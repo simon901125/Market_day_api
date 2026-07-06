@@ -45,10 +45,12 @@ public class User {
     @Column(name = "phone", length = 30)
     private String phone;
 
+    /**帳號登入方式 */
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", length = 30, nullable = false)
     private Provider provider;
 
+    /**使用者帳號狀態 */
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private Status status = Status.UNACTIVE;
@@ -71,15 +73,21 @@ public class User {
     @OneToMany(mappedBy = "user")
     private List<MarketEvent> marketEvents;
 
+    /**帳號登入方式 */
     public enum Provider {
         GOOGLE,
         LOCAL
     }
 
+    /**使用者帳號狀態 */
     public enum Status {
+        /**已刪除 */
         IS_DELETED,
+        /**已停用 */
         DISABLED,
+        /**活動中 */
         ACTIVE,
+        /**未激活 */
         UNACTIVE
     }
 }
