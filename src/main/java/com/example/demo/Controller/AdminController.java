@@ -20,9 +20,10 @@ public class AdminController {
     AdminService service;
 
     @GetMapping("/dashboard/overview")
-    public ApiResponse<AdminDashboardDto> showDashboardOverview(){
+    public ApiResponse<AdminDashboardDto> getDashboardOverview(){
         AdminDashboardDto response = service.setDashboardResponse();
         return ApiResponse.success("ok", response);
     }
 
+    
 }
