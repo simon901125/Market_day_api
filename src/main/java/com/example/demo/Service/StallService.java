@@ -367,7 +367,9 @@ public class StallService {
     public ApiResponse<MapBackedResponse> getOrganizerStallMap(
             String authorizationHeader,
             Long eventId,
-            LocalDate applyDate) {
+            LocalDate applyDate,
+            String keyword,
+            String status) {
         Map<String, Object> organizer = authenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -393,11 +395,16 @@ public class StallService {
 
         List<Map<String, Object>> stallRows = stallRepository.findEventStallsMap(eventId, targetDate).stream()
                 .map(this::withDisplayBoothStatus)
+                .filter(stall -> matchesStallKeyword(stall, keyword))
+                .filter(stall -> matchesStallStatus(stall, status))
                 .toList();
 
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("eventId", eventData.get("eventId"));
         event.put("eventTitle", eventData.get("eventTitle"));
+        event.put("locationName", eventData.get("locationName"));
+        event.put("eventStatus", displayOrganizerEventStatus(eventData));
+        event.put("totalStallCount", eventData.get("totalStallCount"));
         event.put("startAt", eventData.get("startAt"));
         event.put("endAt", eventData.get("endAt"));
         event.put("currentApplyDate", targetDate);
@@ -535,6 +542,17 @@ public class StallService {
     private Map<String, Object> withDisplayBoothStatus(Map<String, Object> stall) {
         Map<String, Object> response = new LinkedHashMap<>(stall);
         response.put("status", displayBoothStatus(stall.get("status")));
+        if (stall.get("selectedApplicationId") != null) {
+            response.put("selectedVendor", orderedMap(
+                    "name", stall.get("vendorName"),
+                    "type", stall.get("brandType"),
+                    "ownerName", stall.get("vendorOwnerName"),
+                    "selectedAt", stall.get("selectedAt")));
+        }
+        response.remove("vendorName");
+        response.remove("brandType");
+        response.remove("vendorOwnerName");
+        response.remove("selectedAt");
         return response;
     }
 
@@ -542,6 +560,43 @@ public class StallService {
         Map<String, Object> response = new LinkedHashMap<>(stall);
         response.put("currentApplyDate", applyDate);
         return response;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean matchesStallKeyword(Map<String, Object> stall, String keyword) {
+        String normalizedKeyword = normalizeText(keyword).toLowerCase();
+        if (normalizedKeyword.isEmpty()) {
+            return true;
+        }
+        String stallNo = normalizeText(stall.get("stallNo")).toLowerCase();
+        if (stallNo.contains(normalizedKeyword)) {
+            return true;
+        }
+        Object selectedVendor = stall.get("selectedVendor");
+        if (selectedVendor instanceof Map<?, ?> vendor) {
+            String vendorName = normalizeText(((Map<String, Object>) vendor).get("name")).toLowerCase();
+            return vendorName.contains(normalizedKeyword);
+        }
+        return false;
+    }
+
+    private boolean matchesStallStatus(Map<String, Object> stall, String status) {
+        String normalizedStatus = normalizeText(status);
+        if (normalizedStatus.isEmpty()
+                || "全部".equals(normalizedStatus)
+                || "全部狀態".equals(normalizedStatus)) {
+            return true;
+        }
+
+        String displayStatus = normalizeText(stall.get("status"));
+        String rawStatus = switch (normalizedStatus.toUpperCase()) {
+            case "AVAILABLE" -> "可選擇";
+            case "SELECTED" -> "已選擇";
+            case "ASSIGNED", "SOLD" -> "系統分配";
+            case "DISABLED" -> "不可使用";
+            default -> normalizedStatus;
+        };
+        return displayStatus.equals(rawStatus);
     }
 
     private List<Map<String, Object>> groupStallsByZone(List<Map<String, Object>> stalls) {
@@ -573,6 +628,44 @@ public class StallService {
             case "DISABLED" -> "不可使用";
             default -> normalizeText(status);
         };
+    }
+
+    private String displayOrganizerEventStatus(Map<String, Object> eventData) {
+        String workflowStatus = stringValue(eventData.get("workflowStatus"));
+        if ("UNPUBLISHED".equals(workflowStatus) || "CANCELLED".equals(workflowStatus)) {
+            return "已下架";
+        }
+        if ("READY_TO_PUBLISH".equals(workflowStatus)) {
+            return "待發布";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime registrationStartAt = toLocalDateTime(eventData.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(eventData.get("registrationEndAt"));
+        LocalDateTime brandsPublicAt = toLocalDateTime(eventData.get("brandsPublicAt"));
+        LocalDateTime startAt = toLocalDateTime(eventData.get("startAt"));
+        LocalDateTime endAt = toLocalDateTime(eventData.get("endAt"));
+
+        if (endAt != null && now.isAfter(endAt)) {
+            return "已結束";
+        }
+        if (startAt != null && !now.isBefore(startAt) && (endAt == null || !now.isAfter(endAt))) {
+            return "進行中";
+        }
+        if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+            return "待發布";
+        }
+        if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
+            return isOrganizerEventFull(eventData) ? "已額滿" : "報名中";
+        }
+        if (brandsPublicAt == null || !now.isBefore(brandsPublicAt)) {
+            return "品牌已公開";
+        }
+        return "品牌已公開";
+    }
+
+    private boolean isOrganizerEventFull(Map<String, Object> eventData) {
+        return isTrue(eventData.get("isFullySelected"));
     }
 
     private boolean isSelectedStallApplication(Map<String, Object> applicationData) {
@@ -653,6 +746,24 @@ public class StallService {
             }
         }
         return null;
+    }
+
+    private LocalDateTime toLocalDateTime(Object value) {
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime;
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime();
+        }
+        String text = value == null ? "" : value.toString().trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(text.replace(" ", "T"));
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private boolean isDateInEventRange(LocalDate date, Map<String, Object> eventData) {

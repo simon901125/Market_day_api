@@ -151,6 +151,283 @@ public class OrganizerRepository {
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
     }
 
+    public Optional<Map<String, Object>> findOrganizerAccountingEventDetail(Long organizerUserId, Long eventId) {
+        String sql = """
+                WITH application_financial AS (
+                    SELECT
+                        a.id,
+                        a.event_id,
+                        a.payment_status,
+                        a.is_cancelled,
+                        a.deposit_amount,
+                        a.deposit_status,
+                        COALESCE(paid_payment.paidAmount,
+                            CASE WHEN a.payment_status = N'PAID' THEN a.total_amount ELSE 0 END
+                        ) AS paidAmount,
+                        COALESCE(refunded.refundAmount, 0) AS refundAmount,
+                        latest_refund.refundStatus
+                    FROM dbo.event_applications a
+                    OUTER APPLY (
+                        SELECT SUM(p.amount) AS paidAmount
+                        FROM dbo.payments p
+                        WHERE p.application_id = a.id
+                          AND p.status = N'PAID'
+                    ) paid_payment
+                    OUTER APPLY (
+                        SELECT SUM(r.amount) AS refundAmount
+                        FROM dbo.refunds r
+                        WHERE r.application_id = a.id
+                          AND r.refund_status = N'REFUNDED'
+                    ) refunded
+                    OUTER APPLY (
+                        SELECT TOP 1 r.refund_status AS refundStatus
+                        FROM dbo.refunds r
+                        WHERE r.application_id = a.id
+                        ORDER BY
+                            CASE r.refund_status
+                                WHEN N'REFUNDED' THEN 1
+                                WHEN N'REFUNDING' THEN 2
+                                WHEN N'REFUND_REQUESTED' THEN 3
+                                WHEN N'REFUND_FAILED' THEN 4
+                                ELSE 5
+                            END,
+                            r.id DESC
+                    ) latest_refund
+                )
+                SELECT
+                    e.id AS eventId,
+                    e.title AS eventTitle,
+                    e.cover_image_url AS coverImageUrl,
+                    e.location_name AS locationName,
+                    e.city,
+                    e.district,
+                    e.address,
+                    e.workflow_status AS publishStatus,
+                    e.start_at AS eventStartAt,
+                    e.end_at AS eventEndAt,
+                    COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) AS totalStallCount,
+                    COALESCE(SUM(CASE
+                        WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0 THEN 1
+                        ELSE 0
+                    END), 0) AS paidStallCount,
+                    COALESCE(SUM(CASE
+                        WHEN af.payment_status <> N'PAID' AND af.is_cancelled = 0 THEN 1
+                        ELSE 0
+                    END), 0) AS pendingPaymentStallCount,
+                    COALESCE(SUM(CASE
+                        WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0 THEN af.paidAmount
+                        ELSE 0
+                    END), 0) AS grossRevenue,
+                    COALESCE(SUM(af.refundAmount), 0) AS refundAmount,
+                    COALESCE(SUM(CASE
+                        WHEN af.payment_status = N'PAID'
+                         AND af.is_cancelled = 0
+                         AND af.deposit_status = N'RETURNED' THEN af.deposit_amount
+                        ELSE 0
+                    END), 0) AS returnedDepositAmount,
+                    COALESCE(SUM(CASE
+                        WHEN af.payment_status = N'PAID'
+                         AND af.is_cancelled = 0
+                         AND af.deposit_status = N'NOT_RETURNED' THEN af.deposit_amount
+                        ELSE 0
+                    END), 0) AS unreturnedDepositAmount,
+                    COALESCE(SUM(CASE
+                        WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0 THEN af.paidAmount
+                        ELSE 0
+                    END), 0)
+                    - COALESCE(SUM(af.refundAmount), 0)
+                    - COALESCE(SUM(CASE
+                        WHEN af.payment_status = N'PAID'
+                         AND af.is_cancelled = 0
+                         AND af.deposit_status = N'RETURNED' THEN af.deposit_amount
+                        ELSE 0
+                    END), 0) AS netRevenue,
+                    COALESCE(refund_stats.refundCount, 0) AS refundCount,
+                    COALESCE(refund_stats.refundedCount, 0) AS refundedCount,
+                    COALESCE(refund_stats.refundingCount, 0) AS refundingCount,
+                    COALESCE(deposit_stats.returnedDepositCount, 0) AS returnedDepositCount,
+                    COALESCE(deposit_stats.unreturnedDepositCount, 0) AS unreturnedDepositCount
+                FROM dbo.market_events e
+                OUTER APPLY (
+                    SELECT COUNT(*) AS totalStalls
+                    FROM dbo.event_stalls s
+                    WHERE s.event_id = e.id
+                ) stall_count
+                OUTER APPLY (
+                    SELECT
+                        COUNT(*) AS refundCount,
+                        SUM(CASE WHEN r.refund_status = N'REFUNDED' THEN 1 ELSE 0 END) AS refundedCount,
+                        SUM(CASE WHEN r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING') THEN 1 ELSE 0 END) AS refundingCount
+                    FROM dbo.refunds r
+                    INNER JOIN dbo.event_applications a ON a.id = r.application_id
+                    WHERE a.event_id = e.id
+                ) refund_stats
+                OUTER APPLY (
+                    SELECT
+                        SUM(CASE WHEN a.payment_status = N'PAID' AND a.is_cancelled = 0 AND a.deposit_status = N'RETURNED' THEN 1 ELSE 0 END) AS returnedDepositCount,
+                        SUM(CASE WHEN a.payment_status = N'PAID' AND a.is_cancelled = 0 AND a.deposit_status = N'NOT_RETURNED' THEN 1 ELSE 0 END) AS unreturnedDepositCount
+                    FROM dbo.event_applications a
+                    WHERE a.event_id = e.id
+                ) deposit_stats
+                LEFT JOIN application_financial af ON af.event_id = e.id
+                WHERE e.id = :eventId
+                  AND e.user_id = :organizerUserId
+                GROUP BY
+                    e.id,
+                    e.title,
+                    e.cover_image_url,
+                    e.location_name,
+                    e.city,
+                    e.district,
+                    e.address,
+                    e.workflow_status,
+                    e.start_at,
+                    e.end_at,
+                    e.max_booths,
+                    stall_count.totalStalls,
+                    refund_stats.refundCount,
+                    refund_stats.refundedCount,
+                    refund_stats.refundingCount,
+                    deposit_stats.returnedDepositCount,
+                    deposit_stats.unreturnedDepositCount
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("organizerUserId", organizerUserId);
+        map.put("eventId", eventId);
+
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    public List<Map<String, Object>> findOrganizerAccountingPaymentDetails(Long eventId) {
+        String sql = """
+                SELECT
+                    a.id AS applicationId,
+                    a.application_no AS applicationNo,
+                    a.is_cancelled AS isCancelled,
+                    a.deposit_amount AS depositAmount,
+                    a.deposit_status AS depositStatus,
+                    p.payment_no AS paymentNo,
+                    p.amount AS paymentAmount,
+                    p.status AS paymentStatus,
+                    p.paid_at AS paidAt,
+                    p.created_at AS paymentCreatedAt,
+                    vendor_up.name AS brandName,
+                    vp.brand_type AS brandType,
+                    COALESCE(refund_data.refundAmount, 0) AS refundAmount,
+                    refund_data.refundStatus
+                FROM dbo.payments p
+                INNER JOIN dbo.event_applications a ON a.id = p.application_id
+                INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
+                INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
+                OUTER APPLY (
+                    SELECT
+                        SUM(CASE WHEN r.refund_status = N'REFUNDED' THEN r.amount ELSE 0 END) AS refundAmount,
+                        (
+                            SELECT TOP 1 r2.refund_status
+                            FROM dbo.refunds r2
+                            WHERE r2.application_id = a.id
+                            ORDER BY
+                                CASE r2.refund_status
+                                    WHEN N'REFUNDED' THEN 1
+                                    WHEN N'REFUNDING' THEN 2
+                                    WHEN N'REFUND_REQUESTED' THEN 3
+                                    WHEN N'REFUND_FAILED' THEN 4
+                                    ELSE 5
+                                END,
+                                r2.id DESC
+                        ) AS refundStatus
+                    FROM dbo.refunds r
+                    WHERE r.application_id = a.id
+                ) refund_data
+                WHERE a.event_id = :eventId
+                ORDER BY COALESCE(p.paid_at, p.created_at) DESC, p.id DESC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("eventId", eventId);
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
+    public List<Map<String, Object>> findOrganizerStallEvents(
+            Long organizerUserId,
+            String eventTitle,
+            LocalDateTime eventStartAt,
+            LocalDateTime eventEndExclusive) {
+        String sql = """
+                SELECT
+                    e.id AS eventId,
+                    e.title AS eventTitle,
+                    e.cover_image_url AS coverImageUrl,
+                    e.location_name AS locationName,
+                    e.city,
+                    e.district,
+                    e.address,
+                    e.start_at AS eventStartAt,
+                    e.end_at AS eventEndAt,
+                    e.registration_start_at AS registrationStartAt,
+                    e.registration_end_at AS registrationEndAt,
+                    e.brands_public_at AS brandsPublicAt,
+                    e.workflow_status AS workflowStatus,
+                    COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) AS totalStallCount,
+                    COALESCE(full_status.isFullySelected, 0) AS isFullySelected
+                FROM dbo.market_events e
+                OUTER APPLY (
+                    SELECT COUNT(*) AS totalStalls
+                    FROM dbo.event_stalls s
+                    WHERE s.event_id = e.id
+                ) stall_count
+                OUTER APPLY (
+                    SELECT CASE
+                        WHEN COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) > 0
+                         AND NOT EXISTS (
+                            SELECT 1
+                            FROM (
+                                SELECT TOP (DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1)
+                                    DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY object_id) - 1, CONVERT(date, e.start_at)) AS applyDate
+                                FROM sys.all_objects
+                            ) event_dates
+                            OUTER APPLY (
+                                SELECT COUNT(DISTINCT ad.selected_stall_id) AS selectedStallCount
+                                FROM dbo.application_dates ad
+                                INNER JOIN dbo.event_applications a ON a.id = ad.application_id
+                                    AND a.event_id = e.id
+                                    AND a.is_cancelled = 0
+                                WHERE ad.apply_date = event_dates.applyDate
+                                  AND ad.selected_stall_id IS NOT NULL
+                            ) selected_count
+                            WHERE COALESCE(selected_count.selectedStallCount, 0)
+                                < COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths)
+                         )
+                        THEN 1 ELSE 0
+                    END AS isFullySelected
+                ) full_status
+                WHERE e.user_id = :organizerUserId
+                  AND e.workflow_status IN (
+                      N'READY_TO_PUBLISH',
+                      N'PUBLISHED',
+                      N'FINAL_REVIEW',
+                      N'UNPUBLISH_REQUESTED',
+                      N'UNPUBLISHED',
+                      N'CANCELLED'
+                  )
+                  AND (:eventTitle IS NULL OR e.title LIKE N'%' + :eventTitle + N'%')
+                  AND (:eventStartAt IS NULL OR e.start_at >= :eventStartAt)
+                  AND (:eventEndExclusive IS NULL OR e.end_at < :eventEndExclusive)
+                ORDER BY
+                    e.start_at DESC,
+                    e.id DESC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("organizerUserId", organizerUserId);
+        map.put("eventTitle", normalizeText(eventTitle));
+        map.put("eventStartAt", eventStartAt);
+        map.put("eventEndExclusive", eventEndExclusive);
+
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
     public List<Map<String, Object>> findOrganizerApplications(
             Long organizerUserId,
             String eventTitle,

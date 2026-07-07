@@ -131,7 +131,9 @@ public class ApiResponse<T> {
             case "Password reset successfully" -> "\u5bc6\u78bc\u91cd\u8a2d\u6210\u529f";
             case "Organizer account retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u5e33\u865f\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
             case "Organizer accounting list retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u5e33\u52d9\u5217\u8868\u53d6\u5f97\u6210\u529f";
+            case "Organizer accounting detail retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u5e33\u52d9\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
             case "Organizer applications retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u7533\u8acb\u5217\u8868\u53d6\u5f97\u6210\u529f";
+            case "Organizer stall events retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u7ba1\u7406\u6d3b\u52d5\u5217\u8868\u53d6\u5f97\u6210\u529f";
             case "Organizer application detail retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u7533\u8acb\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
             case "Organizer application reviewed successfully" -> "\u4e3b\u8fa6\u65b9\u7533\u8acb\u5be9\u6838\u6210\u529f";
             case "Stall selection successful" -> "\u6524\u4f4d\u9078\u64c7\u6210\u529f";

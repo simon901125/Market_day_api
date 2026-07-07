@@ -25,6 +25,8 @@ import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
 import com.example.demo.dto.response.OrganizerApplicationSummaryResponse;
 import com.example.demo.dto.response.OrganizerAccountingSearchResponse;
 import com.example.demo.dto.response.OrganizerAccountingSummaryResponse;
+import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
+import com.example.demo.dto.response.OrganizerStallEventSummaryResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -116,6 +118,42 @@ public class OrganizerService {
                 new OrganizerAccountingSearchResponse(accounts));
     }
 
+    public ApiResponse<MapBackedResponse> getOrganizerAccountDetail(
+            String authorizationHeader,
+            Long eventId,
+            String status) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (eventId == null) {
+            return ApiResponse.fail("Event id is required");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> account = organizerRepository
+                .findOrganizerAccountingEventDetail(organizerUserId, eventId)
+                .orElse(null);
+        if (account == null) {
+            return ApiResponse.fail("Event not found");
+        }
+
+        List<Map<String, Object>> payments = organizerRepository
+                .findOrganizerAccountingPaymentDetails(eventId)
+                .stream()
+                .map(this::toAccountingPaymentDetailResponse)
+                .filter(payment -> matchesAccountingStatus(payment, status))
+                .toList();
+
+        return ApiResponse.success(
+                "Organizer accounting detail retrieved successfully",
+                new MapBackedResponse(orderedMap(
+                        "event", toAccountingEventResponse(withDisplayPublishStatus(account)),
+                        "summary", toAccountingFinancialSummary(account),
+                        "statistics", toAccountingStatistics(account),
+                        "payments", payments)));
+    }
+
     public ApiResponse<OrganizerApplicationSearchResponse> searchOrganizerApplications(
             String authorizationHeader,
             String eventTitle,
@@ -142,6 +180,34 @@ public class OrganizerService {
         return ApiResponse.success(
                 "Organizer applications retrieved successfully",
                 new OrganizerApplicationSearchResponse(applications));
+    }
+
+    public ApiResponse<OrganizerStallEventSearchResponse> searchOrganizerStallEvents(
+            String authorizationHeader,
+            String eventTitle,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        LocalDateTime startAt = eventStartAt == null ? null : eventStartAt.atStartOfDay();
+        LocalDateTime endExclusive = eventEndAt == null ? null : eventEndAt.plusDays(1).atStartOfDay();
+        List<OrganizerStallEventSummaryResponse> events = organizerRepository
+                .findOrganizerStallEvents(organizerUserId, eventTitle, startAt, endExclusive)
+                .stream()
+                .map(this::withDisplayStallEventStatus)
+                .filter(event -> matchesStallEventStatus(event, status))
+                .map(this::toStallEventSummaryResponse)
+                .map(OrganizerStallEventSummaryResponse::new)
+                .toList();
+
+        return ApiResponse.success(
+                "Organizer stall events retrieved successfully",
+                new OrganizerStallEventSearchResponse(events));
     }
 
     public ApiResponse<OrganizerApplicationDetailResponse> getOrganizerApplicationDetail(String authorizationHeader, Long applicationId) {
@@ -285,6 +351,23 @@ public class OrganizerService {
         return normalizedStatus.equals(normalizeText(application.get("applicationStatus")));
     }
 
+    private Map<String, Object> withDisplayStallEventStatus(Map<String, Object> event) {
+        Map<String, Object> response = new LinkedHashMap<>(event);
+        response.put("status", displayStallEventStatus(event));
+        return response;
+    }
+
+    private boolean matchesStallEventStatus(Map<String, Object> event, String status) {
+        String normalizedStatus = normalizeText(status);
+        if (normalizedStatus == null
+                || "全部".equals(normalizedStatus)
+                || "全部狀態".equals(normalizedStatus)) {
+            return true;
+        }
+        return normalizedStatus.toUpperCase().equals(statusText(event.get("workflowStatus")))
+                || normalizedStatus.equals(normalizeText(event.get("status")));
+    }
+
     private Map<String, Object> toAccountingSummaryResponse(Map<String, Object> account) {
         Object paidStallCount = account.get("paidStallCount");
         Object totalStallCount = account.get("totalStallCount");
@@ -302,6 +385,122 @@ public class OrganizerService {
                 "returnedDepositAmount", account.get("returnedDepositAmount"),
                 "unreturnedDepositAmount", account.get("unreturnedDepositAmount"),
                 "netRevenue", account.get("netRevenue"));
+    }
+
+    private Map<String, Object> toAccountingEventResponse(Map<String, Object> account) {
+        return orderedMap(
+                "eventId", account.get("eventId"),
+                "coverImageUrl", account.get("coverImageUrl"),
+                "eventTitle", account.get("eventTitle"),
+                "publishStatus", account.get("publishStatus"),
+                "publishStatusText", account.get("publishStatusText"),
+                "eventDate", formatEventDate(account),
+                "locationName", account.get("locationName"),
+                "address", joinAddress(
+                        account.get("city"),
+                        account.get("district"),
+                        account.get("address")),
+                "totalStallCount", account.get("totalStallCount"),
+                "paidStallCount", account.get("paidStallCount"));
+    }
+
+    private Map<String, Object> toAccountingFinancialSummary(Map<String, Object> account) {
+        return orderedMap(
+                "grossRevenue", account.get("grossRevenue"),
+                "refundAmount", account.get("refundAmount"),
+                "returnedDepositAmount", account.get("returnedDepositAmount"),
+                "unreturnedDepositAmount", account.get("unreturnedDepositAmount"),
+                "netRevenue", account.get("netRevenue"));
+    }
+
+    private Map<String, Object> toAccountingStatistics(Map<String, Object> account) {
+        return orderedMap(
+                "payment", orderedMap(
+                        "totalStallCount", account.get("totalStallCount"),
+                        "paidStallCount", account.get("paidStallCount"),
+                        "pendingPaymentStallCount", account.get("pendingPaymentStallCount")),
+                "refund", orderedMap(
+                        "refundCount", account.get("refundCount"),
+                        "refundedCount", account.get("refundedCount"),
+                        "refundingCount", account.get("refundingCount")),
+                "deposit", orderedMap(
+                        "returnedDepositCount", account.get("returnedDepositCount"),
+                        "returnedDepositAmount", account.get("returnedDepositAmount"),
+                        "unreturnedDepositCount", account.get("unreturnedDepositCount"),
+                        "unreturnedDepositAmount", account.get("unreturnedDepositAmount")));
+    }
+
+    private Map<String, Object> toAccountingPaymentDetailResponse(Map<String, Object> payment) {
+        return orderedMap(
+                "paymentNo", payment.get("paymentNo"),
+                "brandName", payment.get("brandName"),
+                "paidAt", formatDateTime(firstPresent(payment.get("paidAt"), payment.get("paymentCreatedAt"))),
+                "paymentAmount", payment.get("paymentAmount"),
+                "refundAmount", payment.get("refundAmount"),
+                "depositStatus", displayDepositStatus(payment.get("depositStatus")),
+                "accountingStatus", displayAccountingStatus(payment));
+    }
+
+    private boolean matchesAccountingStatus(Map<String, Object> payment, String status) {
+        String normalizedStatus = normalizeText(status);
+        if (normalizedStatus == null
+                || "全部".equals(normalizedStatus)
+                || "全部狀態".equals(normalizedStatus)) {
+            return true;
+        }
+        return normalizedStatus.equals(normalizeText(payment.get("accountingStatus")));
+    }
+
+    private String displayAccountingStatus(Map<String, Object> payment) {
+        if (isTrue(payment.get("isCancelled"))) {
+            return "已取消";
+        }
+        String refundStatus = statusText(payment.get("refundStatus"));
+        if ("REFUNDED".equals(refundStatus)) {
+            return "已退款";
+        }
+        if ("REFUNDING".equals(refundStatus)) {
+            return "退款處理中";
+        }
+        if ("REFUND_REQUESTED".equals(refundStatus)) {
+            return "退款申請中";
+        }
+        if ("PAID".equals(statusText(payment.get("paymentStatus")))) {
+            return "付款成功";
+        }
+        return displayPaymentRecordStatus(payment.get("paymentStatus"));
+    }
+
+    private String displayPaymentRecordStatus(Object value) {
+        return switch (statusText(value) == null ? "" : statusText(value)) {
+            case "PAID" -> "付款成功";
+            case "PENDING" -> "待付款";
+            case "FAILED" -> "付款失敗";
+            case "EXPIRED" -> "付款逾期";
+            default -> normalizeText(value);
+        };
+    }
+
+    private String displayDepositStatus(Object value) {
+        return switch (statusText(value) == null ? "" : statusText(value)) {
+            case "RETURNED" -> "已退還";
+            case "NOT_RETURNED" -> "未退還";
+            default -> normalizeText(value);
+        };
+    }
+
+    private Map<String, Object> toStallEventSummaryResponse(Map<String, Object> event) {
+        return orderedMap(
+                "eventId", event.get("eventId"),
+                "eventTitle", event.get("eventTitle"),
+                "coverImageUrl", event.get("coverImageUrl"),
+                "eventDate", formatEventDate(event),
+                "address", joinAddress(
+                        event.get("city"),
+                        event.get("district"),
+                        event.get("locationName")),
+                "totalStallCount", event.get("totalStallCount"),
+                "status", event.get("status"));
     }
 
     private Map<String, Object> toApplicationSummaryResponse(Map<String, Object> application) {
@@ -442,6 +641,44 @@ public class OrganizerService {
             return "即將開始";
         }
         return "活動預告";
+    }
+
+    private String displayStallEventStatus(Map<String, Object> event) {
+        String workflowStatus = statusText(event.get("workflowStatus"));
+        if ("UNPUBLISHED".equals(workflowStatus) || "CANCELLED".equals(workflowStatus)) {
+            return "已下架";
+        }
+        if ("READY_TO_PUBLISH".equals(workflowStatus)) {
+            return "待發布";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+        LocalDateTime brandsPublicAt = toLocalDateTime(event.get("brandsPublicAt"));
+        LocalDateTime startAt = toLocalDateTime(event.get("eventStartAt"));
+        LocalDateTime endAt = toLocalDateTime(event.get("eventEndAt"));
+
+        if (endAt != null && now.isAfter(endAt)) {
+            return "已結束";
+        }
+        if (startAt != null && !now.isBefore(startAt) && (endAt == null || !now.isAfter(endAt))) {
+            return "進行中";
+        }
+        if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+            return "待發布";
+        }
+        if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
+            return isStallEventFull(event) ? "已額滿" : "報名中";
+        }
+        if (brandsPublicAt == null || !now.isBefore(brandsPublicAt)) {
+            return "品牌已公開";
+        }
+        return "品牌已公開";
+    }
+
+    private boolean isStallEventFull(Map<String, Object> event) {
+        return isTrue(event.get("isFullySelected"));
     }
 
     private String toRegistrationPeriods(
@@ -969,6 +1206,7 @@ public class OrganizerService {
             case "READY_TO_PUBLISH" -> "\u5f85\u767c\u5e03";
             case "PUBLISHED" -> "\u5df2\u767c\u5e03";
             case "BRANDS_PUBLISHED" -> "\u6524\u5546\u540d\u55ae\u5df2\u767c\u5e03";
+            case "FINAL_REVIEW" -> "\u54c1\u724c\u516c\u958b\u524d\u9a57\u6536";
             case "UNPUBLISH_REQUESTED" -> "\u4e0b\u67b6\u7533\u8acb\u4e2d";
             case "UNPUBLISHED" -> "\u5df2\u4e0b\u67b6";
             case "CANCELLED" -> "\u5df2\u53d6\u6d88";
