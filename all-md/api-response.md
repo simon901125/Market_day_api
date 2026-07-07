@@ -72,13 +72,16 @@ Response data:
 }
 ```
 
-`GET /api/organizer/applications/{id}` 的 `data.application` 會解析 `event_applications.review_note`，回傳：
+`GET /api/organizer/applications/{id}` 會解析 `event_applications.review_note`，並在 `data.applicationdetail` 回傳：
 
 ```json
 {
-  "applicationId": 101,
-  "applicationNo": "T2-ORDER-3",
-  "applicationStatus": "審核未通過",
+  "registrationPeriods": "2026-06-28 11:00-19:00 - 2026-06-29 11:00-19:00",
+  "stallSize": "3x2.5",
+  "stallZone": "A",
+  "stallCategory": "Food",
+  "vehicleNo": "T5-CAR-03",
+  "applicantNote": "待付款 test application.",
   "reviewNote": "資料不完整",
   "reviewNoteDetail": "請補上商品照片"
 }
@@ -107,14 +110,16 @@ Response data:
 | --- | --- |
 | `LoginResponse` | local / Google login |
 | `LoginUserResponse` | `LoginResponse.user` |
-| `UserProfileResponse` | `/api/auth/me`、`/api/users/me` |
+| `UserProfileResponse` | `/api/auth/me` |
 | `UserResponse` | `/usersall` |
 | `VendorAccountResponse` | `/api/vendor/account` |
 | `VendorStallMapResponse` | `/api/vendor/stall-map/{applicationNo}` |
 | `OrganizerAccountResponse` | `/api/organizer/account` |
+| `OrganizerAccountingSearchResponse` | `/api/organizer/accounts/search` |
+| `MapBackedResponse` | `/api/organizer/accounts/{eventId}` |
 | `OrganizerApplicationSummaryResponse` | `/api/organizer/applications/search` |
 | `OrganizerApplicationDetailResponse` | `/api/organizer/applications/{id}` |
-| `EventStallStatusResponse` | `/api/events/{eventId}/stallsStatus` |
+| `EventStallStatusResponse` | `/api/eventsMap/{eventId}/stallsStatus` |
 | `StallSelectionResponse` | `/api/stalls/select` |
 | `PasswordResetVerificationResponse` | `/api/auth/resetPassword/emailVerify` |
 
@@ -133,8 +138,8 @@ Response data:
       "email": "vendor@example.com",
       "name": "vendor1",
       "role": "VENDOR",
-      "provider": "LOCAL",
-      "emailVerified": true
+      "status": "ACTIVE",
+      "isLogin": true
     }
   }
 }
@@ -144,13 +149,22 @@ Response data:
 
 `POST /api/stalls/select`
 
-Request body 只需要 `applicationNo` 與 `stallNo`，`eventId` 由後端依申請單查出。
+Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `applyDate` 與 `stallNo`；`eventId` 由後端依申請單查出。
 `applicationNo` 與 `stallNo` 目前只檢查必填，不限制編號格式。
 
 ```json
 {
   "applicationNo": "MD001",
-  "stallNo": "A01"
+  "selections": [
+    {
+      "applyDate": "2026-09-01",
+      "stallNo": "A01"
+    },
+    {
+      "applyDate": "2026-09-02",
+      "stallNo": "A01"
+    }
+  ]
 }
 ```
 
@@ -291,92 +305,168 @@ Request body 只需要 `applicationNo` 與 `stallNo`，`eventId` 由後端依申
 
 | 區塊 | 說明 |
 | --- | --- |
-| `applicationId` / `applicationNo` / `applicationStatus` | 申請基本資訊。 |
-| `event` | 活動名稱、時間、地點、封面圖等資訊。 |
-| `application` | 審核、付款、保證金、退款與申請備註等狀態。 |
-| `statusTimeline` | 申請、付款、退款相關時間。 |
+| `application` | 申請 ID、申請編號與後端計算後的申請狀態。 |
+| `event` | 活動名稱、活動狀態、活動日期與地址。 |
 | `vendor` | 攤主聯絡資料。 |
 | `brand` | 品牌資料。 |
-| `registration` | 報名日期與已選攤位資料。 |
-| `fee` | 費用、付款與退款資料。 |
+| `applicationdetail` | 報名時段、攤位尺寸、攤位區域、攤位類別、車牌、申請備註與審核備註。 |
+| `stall` | 每個報名日期的攤位選擇列。 |
+| `fee` | 付款狀態、付款方式、付款編號與付款金額。 |
+| `feedetail` | 報名費、設備租借費、額外電費、保證金與總計。 |
+| `equipmentRentals` | 免費設備、免費基本用電、租借設備、額外申請用電四區。 |
+| `status` | 固定狀態流清單與各節點時間。 |
 
 ```json
 {
   "statusCode": 200,
-  "message": "Organizer application detail retrieved successfully",
+  "message": "主辦方申請詳情取得成功",
   "messageDetails": null,
   "data": {
-    "applicationId": 1,
-    "applicationNo": "APP-MD0101-V01",
-    "applicationStatus": "退款處理中",
-    "event": {
-      "eventId": 1,
-      "eventTitle": "MD0101",
-      "eventTime": "2026-09-01 11:00 - 2026-09-03 19:00",
-      "eventStartAt": "2026-09-01T11:00:00",
-      "eventEndAt": "2026-09-03T19:00:00",
-      "locationName": "市集廣場",
-      "city": "台北市",
-      "district": "中正區",
-      "address": "市集路 1 號",
-      "coverImageUrl": "/images/event.jpg"
-    },
     "application": {
-      "reviewStatus": "APPROVED",
-      "paymentStatus": "PAID",
-      "depositStatus": "NOT_RETURNED",
-      "refundStatus": "REFUNDING",
-      "appliedAt": "2026-07-01T14:00:00",
+      "applicationId": 1,
+      "applicationNo": "T5-APP-06",
+      "applicationStatus": "報名完成"
+    },
+    "event": {
+      "eventTitle": "T5-APPLICATION-STATUS",
+      "eventStatus": "已結束",
+      "eventTime": "2026-06-28 - 2026-06-29",
+      "address": "Taipei CityXinyi DistrictT5 Application Status Address 1"
+    },
+    "applicationdetail": {
+      "registrationPeriods": "2026-06-28 11:00-19:00 - 2026-06-29 11:00-19:00",
+      "stallSize": "3x2.5",
+      "stallZone": "A",
+      "stallCategory": "Food",
+      "vehicleNo": "T5-CAR-06",
+      "applicantNote": "報名完成 test application.",
       "reviewNote": null,
-      "applicantNote": "需要插座"
+      "reviewNoteDetail": null
     },
-    "statusTimeline": {
-      "appliedAt": "2026-07-01T14:00:00",
-      "paymentCreatedAt": "2026-07-02T10:00:00",
-      "paidAt": "2026-07-02T10:10:00",
-      "refundedAt": null
-    },
-    "vendor": {
-      "vendorName": "vendor1",
-      "vendorOwnerName": "vendor1",
-      "vendorPhone": "0912345678",
-      "vendorEmail": "vendor1@example.com",
-      "address": "台北市中正區市集路 1 號"
-    },
-    "brand": {
-      "brandName": "vendor1",
-      "brandType": "餐飲",
-      "categoryName": "甜點",
-      "brandDescription": "手作甜點",
-      "avatarUrl": "/images/vendor-avatar.jpg"
-    },
-    "registration": {
-      "applyDates": "2026-09-01,2026-09-02",
-      "stall": {
-        "stallNo": "A01",
-        "zoneName": "A 區",
-        "width": 2,
-        "length": 3,
-        "height": 2
+    "stall": [
+      {
+        "applyDate": "2026-06-28",
+        "stallNo": "A06",
+        "zoneName": "A",
+        "selectionStatus": "已選擇"
       }
-    },
+    ],
     "fee": {
-      "baseFee": 2500,
-      "depositAmount": 1000,
-      "otherFeeAmount": 100,
-      "totalAmount": 3600,
+      "paymentStatus": "付款成功",
+      "paymentMethod": "TEST",
+      "paymentNo": "PAY-T5-APP-06",
+      "paymentAmount": 5400
+    },
+    "feedetail": [
+      { "item": "報名費", "content": "2天 (2026-06-28、2026-06-29)", "amount": 2400 },
+      { "item": "設備租借費", "content": "帳篷租借*2、冷藏櫃租借*1", "amount": 2100 },
+      { "item": "額外電費", "content": "110V / 500W*2", "amount": 600 },
+      { "item": "保證金", "content": "保證金", "amount": 300 },
+      { "item": "總計", "content": null, "amount": 5400 }
+    ],
+    "equipmentRentals": {
+      "freeEquipments": [],
+      "freeBasicPower": [],
+      "rentalEquipments": [],
+      "extraPower": []
+    },
+    "status": []
+  }
+}
+```
+
+## Organizer 帳務詳情
+
+`GET /api/organizer/accounts/{eventId}`
+
+需要 `Authorization` header。可用 `status` query param 篩選 `payments` 明細，支援 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`，未帶時回傳全部付款明細。
+
+`data` 主要包含：
+
+| 區塊 | 說明 |
+| --- | --- |
+| `event` | 活動圖片、名稱、活動狀態、活動日期、地點、攤位總數、已付款攤位數。 |
+| `summary` | 收款總額、退款總額、已退款保證金、未退款保證金、實收總額。 |
+| `statistics` | 付款、退款、保證金統計。 |
+| `payments` | 付款明細。 |
+
+`payments` 每列欄位：
+
+| 欄位 | 說明 |
+| --- | --- |
+| `paymentNo` | 付款編號。 |
+| `brandName` | 品牌名稱。 |
+| `paidAt` | 付款時間。 |
+| `paymentAmount` | 付款金額。 |
+| `refundAmount` | 已完成退款金額；只有 `accountingStatus = 已退款` 時才會顯示實際退款金額，退款申請中與退款處理中回 `0`。 |
+| `depositStatus` | 保證金狀態。 |
+| `accountingStatus` | 帳務狀態。 |
+
+`payments` 不回傳攤位編號；帳務頁若需要攤位資訊，應由攤位管理相關 API 查詢。
+
+```json
+{
+  "statusCode": 200,
+  "message": "主辦方帳務詳情取得成功",
+  "messageDetails": null,
+  "data": {
+    "event": {
+      "eventId": 3,
+      "coverImageUrl": "/uploads/events/t7-stall-03-cover.jpg",
+      "eventTitle": "T7-STALL-03 已額滿市集",
+      "publishStatus": "PUBLISHED",
+      "publishStatusText": "報名中",
+      "eventDate": "2026-07-29 - 2026-07-30",
+      "locationName": "T7 Venue 3",
+      "address": "New Taipei CityBanqiao DistrictT7 Test Road 3",
+      "totalStallCount": 5,
+      "paidStallCount": 5
+    },
+    "summary": {
+      "grossRevenue": 7500,
+      "refundAmount": 1500,
+      "returnedDepositAmount": 0,
+      "unreturnedDepositAmount": 1500,
+      "netRevenue": 6000
+    },
+    "statistics": {
       "payment": {
-        "paymentNo": "PAY-001",
-        "paymentStatus": "PAID",
-        "paidAt": "2026-07-02T10:10:00"
+        "totalStallCount": 5,
+        "paidStallCount": 5,
+        "pendingPaymentStallCount": 0
       },
       "refund": {
-        "refundNo": "RF-001",
-        "refundAmount": 3600,
-        "refundStatus": "REFUNDING",
-        "refundedAt": null
+        "refundCount": 3,
+        "refundedCount": 1,
+        "refundingCount": 2
+      },
+      "deposit": {
+        "returnedDepositCount": 0,
+        "returnedDepositAmount": 0,
+        "unreturnedDepositCount": 5,
+        "unreturnedDepositAmount": 1500
       }
-    }
+    },
+    "payments": [
+      {
+        "paymentNo": "PAY-T7-FULL-04",
+        "brandName": "T7 滿額攤商 4",
+        "paidAt": "2026-07-07 10:40",
+        "paymentAmount": 1500,
+        "refundAmount": 1500,
+        "depositStatus": "未退還",
+        "accountingStatus": "已退款"
+      },
+      {
+        "paymentNo": "PAY-T7-FULL-03",
+        "brandName": "T7 滿額攤商 3",
+        "paidAt": "2026-07-07 11:00",
+        "paymentAmount": 1500,
+        "refundAmount": 0,
+        "depositStatus": "未退還",
+        "accountingStatus": "退款處理中"
+      }
+    ]
   }
 }
 ```
@@ -461,7 +551,7 @@ Service 或 Filter 即使傳入英文 key，也會透過 `ApiResponse.fail(...)`
 - JWT Filter 失敗也會透過 `ApiResponse.fail(statusCode, message)` 回傳中文錯誤。
 - `messageDetails` 目前通常為 `null`；舊版由 `GlobalResponseAdvice` 自動補 `Executed API: ...` 的設計已不是主要資料傳遞方式。
 
-## 2026-07-01 更新：Organizer 申請詳情目前版
+## 2026-07-07 更新：Organizer 申請詳情目前版
 
 `GET /api/organizer/applications/{id}`
 
@@ -469,8 +559,12 @@ Service 或 Filter 即使傳入英文 key，也會透過 `ApiResponse.fail(...)`
 
 - `message` 會由 `ApiResponse.success(...)` 統一轉為中文。
 - `status` 固定回傳完整狀態流清單，未到達的節點以 `value: null`、`createdAt: null` 表示。
-- `fee` 只保留各項金額與 note，不再回傳 `items`。
-- `equipmentRentals` 回傳申請單已租借設備；若為電力租借，會包含 `appliances` 與 `totalWattage`。
+- `event.eventStatus` 統一回傳 `活動預告`、`即將開始`、`進行中`、`已結束`。
+- `applicationdetail.registrationPeriods` 是單一字串，例如 `2026-06-28 11:00-19:00 - 2026-06-29 11:00-19:00`。
+- `stall` 依報名日期回傳陣列，未選位日期也會回傳 `selectionStatus: 未選擇`。
+- `fee` 只保留付款狀態、付款方式、付款編號與付款金額。
+- `feedetail` 回傳報名費、設備租借費、額外電費、保證金與總計；`content` 會帶日期、設備名稱數量或電力規格。
+- `equipmentRentals` 分成 `freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower` 四區。
 
 ```json
 {
@@ -484,9 +578,10 @@ Service 或 Filter 即使傳入英文 key，也會透過 `ApiResponse.fail(...)`
       "applicationStatus": "報名完成"
     },
     "event": {
-      "eventTitle": "T2 Organizer1 Timeline Event",
-      "eventTime": "2026-08-10 - 2026-08-12",
-      "address": "Taipei CityXinyi DistrictTimeline Test Address 1"
+      "eventTitle": "T5-APPLICATION-STATUS",
+      "eventStatus": "已結束",
+      "eventTime": "2026-06-28 - 2026-06-29",
+      "address": "Taipei CityXinyi DistrictT5 Application Status Address 1"
     },
     "vendor": {
       "vendorOwnerName": "test2 vendor 0 owner",
@@ -499,38 +594,84 @@ Service 或 Filter 即使傳入英文 key，也會透過 `ApiResponse.fail(...)`
       "categoryName": "Food",
       "brandDescription": "test2 vendor 0 brand description"
     },
-    "stall": {
-      "selectedStallId": 201,
-      "stallNo": "A01",
-      "zoneName": "A",
-      "width": 3.00,
-      "length": 3.00,
-      "height": 2.50
+    "applicationdetail": {
+      "registrationPeriods": "2026-06-28 11:00-19:00 - 2026-06-29 11:00-19:00",
+      "stallSize": "3x2.5",
+      "stallZone": "A",
+      "stallCategory": "Food",
+      "vehicleNo": "T5-CAR-06",
+      "applicantNote": "報名完成 test application.",
+      "reviewNote": null,
+      "reviewNoteDetail": null
     },
-    "fee": {
-      "stallFee": 1200,
-      "stallFeeNote": "3 公尺 x 3 公尺 攤位 (1天)",
-      "rentalFee": 100,
-      "rentalFeeNote": "桌子 NT$100/天 x 1天",
-      "equipmentRentalFee": 100,
-      "depositAmount": 500,
-      "depositNote": null,
-      "totalAmount": 1800
-    },
-    "equipmentRentals": [
+    "stall": [
       {
-        "equipmentRentalId": 301,
-        "eventEquipmentId": 401,
-        "equipmentName": "桌子",
-        "rentalFee": 100,
-        "pricingUnit": "DAY",
-        "quantity": 1,
-        "rentalUnits": 1,
-        "subtotal": 100,
-        "appliances": [],
-        "totalWattage": null
+        "applyDate": "2026-06-28",
+        "stallNo": "A06",
+        "zoneName": "A",
+        "selectionStatus": "已選擇"
+      },
+      {
+        "applyDate": "2026-06-29",
+        "stallNo": "A06",
+        "zoneName": "A",
+        "selectionStatus": "已選擇"
       }
     ],
+    "fee": {
+      "paymentStatus": "付款成功",
+      "paymentMethod": "TEST",
+      "paymentNo": "PAY-T5-APP-06",
+      "paymentAmount": 5400
+    },
+    "feedetail": [
+      { "item": "報名費", "content": "2天 (2026-06-28、2026-06-29)", "amount": 2400 },
+      { "item": "設備租借費", "content": "帳篷租借*2、冷藏櫃租借*1", "amount": 2100 },
+      { "item": "額外電費", "content": "110V / 500W*2", "amount": 600 },
+      { "item": "保證金", "content": "保證金", "amount": 300 },
+      { "item": "總計", "content": null, "amount": 5400 }
+    ],
+    "equipmentRentals": {
+      "freeEquipments": [
+        {
+          "equipmentName": "攤位椅",
+          "specification": "一般折疊椅，每攤基本提供。",
+          "quantity": 2,
+          "unit": "個",
+          "subtotal": 0
+        }
+      ],
+      "freeBasicPower": [
+        {
+          "powerSpecification": "110V / 300W",
+          "wattage": 300,
+          "unitPrice": 0,
+          "subtotal": 0
+        }
+      ],
+      "rentalEquipments": [
+        {
+          "equipmentName": "帳篷租借",
+          "specification": "3x3m 防水帳篷，含基本搭設。",
+          "quantity": 2,
+          "unit": "天",
+          "subtotal": 1600,
+          "subtotalContent": "共2天",
+          "total": 1600
+        }
+      ],
+      "extraPower": [
+        {
+          "powerSpecification": "110V / 500W",
+          "wattage": 500,
+          "unitPrice": 150,
+          "unit": "天",
+          "subtotal": 600,
+          "subtotalContent": "共2天",
+          "total": 600
+        }
+      ]
+    },
     "status": [
       { "key": "APPLIED", "label": "報名日期", "value": "已報名", "createdAt": "2026-07-01 09:00" },
       { "key": "REVIEW", "label": "審核時間", "value": "審核通過", "createdAt": "2026-07-02 10:00" },

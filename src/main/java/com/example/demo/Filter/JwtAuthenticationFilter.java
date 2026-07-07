@@ -29,8 +29,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     //api放置處
     private final Set<ProtectedApi> protectedApis = Set.of(
             new ProtectedApi(HttpMethod.POST.name(), "/api/auth/logout"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/auth/google-bind"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/auth/me"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/users/me"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/account/deactivate"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/account"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/stall-map/{applicationNo}"),
@@ -38,8 +38,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/account"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/applications/search"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/applications/{id}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall-map/{eventId}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall-map/{eventId}/stalls/{stallNo}"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/accounts/{eventId}"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stalls/search"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall/{eventId}"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall/{eventId}/{stallNo}"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/approve"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject"));
 

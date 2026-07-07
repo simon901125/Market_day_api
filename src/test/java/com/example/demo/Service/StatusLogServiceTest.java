@@ -36,6 +36,7 @@ import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.dto.response.LoginUserResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 @ExtendWith(MockitoExtension.class)
 class StatusLogServiceTest {
@@ -52,7 +53,7 @@ class StatusLogServiceTest {
     @Mock
     private JwtService jwtService;
 
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     @InjectMocks
     private StatusLogService statusLogService;
@@ -92,6 +93,41 @@ class StatusLogServiceTest {
                 .containsExactly("application_dates.selected_stall_id", "application_dates.selected_stall_id");
         assertThat(entries).extracting(StatusLogEntry::getNewStatus)
                 .containsExactly("88", "89");
+    }
+
+    @Test
+    void stallSelectionRecordsOnlyRequestedApplicationDate() {
+        MockHttpServletRequest request = post("/api/stalls/select");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(
+                request,
+                """
+                        {
+                          "applicationNo": "MD001",
+                          "selections": [
+                            {
+                              "applyDate": "2026-10-11",
+                              "stallNo": "A02"
+                            }
+                          ]
+                        }
+                        """);
+        when(stallRepository.findSelectedApplicationDates("MD001"))
+                .thenReturn(List.of(
+                        Map.of(
+                                "applicationDateId", 101L,
+                                "applyDate", "2026-10-10",
+                                "selectedStallId", 88L),
+                        Map.of(
+                                "applicationDateId", 102L,
+                                "applyDate", "2026-10-11",
+                                "selectedStallId", 89L)));
+
+        statusLogService.recordForRequest(1L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetId()).isEqualTo(102L);
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("89");
     }
 
     @ParameterizedTest

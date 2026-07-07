@@ -6,8 +6,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -113,14 +111,15 @@ public class StallService {
         if (applicationDates.isEmpty()) {
             return ApiResponse.fail("Application dates are required");
         }
-        if (applicationDates.stream().anyMatch(date -> date.get("selectedStallId") != null)) {
-            return ApiResponse.fail("Application has already selected a stall");
-        }
 
         Long eventId = ((Number) application.get("eventId")).longValue();
-        Set<LocalDate> registeredDates = applicationDates.stream()
-                .map(date -> toLocalDate(date.get("applyDate")))
-                .collect(Collectors.toSet());
+        Map<LocalDate, Map<String, Object>> applicationDatesByDate = new HashMap<>();
+        for (Map<String, Object> applicationDate : applicationDates) {
+            LocalDate applyDate = toLocalDate(applicationDate.get("applyDate"));
+            if (applyDate != null) {
+                applicationDatesByDate.put(applyDate, applicationDate);
+            }
+        }
         Map<LocalDate, String> requestedSelections = new HashMap<>();
         for (StallSelectionRequest.Selection selection : body.getSelections()) {
             if (selection == null || selection.getApplyDate() == null) {
@@ -133,17 +132,22 @@ public class StallService {
                 return ApiResponse.fail("Duplicate apply date in stall selections");
             }
         }
-        if (!requestedSelections.keySet().equals(registeredDates)) {
-            return ApiResponse.fail("Stall selections must match all application dates");
+        for (LocalDate requestedDate : requestedSelections.keySet()) {
+            Map<String, Object> applicationDate = applicationDatesByDate.get(requestedDate);
+            if (applicationDate == null) {
+                return ApiResponse.fail("Apply date is not part of this application");
+            }
+            if (applicationDate.get("selectedStallId") != null) {
+                return ApiResponse.fail("Application date has already selected a stall");
+            }
         }
 
-        List<StallSelectionResponse.Selection> selectedResults = new java.util.ArrayList<>();
         for (Map.Entry<LocalDate, String> requestedSelection : requestedSelections.entrySet()) {
             Map<String, Object> stall = stallRepository.findStallForSelection(eventId, requestedSelection.getValue())
                     .orElse(null);
             if (stall == null) {
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                return ApiResponse.fail("Stall not found");
+                return ApiResponse.fail("Invalid stall selection");
             }
 
             String stallStatus = stringValue(stall.get("status"));
@@ -167,10 +171,15 @@ public class StallService {
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
                 return ApiResponse.fail("Stall has already been selected");
             }
-            selectedResults.add(new StallSelectionResponse.Selection(
-                    requestedSelection.getKey(),
-                    requestedSelection.getValue()));
         }
+
+        List<StallSelectionResponse.Selection> selectedResults = stallRepository
+                .findSelectedApplicationDates(body.getApplicationNo())
+                .stream()
+                .map(selectedDate -> new StallSelectionResponse.Selection(
+                        toLocalDate(selectedDate.get("applyDate")),
+                        normalizeText(selectedDate.get("stallNo"))))
+                .toList();
 
         return ApiResponse.success(
                 "Stall selection successful",
@@ -326,6 +335,12 @@ public class StallService {
         List<Map<String, Object>> stalls = stallRepository.findEventStallsMap(eventId, targetDate).stream()
                 .map(this::withDisplayBoothStatus)
                 .toList();
+        List<Map<String, Object>> selectedStalls = stallRepository.findSelectedApplicationDates(applicationNo).stream()
+                .map(this::selectedStallSummary)
+                .toList();
+        List<Object> alreadySelectDate = selectedStalls.stream()
+                .map(stall -> stall.get("applyDate"))
+                .toList();
 
         Map<String, Object> application = new LinkedHashMap<>();
         application.put("applicationNo", applicationData.get("applicationNo"));
@@ -334,8 +349,8 @@ public class StallService {
         application.put("currentApplyDate", targetDate);
         application.put("applyDates", applicationData.get("applyDates"));
         application.put("applyDateCount", applicationData.get("applicationDateCount"));
-        application.put("selectedStallId", applicationData.get("selectedStallId"));
-        application.put("selectedStall", selectedStall(applicationData));
+        application.put("selectedStalls", selectedStalls);
+        application.put("alreadyselectdate", alreadySelectDate);
 
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("eventTitle", applicationData.get("eventTitle"));
@@ -352,7 +367,9 @@ public class StallService {
     public ApiResponse<MapBackedResponse> getOrganizerStallMap(
             String authorizationHeader,
             Long eventId,
-            LocalDate applyDate) {
+            LocalDate applyDate,
+            String keyword,
+            String status) {
         Map<String, Object> organizer = authenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -378,11 +395,16 @@ public class StallService {
 
         List<Map<String, Object>> stallRows = stallRepository.findEventStallsMap(eventId, targetDate).stream()
                 .map(this::withDisplayBoothStatus)
+                .filter(stall -> matchesStallKeyword(stall, keyword))
+                .filter(stall -> matchesStallStatus(stall, status))
                 .toList();
 
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("eventId", eventData.get("eventId"));
         event.put("eventTitle", eventData.get("eventTitle"));
+        event.put("locationName", eventData.get("locationName"));
+        event.put("eventStatus", displayOrganizerEventStatus(eventData));
+        event.put("totalStallCount", eventData.get("totalStallCount"));
         event.put("startAt", eventData.get("startAt"));
         event.put("endAt", eventData.get("endAt"));
         event.put("currentApplyDate", targetDate);
@@ -520,6 +542,17 @@ public class StallService {
     private Map<String, Object> withDisplayBoothStatus(Map<String, Object> stall) {
         Map<String, Object> response = new LinkedHashMap<>(stall);
         response.put("status", displayBoothStatus(stall.get("status")));
+        if (stall.get("selectedApplicationId") != null) {
+            response.put("selectedVendor", orderedMap(
+                    "name", stall.get("vendorName"),
+                    "type", stall.get("brandType"),
+                    "ownerName", stall.get("vendorOwnerName"),
+                    "selectedAt", stall.get("selectedAt")));
+        }
+        response.remove("vendorName");
+        response.remove("brandType");
+        response.remove("vendorOwnerName");
+        response.remove("selectedAt");
         return response;
     }
 
@@ -527,6 +560,43 @@ public class StallService {
         Map<String, Object> response = new LinkedHashMap<>(stall);
         response.put("currentApplyDate", applyDate);
         return response;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean matchesStallKeyword(Map<String, Object> stall, String keyword) {
+        String normalizedKeyword = normalizeText(keyword).toLowerCase();
+        if (normalizedKeyword.isEmpty()) {
+            return true;
+        }
+        String stallNo = normalizeText(stall.get("stallNo")).toLowerCase();
+        if (stallNo.contains(normalizedKeyword)) {
+            return true;
+        }
+        Object selectedVendor = stall.get("selectedVendor");
+        if (selectedVendor instanceof Map<?, ?> vendor) {
+            String vendorName = normalizeText(((Map<String, Object>) vendor).get("name")).toLowerCase();
+            return vendorName.contains(normalizedKeyword);
+        }
+        return false;
+    }
+
+    private boolean matchesStallStatus(Map<String, Object> stall, String status) {
+        String normalizedStatus = normalizeText(status);
+        if (normalizedStatus.isEmpty()
+                || "全部".equals(normalizedStatus)
+                || "全部狀態".equals(normalizedStatus)) {
+            return true;
+        }
+
+        String displayStatus = normalizeText(stall.get("status"));
+        String rawStatus = switch (normalizedStatus.toUpperCase()) {
+            case "AVAILABLE" -> "可選擇";
+            case "SELECTED" -> "已選擇";
+            case "ASSIGNED", "SOLD" -> "系統分配";
+            case "DISABLED" -> "不可使用";
+            default -> normalizedStatus;
+        };
+        return displayStatus.equals(rawStatus);
     }
 
     private List<Map<String, Object>> groupStallsByZone(List<Map<String, Object>> stalls) {
@@ -560,6 +630,44 @@ public class StallService {
         };
     }
 
+    private String displayOrganizerEventStatus(Map<String, Object> eventData) {
+        String workflowStatus = stringValue(eventData.get("workflowStatus"));
+        if ("UNPUBLISHED".equals(workflowStatus) || "CANCELLED".equals(workflowStatus)) {
+            return "已下架";
+        }
+        if ("READY_TO_PUBLISH".equals(workflowStatus)) {
+            return "待發布";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime registrationStartAt = toLocalDateTime(eventData.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(eventData.get("registrationEndAt"));
+        LocalDateTime brandsPublicAt = toLocalDateTime(eventData.get("brandsPublicAt"));
+        LocalDateTime startAt = toLocalDateTime(eventData.get("startAt"));
+        LocalDateTime endAt = toLocalDateTime(eventData.get("endAt"));
+
+        if (endAt != null && now.isAfter(endAt)) {
+            return "已結束";
+        }
+        if (startAt != null && !now.isBefore(startAt) && (endAt == null || !now.isAfter(endAt))) {
+            return "進行中";
+        }
+        if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+            return "待發布";
+        }
+        if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
+            return isOrganizerEventFull(eventData) ? "已額滿" : "報名中";
+        }
+        if (brandsPublicAt == null || !now.isBefore(brandsPublicAt)) {
+            return "品牌已公開";
+        }
+        return "品牌已公開";
+    }
+
+    private boolean isOrganizerEventFull(Map<String, Object> eventData) {
+        return isTrue(eventData.get("isFullySelected"));
+    }
+
     private boolean isSelectedStallApplication(Map<String, Object> applicationData) {
         return toLong(applicationData.get("selectedStallCount")) > 0
                 && toLong(applicationData.get("selectedStallCount")).equals(toLong(applicationData.get("applicationDateCount")))
@@ -568,19 +676,14 @@ public class StallService {
                 && stringValue(applicationData.get("refundStatus")).isEmpty();
     }
 
-    private Map<String, Object> selectedStall(Map<String, Object> applicationData) {
-        if (applicationData.get("selectedStallId") == null) {
-            return null;
-        }
-
+    private Map<String, Object> selectedStallSummary(Map<String, Object> selectedDate) {
         Map<String, Object> stall = new LinkedHashMap<>();
-        stall.put("selectedStallId", applicationData.get("selectedStallId"));
-        stall.put("applyDate", applicationData.get("currentApplyDate"));
-        stall.put("stallNo", applicationData.get("selectedStallNo"));
-        stall.put("zoneName", applicationData.get("selectedStallZoneName"));
-        stall.put("width", applicationData.get("selectedStallWidth"));
-        stall.put("length", applicationData.get("selectedStallLength"));
-        stall.put("height", applicationData.get("selectedStallHeight"));
+        stall.put("selectedStallId", selectedDate.get("selectedStallId"));
+        stall.put("applyDate", selectedDate.get("applyDate"));
+        stall.put("stallNo", selectedDate.get("stallNo"));
+        stall.put("zoneName", selectedDate.get("zoneName"));
+        stall.put("width", selectedDate.get("width"));
+        stall.put("length", selectedDate.get("length"));
         return stall;
     }
 
@@ -643,6 +746,24 @@ public class StallService {
             }
         }
         return null;
+    }
+
+    private LocalDateTime toLocalDateTime(Object value) {
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime;
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime();
+        }
+        String text = value == null ? "" : value.toString().trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(text.replace(" ", "T"));
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private boolean isDateInEventRange(LocalDate date, Map<String, Object> eventData) {

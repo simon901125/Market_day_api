@@ -26,7 +26,7 @@ public class UserRepository {
 
     public List<UserResponse> findAllUsers() {
         String sql = """
-                SELECT id, role, name, email, password_hash, phone, provider, status, isLogin, email_verified_at, expired_time, created_at, updated_at
+                SELECT id, role, email, password_hash, provider, google_sub, status, isLogin, email_verified_at, expired_time, created_at, updated_at
                 FROM users
                 """;
 
@@ -34,11 +34,10 @@ public class UserRepository {
             UserResponse user = new UserResponse();
             user.setId(rs.getLong("id"));
             user.setRole(rs.getString("role"));
-            user.setName(rs.getString("name"));
             user.setEmail(rs.getString("email"));
             user.setPasswordHash(rs.getString("password_hash"));
-            user.setPhone(rs.getString("phone"));
             user.setProvider(rs.getString("provider"));
+            user.setGoogleSub(rs.getString("google_sub"));
             user.setStatus(rs.getString("status"));
             user.setIsLogin(rs.getBoolean("isLogin"));
             user.setEmailVerifiedAt(rs.getObject("email_verified_at", LocalDateTime.class));
@@ -57,31 +56,28 @@ public class UserRepository {
         return count != null && count > 0;
     }
 
-    public Long createLocalUser(String role, String name, String email, String passwordHash, String phone) {
+    public Long createLocalUser(String role, String email, String passwordHash) {
         String sql = """
-                INSERT INTO users (role, name, email, password_hash, phone, provider)
-                VALUES (:role, :name, :email, :passwordHash, :phone, :provider)
+                INSERT INTO users (role, email, password_hash, provider)
+                VALUES (:role, :email, :passwordHash, :provider)
                 """;
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("role", role)
-                .addValue("name", name)
                 .addValue("email", email)
                 .addValue("passwordHash", passwordHash)
-                .addValue("phone", phone)
                 .addValue("provider", "LOCAL");
         KeyHolder keyHolder = new GeneratedKeyHolder();
         namedParameterJdbcTemplate.update(sql, params, keyHolder, new String[] {"id"});
         return keyHolder.getKey().longValue();
     }
 
-    public Long createSystemAdmin(String name, String email, String passwordHash) {
+    public Long createSystemAdmin(String email, String passwordHash) {
         String sql = """
-                INSERT INTO users (role, name, email, password_hash, provider, status, isLogin, email_verified_at)
-                VALUES (:role, :name, :email, :passwordHash, :provider, :status, :isLogin, SYSDATETIME())
+                INSERT INTO users (role, email, password_hash, provider, status, isLogin, email_verified_at)
+                VALUES (:role, :email, :passwordHash, :provider, :status, :isLogin, SYSDATETIME())
                 """;
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("role", "ADMIN")
-                .addValue("name", name)
                 .addValue("email", email)
                 .addValue("passwordHash", passwordHash)
                 .addValue("provider", "LOCAL")
@@ -92,68 +88,75 @@ public class UserRepository {
         return keyHolder.getKey().longValue();
     }
 
-    public int updateSystemAdminName(String email, String name) {
+    public Long createGoogleUser(String role, String email, String googleSub) {
         String sql = """
-                UPDATE users
-                SET name = :name,
-                    updated_at = SYSDATETIME()
-                WHERE email = :email
-                  AND role = :role
-                  AND provider = :provider
-                """;
-        Map<String, Object> map = new HashMap<>();
-        map.put("email", email);
-        map.put("name", name);
-        map.put("role", "ADMIN");
-        map.put("provider", "LOCAL");
-        return namedParameterJdbcTemplate.update(sql, map);
-    }
-
-    public Long createGoogleUser(String role, String name, String email) {
-        String sql = """
-                INSERT INTO users (role, name, email, password_hash, phone, provider)
-                VALUES (:role, :name, :email, :passwordHash, :phone, :provider)
+                INSERT INTO users (role, email, password_hash, provider, google_sub)
+                VALUES (:role, :email, :passwordHash, :provider, :googleSub)
                 """;
 
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("role", role)
-                .addValue("name", name)
                 .addValue("email", email)
                 .addValue("passwordHash", null)
-                .addValue("phone", null)
-                .addValue("provider", "GOOGLE");
+                .addValue("provider", "GOOGLE")
+                .addValue("googleSub", googleSub);
         KeyHolder keyHolder = new GeneratedKeyHolder();
         namedParameterJdbcTemplate.update(sql, params, keyHolder, new String[] {"id"});
         return keyHolder.getKey().longValue();
     }
 
+    public void createUserProfile(Long userId, String profileType, String name, String email) {
+        String sql = """
+                INSERT INTO user_profiles (
+                    user_id, profile_type, name
+                )
+                VALUES (
+                    :userId, :profileType, :name
+                )
+                """;
+        Map<String, Object> map = new HashMap<>();
+        String profileName = name == null || name.isBlank() ? email : name;
+        map.put("userId", userId);
+        map.put("profileType", profileType);
+        map.put("name", profileName);
+        namedParameterJdbcTemplate.update(sql, map);
+    }
+
     public Optional<Map<String, Object>> findLocalUserByEmail(String email) {
         String sql = """
-                SELECT id, role, name, email, password_hash, phone, provider, status, isLogin,
-                       email_verified_at AS emailVerifiedAt,
-                       expired_time AS expiredTime,
-                       created_at AS createdAt,
-                       updated_at AS updatedAt
-                FROM users
-                WHERE email = :email
-                  AND provider = :provider
+                SELECT u.id, u.role, u.email, u.password_hash, u.provider, u.status, u.isLogin,
+                       up.name AS name,
+                       up.contact_phone AS phone,
+                       u.google_sub AS googleSub,
+                       u.email_verified_at AS emailVerifiedAt,
+                       u.expired_time AS expiredTime,
+                       u.created_at AS createdAt,
+                       u.updated_at AS updatedAt
+                FROM users u
+                    LEFT JOIN user_profiles up ON up.user_id = u.id AND up.profile_type = u.role
+                WHERE u.email = :email
+                  AND u.provider IN ('LOCAL', 'BOTH')
                 """;
         Map<String, Object> map = new HashMap<>();
         map.put("email", email);
-        map.put("provider", "LOCAL");
         List<Map<String, Object>> list = namedParameterJdbcTemplate.queryForList(sql, map);
         return RepositoryResultMapper.normalizeOptional(list.stream().findFirst());
     }
 
     public Optional<Map<String, Object>> findProfileByEmail(String email) {
         String sql = """
-                SELECT id, role, name, email, phone, provider, status, isLogin,
-                       email_verified_at AS emailVerifiedAt,
-                       expired_time AS expiredTime,
-                       created_at AS createdAt,
-                       updated_at AS updatedAt
-                FROM users
-                WHERE email = :email
+                SELECT u.id, u.role, u.email, u.provider,
+                       up.name AS name,
+                       up.contact_phone AS phone,
+                       u.google_sub AS googleSub,
+                       u.status, u.isLogin,
+                       u.email_verified_at AS emailVerifiedAt,
+                       u.expired_time AS expiredTime,
+                       u.created_at AS createdAt,
+                       u.updated_at AS updatedAt
+                FROM users u
+                    LEFT JOIN user_profiles up ON up.user_id = u.id AND up.profile_type = u.role
+                WHERE u.email = :email
                 """;
         Map<String, Object> map = new HashMap<>();
         map.put("email", email);
@@ -161,18 +164,43 @@ public class UserRepository {
         return RepositoryResultMapper.normalizeOptional(list.stream().findFirst());
     }
 
-    public int updateProfileByEmail(String email, String name, String phone) {
+    public Optional<Map<String, Object>> findGoogleUserBySub(String googleSub) {
         String sql = """
-                UPDATE users
-                SET name = COALESCE(:name, name),
-                    phone = COALESCE(:phone, phone),
-                    updated_at = SYSDATETIME()
-                WHERE email = :email
+                SELECT u.id, u.role, u.email, u.provider,
+                       up.name AS name,
+                       up.contact_phone AS phone,
+                       u.google_sub AS googleSub,
+                       u.status, u.isLogin,
+                       u.email_verified_at AS emailVerifiedAt,
+                       u.expired_time AS expiredTime,
+                       u.created_at AS createdAt,
+                       u.updated_at AS updatedAt
+                FROM users u
+                    LEFT JOIN user_profiles up ON up.user_id = u.id AND up.profile_type = u.role
+                WHERE u.google_sub = :googleSub
+                  AND u.provider IN ('GOOGLE', 'BOTH')
                 """;
         Map<String, Object> map = new HashMap<>();
-        map.put("name", name);
-        map.put("phone", phone);
+        map.put("googleSub", googleSub);
+        List<Map<String, Object>> list = namedParameterJdbcTemplate.queryForList(sql, map);
+        return RepositoryResultMapper.normalizeOptional(list.stream().findFirst());
+    }
+
+    public int bindGoogleAccountByEmail(String email, String googleSub) {
+        String sql = """
+                UPDATE users
+                SET provider = 'BOTH',
+                    google_sub = :googleSub,
+                    email_verified_at = COALESCE(email_verified_at, SYSDATETIME()),
+                    status = CASE WHEN status = 'UNACTIVE' THEN 'ACTIVE' ELSE status END,
+                    updated_at = SYSDATETIME()
+                WHERE email = :email
+                  AND provider = 'LOCAL'
+                  AND google_sub IS NULL
+                """;
+        Map<String, Object> map = new HashMap<>();
         map.put("email", email);
+        map.put("googleSub", googleSub);
         return namedParameterJdbcTemplate.update(sql, map);
     }
 
@@ -195,7 +223,7 @@ public class UserRepository {
                 FROM market_events
                 WHERE user_id = :userId
                   AND end_at >= SYSDATETIME()
-                  AND (publish_status IS NULL OR publish_status NOT IN (N'UNPUBLISHED', N'CANCELLED'))
+                  AND workflow_status NOT IN (N'UNPUBLISHED', N'CANCELLED')
                 """;
         Map<String, Object> map = new HashMap<>();
         map.put("userId", userId);
@@ -304,12 +332,11 @@ public class UserRepository {
                 SET password_hash = :passwordHash,
                     updated_at = SYSDATETIME()
                 WHERE email = :email
-                  AND provider = :provider
+                  AND provider IN ('LOCAL', 'BOTH')
                 """;
         Map<String, Object> map = new HashMap<>();
         map.put("email", email);
         map.put("passwordHash", passwordHash);
-        map.put("provider", "LOCAL");
         return namedParameterJdbcTemplate.update(sql, map);
     }
 
@@ -319,12 +346,11 @@ public class UserRepository {
                 SET password_hash = :passwordHash,
                     updated_at = SYSDATETIME()
                 WHERE id = :userId
-                  AND provider = :provider
+                  AND provider IN ('LOCAL', 'BOTH')
                 """;
         Map<String, Object> map = new HashMap<>();
         map.put("userId", userId);
         map.put("passwordHash", passwordHash);
-        map.put("provider", "LOCAL");
         return namedParameterJdbcTemplate.update(sql, map);
     }
 

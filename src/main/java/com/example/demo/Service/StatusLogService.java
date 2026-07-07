@@ -2,9 +2,12 @@ package com.example.demo.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
@@ -87,7 +90,17 @@ public class StatusLogService {
             body.setApplicationNo(response.getApplicationNo());
         }
 
+        Set<LocalDate> requestedDates = body.getSelections() == null ? Set.of() : body.getSelections().stream()
+                .filter(selection -> selection != null && selection.getApplyDate() != null)
+                .map(StallSelectionRequest.Selection::getApplyDate)
+                .collect(Collectors.toSet());
+
         List<Map<String, Object>> selectedDates = stallRepository.findSelectedApplicationDates(body.getApplicationNo());
+        if (!requestedDates.isEmpty()) {
+            selectedDates = selectedDates.stream()
+                    .filter(selectedDate -> requestedDates.contains(toLocalDate(selectedDate.get("applyDate"))))
+                    .toList();
+        }
         if (selectedDates.isEmpty()) {
             return List.of();
         }
@@ -228,6 +241,24 @@ public class StatusLogService {
         }
         if (value instanceof String string && !string.isBlank()) {
             return Long.valueOf(string);
+        }
+        return null;
+    }
+
+    private LocalDate toLocalDate(Object value) {
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        if (value instanceof java.sql.Date sqlDate) {
+            return sqlDate.toLocalDate();
+        }
+        String text = value == null ? "" : value.toString().trim();
+        if (text.length() >= 10) {
+            try {
+                return LocalDate.parse(text.substring(0, 10));
+            } catch (RuntimeException ignored) {
+                return null;
+            }
         }
         return null;
     }

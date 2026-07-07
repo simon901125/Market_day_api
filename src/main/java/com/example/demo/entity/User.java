@@ -33,9 +33,6 @@ public class User {
     @Column(name = "role", length = 30, nullable = false)
     private Role role;
 
-    @Column(name = "name", length = 100, nullable = false)
-    private String name;
-
     @Column(name = "email", length = 255, nullable = false, unique = true)
     private String email;
 
@@ -49,6 +46,9 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", length = 30, nullable = false)
     private Provider provider;
+
+    @Column(name = "google_sub", length = 255)
+    private String googleSub;
 
     /**使用者帳號狀態 */
     @Enumerated(EnumType.STRING)
@@ -86,6 +86,7 @@ public class User {
     /**帳號登入方式 */
     public enum Provider {
         GOOGLE,
+        BOTH,
         LOCAL
     }
 

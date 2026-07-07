@@ -1,6 +1,6 @@
 # Swagger / OpenAPI 文件
 
-更新日期：2026-06-29
+更新日期：2026-07-07
 
 本文件說明目前 `demo` 專案的 Swagger / OpenAPI 設定、DTO 標註方式、JWT 使用方式，以及目前 API 清單。
 
@@ -89,7 +89,7 @@ public class LocalLoginRequest {
 | --- | --- |
 | `email` | 必填，需符合 Email 格式。 |
 | `password` | 必填，至少 8 碼，需包含英文與數字。 |
-| `phone` | 選填；若有提供，需符合 `09xxxxxxxx`。 |
+| `name` | 本地註冊必填，最多 20 個字元。 |
 | `code` | 必填，6 位數驗證碼。 |
 | `resetToken` | 重設密碼時必填。 |
 | `applicationNo` | 攤位選擇與攤位圖查詢使用。 |
@@ -172,13 +172,17 @@ Bearer <JWT_TOKEN>
 | Method | API |
 | --- | --- |
 | POST | `/api/auth/logout` |
+| POST | `/api/auth/google-bind` |
 | GET | `/api/auth/me` |
-| POST | `/api/users/me` |
 | POST | `/api/account/deactivate` |
 | GET | `/api/vendor/account` |
 | GET | `/api/vendor/stall-map/{applicationNo}` |
 | POST | `/api/stalls/select` |
 | GET | `/api/organizer/account` |
+| GET | `/api/organizer/accounts/{eventId}` |
+| GET | `/api/organizer/stalls/search` |
+| GET | `/api/organizer/stall/{eventId}` |
+| GET | `/api/organizer/stall/{eventId}/{stallNo}` |
 | GET | `/api/organizer/applications/search` |
 | GET | `/api/organizer/applications/{id}` |
 | POST | `/api/organizer/applications/{id}/approve` |
@@ -202,21 +206,21 @@ Bearer <JWT_TOKEN>
 | POST | `/api/admin/local-login` | `LocalLoginRequest` | 否 | 管理員本地登入。 |
 | POST | `/api/vendor/google-login` | `GoogleCredentialRequest` | 否 | 攤主 Google 登入。 |
 | POST | `/api/organizer/google-login` | `GoogleCredentialRequest` | 否 | 主辦方 Google 登入。 |
+| POST | `/api/auth/google-bind` | `GoogleCredentialRequest` | 是 | 綁定目前登入帳號與 Google。 |
 | POST | `/api/auth/createAccount/emailVerify` | `EmailVerificationRequest` | 否 | 註冊 Email 驗證。 |
 | POST | `/api/auth/resetPassword/request` | `RequestPasswordResetRequest` | 否 | 申請重設密碼驗證碼。 |
 | POST | `/api/auth/resetPassword/emailVerify` | `EmailVerificationRequest` | 否 | 驗證重設密碼 Email 驗證碼，成功後回傳 reset token。 |
 | POST | `/api/auth/resetPassword/reset` | `ResetPasswordRequest` | 否 | 使用 reset token 重設密碼。 |
 | POST | `/api/auth/logout` | - | 是 | 登出。 |
 | GET | `/api/auth/me` | - | 是 | 取得目前登入使用者資料。 |
-| POST | `/api/users/me` | `UpdateUserProfileRequest` | 是 | 更新目前登入使用者資料。 |
 | POST | `/api/account/deactivate` | - | 是 | 停用目前登入帳號。 |
 
 ### 攤主與攤位 API
 
 | Method | API | Request DTO | JWT | 說明 |
 | --- | --- | --- | --- | --- |
-| POST | `/api/stalls/select` | `StallSelectionRequest` | 是 | 依 `applicationNo` 與 `stallNo` 選位；後端自行查出活動並檢查攤主身分。 |
-| GET | `/api/events/{eventId}/stallsStatus` | - | 否 | 查詢活動攤位狀態。 |
+| POST | `/api/stalls/select` | `StallSelectionRequest` | 是 | 依 `applicationNo` 與 `selections[]` 一次送出該申請單所有報名日期的選位。 |
+| GET | `/api/eventsMap/{eventId}/stallsStatus` | - | 否 | 公開查詢活動指定日期攤位狀態；未帶日期時預設活動第一天。 |
 | GET | `/api/vendor/account` | - | 是 | 取得目前登入攤主資料。 |
 | GET | `/api/vendor/stall-map/{applicationNo}` | - | 是 | 查詢待選位或已成功選位申請單的攤位圖；已選位時回傳 `selectedStall`。 |
 
@@ -258,8 +262,24 @@ Bearer <JWT_TOKEN>
 | Method | API | Request | JWT | 說明 |
 | --- | --- | --- | --- | --- |
 | GET | `/api/organizer/account` | Authorization header | 是 | 取得目前登入主辦方資料。 |
+| GET | `/api/organizer/accounts/search` | Query params | 是 | 查詢主辦方帳務活動列表，可依活動名稱、狀態與活動日期篩選。 |
+| GET | `/api/organizer/accounts/{eventId}` | Query params | 是 | 查詢活動帳務詳情，可依帳務狀態篩選付款明細。 |
 | GET | `/api/organizer/applications/search` | Authorization header | 是 | 查詢目前主辦方 published 活動的全部申請資料，依申請時間倒序。 |
 | GET | `/api/organizer/applications/{id}` | Authorization header | 是 | 查詢主辦方申請明細。 |
+| GET | `/api/organizer/stalls/search` | Query params | 是 | 查詢主辦方攤位管理活動列表。 |
+| GET | `/api/organizer/stall/{eventId}` | Query params | 是 | 查詢主辦方活動指定日期攤位狀況，可依關鍵字與選位狀態篩選。 |
+| GET | `/api/organizer/stall/{eventId}/{stallNo}` | Query params | 是 | 查詢主辦方活動指定日期單一攤位的攤主與申請資訊。 |
+
+## Organizer 帳務詳情
+
+`GET /api/organizer/accounts/{eventId}`
+
+- 需要 `Authorization` header。
+- `eventId` 放在 path params。
+- `status` query param 可篩選付款明細，支援 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`。
+- 回傳 `event`、`summary`、`statistics`、`payments` 四個主要區塊。
+- `payments` 不回傳 `stallNo`。
+- `payments.refundAmount` 只代表已完成退款金額；退款申請中與退款處理中的明細會回 `0`，且不納入帳務摘要退款總額。
 
 ## Organizer 申請列表
 
@@ -297,13 +317,32 @@ Bearer <JWT_TOKEN>
 
 | 區塊 | 說明 |
 | --- | --- |
-| `event` | 活動名稱、時間、地點、封面圖。 |
-| `application` | 申請、審核、付款、保證金、退款與備註狀態。 |
-| `statusTimeline` | 申請、付款、退款相關時間。 |
+| `application` | 申請 ID、申請編號與後端計算後的申請狀態。 |
+| `event` | 活動名稱、活動狀態、活動日期與地址；`eventStatus` 固定為 `活動預告`、`即將開始`、`進行中`、`已結束`。 |
 | `vendor` | 攤主聯絡資訊。 |
 | `brand` | 品牌資訊。 |
-| `registration` | 報名日期與攤位資訊。 |
-| `fee` | 費用、付款與退款資訊。 |
+| `applicationdetail` | 報名時段、攤位尺寸、攤位區域、攤位類別、車牌、申請備註與審核備註；`registrationPeriods` 為單一字串。 |
+| `stall` | 依報名日期回傳攤位列；每列包含日期、攤位編號、區域與選擇狀態。 |
+| `fee` | 付款狀態、付款方式、付款編號與付款金額。 |
+| `feedetail` | 報名費、設備租借費、額外電費、保證金與總計。 |
+| `equipmentRentals` | 四區設備/用電資訊：`freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower`。 |
+| `status` | 固定狀態流清單與各節點時間。 |
+
+`applicationdetail.registrationPeriods` 範例：
+
+```text
+2026-06-28 11:00-19:00 - 2026-06-29 11:00-19:00
+```
+
+`feedetail.content` 範例：
+
+| 項目 | content 範例 |
+| --- | --- |
+| 報名費 | `2天 (2026-06-28、2026-06-29)` |
+| 設備租借費 | `帳篷租借*1、冷藏櫃租借*1` |
+| 額外電費 | `110V / 500W*2` |
+
+`rentalEquipments.unit` 與 `extraPower.unit` 只回單位文字，例如 `天`，不包含 `/`。
 
 ## 文件維護規則
 

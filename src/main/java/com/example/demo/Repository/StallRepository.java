@@ -221,10 +221,14 @@ public class StallRepository {
                     ad.id AS applicationDateId,
                     ad.apply_date AS applyDate,
                     ad.selected_stall_id AS selectedStallId,
-                    s.stall_no AS stallNo
+                    s.stall_no AS stallNo,
+                    z.zone_name AS zoneName,
+                    s.width,
+                    s.length
                 FROM dbo.event_applications a
                 INNER JOIN dbo.application_dates ad ON ad.application_id = a.id
                 INNER JOIN dbo.event_stalls s ON s.id = ad.selected_stall_id
+                LEFT JOIN dbo.event_stall_zones z ON z.id = s.zone_id
                 WHERE a.application_no = :applicationNo
                 ORDER BY ad.apply_date ASC
                 """;
@@ -323,7 +327,10 @@ public class StallRepository {
                         ELSE N'AVAILABLE'
                     END AS status,
                     selected_application.id AS selectedApplicationId,
-                    selected_vendor.name AS vendorName
+                    selected_vendor.name AS vendorName,
+                    selected_vp.brand_type AS brandType,
+                    selected_vendor.contact_name AS vendorOwnerName,
+                    selected_at.selectedAt
                 FROM dbo.event_stalls s
                 INNER JOIN dbo.event_stall_zones z ON z.id = s.zone_id
                 LEFT JOIN dbo.application_dates selected_date ON selected_date.selected_stall_id = s.id
@@ -332,6 +339,17 @@ public class StallRepository {
                     AND selected_application.is_cancelled = 0
                 LEFT JOIN dbo.vendor_profiles selected_vp ON selected_vp.id = selected_application.vendor_profile_id
                 LEFT JOIN dbo.user_profiles selected_vendor ON selected_vendor.id = selected_vp.user_profile_id
+                OUTER APPLY (
+                    SELECT TOP 1 rl.created_at AS selectedAt
+                    FROM dbo.status_logs sl
+                    INNER JOIN dbo.request_logs rl ON rl.id = sl.request_log_id
+                    WHERE rl.status_code BETWEEN 200 AND 299
+                      AND sl.target_type = N'APPLICATION_DATE'
+                      AND sl.target_id = selected_date.id
+                      AND sl.status_field = N'application_dates.selected_stall_id'
+                      AND sl.new_status = CONVERT(NVARCHAR(100), s.id)
+                    ORDER BY rl.created_at DESC, sl.id DESC
+                ) selected_at
                 WHERE s.event_id = :eventId
                 ORDER BY z.zone_name ASC, s.stall_no ASC
                 """;
@@ -347,13 +365,50 @@ public class StallRepository {
                 SELECT
                     e.id AS eventId,
                     e.title AS eventTitle,
+                    e.location_name AS locationName,
                     e.city,
                     e.district,
                     e.address,
                     e.start_at AS startAt,
                     e.end_at AS endAt,
-                    e.map_image_url AS mapImageUrl
+                    e.registration_start_at AS registrationStartAt,
+                    e.registration_end_at AS registrationEndAt,
+                    e.brands_public_at AS brandsPublicAt,
+                    e.workflow_status AS workflowStatus,
+                    e.map_image_url AS mapImageUrl,
+                    COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) AS totalStallCount,
+                    COALESCE(full_status.isFullySelected, 0) AS isFullySelected
                 FROM dbo.market_events e
+                OUTER APPLY (
+                    SELECT COUNT(*) AS totalStalls
+                    FROM dbo.event_stalls s
+                    WHERE s.event_id = e.id
+                ) stall_count
+                OUTER APPLY (
+                    SELECT CASE
+                        WHEN COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) > 0
+                         AND NOT EXISTS (
+                            SELECT 1
+                            FROM (
+                                SELECT TOP (DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1)
+                                    DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY object_id) - 1, CONVERT(date, e.start_at)) AS applyDate
+                                FROM sys.all_objects
+                            ) event_dates
+                            OUTER APPLY (
+                                SELECT COUNT(DISTINCT ad.selected_stall_id) AS selectedStallCount
+                                FROM dbo.application_dates ad
+                                INNER JOIN dbo.event_applications a ON a.id = ad.application_id
+                                    AND a.event_id = e.id
+                                    AND a.is_cancelled = 0
+                                WHERE ad.apply_date = event_dates.applyDate
+                                  AND ad.selected_stall_id IS NOT NULL
+                            ) selected_count
+                            WHERE COALESCE(selected_count.selectedStallCount, 0)
+                                < COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths)
+                         )
+                        THEN 1 ELSE 0
+                    END AS isFullySelected
+                ) full_status
                 WHERE e.id = :eventId
                   AND e.user_id = :organizerUserId
                 """;

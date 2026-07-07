@@ -25,6 +25,8 @@ import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
 import com.example.demo.dto.response.OrganizerApplicationSummaryResponse;
 import com.example.demo.dto.response.OrganizerAccountingSearchResponse;
 import com.example.demo.dto.response.OrganizerAccountingSummaryResponse;
+import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
+import com.example.demo.dto.response.OrganizerStallEventSummaryResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -116,6 +118,42 @@ public class OrganizerService {
                 new OrganizerAccountingSearchResponse(accounts));
     }
 
+    public ApiResponse<MapBackedResponse> getOrganizerAccountDetail(
+            String authorizationHeader,
+            Long eventId,
+            String status) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (eventId == null) {
+            return ApiResponse.fail("Event id is required");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> account = organizerRepository
+                .findOrganizerAccountingEventDetail(organizerUserId, eventId)
+                .orElse(null);
+        if (account == null) {
+            return ApiResponse.fail("Event not found");
+        }
+
+        List<Map<String, Object>> payments = organizerRepository
+                .findOrganizerAccountingPaymentDetails(eventId)
+                .stream()
+                .map(this::toAccountingPaymentDetailResponse)
+                .filter(payment -> matchesAccountingStatus(payment, status))
+                .toList();
+
+        return ApiResponse.success(
+                "Organizer accounting detail retrieved successfully",
+                new MapBackedResponse(orderedMap(
+                        "event", toAccountingEventResponse(withDisplayPublishStatus(account)),
+                        "summary", toAccountingFinancialSummary(account),
+                        "statistics", toAccountingStatistics(account),
+                        "payments", payments)));
+    }
+
     public ApiResponse<OrganizerApplicationSearchResponse> searchOrganizerApplications(
             String authorizationHeader,
             String eventTitle,
@@ -144,6 +182,34 @@ public class OrganizerService {
                 new OrganizerApplicationSearchResponse(applications));
     }
 
+    public ApiResponse<OrganizerStallEventSearchResponse> searchOrganizerStallEvents(
+            String authorizationHeader,
+            String eventTitle,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        LocalDateTime startAt = eventStartAt == null ? null : eventStartAt.atStartOfDay();
+        LocalDateTime endExclusive = eventEndAt == null ? null : eventEndAt.plusDays(1).atStartOfDay();
+        List<OrganizerStallEventSummaryResponse> events = organizerRepository
+                .findOrganizerStallEvents(organizerUserId, eventTitle, startAt, endExclusive)
+                .stream()
+                .map(this::withDisplayStallEventStatus)
+                .filter(event -> matchesStallEventStatus(event, status))
+                .map(this::toStallEventSummaryResponse)
+                .map(OrganizerStallEventSummaryResponse::new)
+                .toList();
+
+        return ApiResponse.success(
+                "Organizer stall events retrieved successfully",
+                new OrganizerStallEventSearchResponse(events));
+    }
+
     public ApiResponse<OrganizerApplicationDetailResponse> getOrganizerApplicationDetail(String authorizationHeader, Long applicationId) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
@@ -162,8 +228,10 @@ public class OrganizerService {
         }
 
         List<Map<String, Object>> equipmentRentals = organizerRepository.findApplicationEquipmentRentals(applicationId);
+        List<Map<String, Object>> applicationDates = organizerRepository.findApplicationDates(applicationId);
         Map<String, Object> response = toApplicationDetailResponse(
                 withDisplayApplicationStatus(application),
+                applicationDates,
                 equipmentRentals);
         response.put("status", toApplicationStatusFlow(application));
         return ApiResponse.success(
@@ -283,6 +351,23 @@ public class OrganizerService {
         return normalizedStatus.equals(normalizeText(application.get("applicationStatus")));
     }
 
+    private Map<String, Object> withDisplayStallEventStatus(Map<String, Object> event) {
+        Map<String, Object> response = new LinkedHashMap<>(event);
+        response.put("status", displayStallEventStatus(event));
+        return response;
+    }
+
+    private boolean matchesStallEventStatus(Map<String, Object> event, String status) {
+        String normalizedStatus = normalizeText(status);
+        if (normalizedStatus == null
+                || "全部".equals(normalizedStatus)
+                || "全部狀態".equals(normalizedStatus)) {
+            return true;
+        }
+        return normalizedStatus.toUpperCase().equals(statusText(event.get("workflowStatus")))
+                || normalizedStatus.equals(normalizeText(event.get("status")));
+    }
+
     private Map<String, Object> toAccountingSummaryResponse(Map<String, Object> account) {
         Object paidStallCount = account.get("paidStallCount");
         Object totalStallCount = account.get("totalStallCount");
@@ -302,6 +387,122 @@ public class OrganizerService {
                 "netRevenue", account.get("netRevenue"));
     }
 
+    private Map<String, Object> toAccountingEventResponse(Map<String, Object> account) {
+        return orderedMap(
+                "eventId", account.get("eventId"),
+                "coverImageUrl", account.get("coverImageUrl"),
+                "eventTitle", account.get("eventTitle"),
+                "publishStatus", account.get("publishStatus"),
+                "publishStatusText", account.get("publishStatusText"),
+                "eventDate", formatEventDate(account),
+                "locationName", account.get("locationName"),
+                "address", joinAddress(
+                        account.get("city"),
+                        account.get("district"),
+                        account.get("address")),
+                "totalStallCount", account.get("totalStallCount"),
+                "paidStallCount", account.get("paidStallCount"));
+    }
+
+    private Map<String, Object> toAccountingFinancialSummary(Map<String, Object> account) {
+        return orderedMap(
+                "grossRevenue", account.get("grossRevenue"),
+                "refundAmount", account.get("refundAmount"),
+                "returnedDepositAmount", account.get("returnedDepositAmount"),
+                "unreturnedDepositAmount", account.get("unreturnedDepositAmount"),
+                "netRevenue", account.get("netRevenue"));
+    }
+
+    private Map<String, Object> toAccountingStatistics(Map<String, Object> account) {
+        return orderedMap(
+                "payment", orderedMap(
+                        "totalStallCount", account.get("totalStallCount"),
+                        "paidStallCount", account.get("paidStallCount"),
+                        "pendingPaymentStallCount", account.get("pendingPaymentStallCount")),
+                "refund", orderedMap(
+                        "refundCount", account.get("refundCount"),
+                        "refundedCount", account.get("refundedCount"),
+                        "refundingCount", account.get("refundingCount")),
+                "deposit", orderedMap(
+                        "returnedDepositCount", account.get("returnedDepositCount"),
+                        "returnedDepositAmount", account.get("returnedDepositAmount"),
+                        "unreturnedDepositCount", account.get("unreturnedDepositCount"),
+                        "unreturnedDepositAmount", account.get("unreturnedDepositAmount")));
+    }
+
+    private Map<String, Object> toAccountingPaymentDetailResponse(Map<String, Object> payment) {
+        return orderedMap(
+                "paymentNo", payment.get("paymentNo"),
+                "brandName", payment.get("brandName"),
+                "paidAt", formatDateTime(firstPresent(payment.get("paidAt"), payment.get("paymentCreatedAt"))),
+                "paymentAmount", payment.get("paymentAmount"),
+                "refundAmount", payment.get("refundAmount"),
+                "depositStatus", displayDepositStatus(payment.get("depositStatus")),
+                "accountingStatus", displayAccountingStatus(payment));
+    }
+
+    private boolean matchesAccountingStatus(Map<String, Object> payment, String status) {
+        String normalizedStatus = normalizeText(status);
+        if (normalizedStatus == null
+                || "全部".equals(normalizedStatus)
+                || "全部狀態".equals(normalizedStatus)) {
+            return true;
+        }
+        return normalizedStatus.equals(normalizeText(payment.get("accountingStatus")));
+    }
+
+    private String displayAccountingStatus(Map<String, Object> payment) {
+        if (isTrue(payment.get("isCancelled"))) {
+            return "已取消";
+        }
+        String refundStatus = statusText(payment.get("refundStatus"));
+        if ("REFUNDED".equals(refundStatus)) {
+            return "已退款";
+        }
+        if ("REFUNDING".equals(refundStatus)) {
+            return "退款處理中";
+        }
+        if ("REFUND_REQUESTED".equals(refundStatus)) {
+            return "退款申請中";
+        }
+        if ("PAID".equals(statusText(payment.get("paymentStatus")))) {
+            return "付款成功";
+        }
+        return displayPaymentRecordStatus(payment.get("paymentStatus"));
+    }
+
+    private String displayPaymentRecordStatus(Object value) {
+        return switch (statusText(value) == null ? "" : statusText(value)) {
+            case "PAID" -> "付款成功";
+            case "PENDING" -> "待付款";
+            case "FAILED" -> "付款失敗";
+            case "EXPIRED" -> "付款逾期";
+            default -> normalizeText(value);
+        };
+    }
+
+    private String displayDepositStatus(Object value) {
+        return switch (statusText(value) == null ? "" : statusText(value)) {
+            case "RETURNED" -> "已退還";
+            case "NOT_RETURNED" -> "未退還";
+            default -> normalizeText(value);
+        };
+    }
+
+    private Map<String, Object> toStallEventSummaryResponse(Map<String, Object> event) {
+        return orderedMap(
+                "eventId", event.get("eventId"),
+                "eventTitle", event.get("eventTitle"),
+                "coverImageUrl", event.get("coverImageUrl"),
+                "eventDate", formatEventDate(event),
+                "address", joinAddress(
+                        event.get("city"),
+                        event.get("district"),
+                        event.get("locationName")),
+                "totalStallCount", event.get("totalStallCount"),
+                "status", event.get("status"));
+    }
+
     private Map<String, Object> toApplicationSummaryResponse(Map<String, Object> application) {
         return orderedMap(
                 "applicationId", application.get("applicationId"),
@@ -316,18 +517,18 @@ public class OrganizerService {
 
     private Map<String, Object> toApplicationDetailResponse(
             Map<String, Object> application,
+            List<Map<String, Object>> applicationDateRows,
             List<Map<String, Object>> equipmentRentalRows) {
         Map<String, Object> response = new LinkedHashMap<>();
         Map<String, Object> reviewNote = parseReviewNote(application.get("reviewNote"));
         response.put("application", orderedMap(
                 "applicationId", application.get("applicationId"),
                 "applicationNo", application.get("applicationNo"),
-                "applicationStatus", application.get("applicationStatus"),
-                "reviewNote", reviewNote.get("reviewNote"),
-                "reviewNoteDetail", reviewNote.get("reviewNoteDetail")));
+                "applicationStatus", application.get("applicationStatus")));
 
         response.put("event", orderedMap(
                 "eventTitle", application.get("eventTitle"),
+                "eventStatus", displayEventStatus(application),
                 "eventTime", formatEventDate(application),
                 "address", joinAddress(
                         application.get("eventCity"),
@@ -348,33 +549,45 @@ public class OrganizerService {
                 "categoryName", application.get("categoryName"),
                 "brandDescription", application.get("brandDescription")));
 
-        response.put("stall", orderedMap(
-                "selectedStallId", application.get("selectedStallId"),
-                "stallNo", application.get("selectedStallNo"),
-                "zoneName", application.get("stallZoneName"),
-                "width", application.get("stallWidth"),
-                "length", application.get("stallLength"),
-                "height", application.get("stallHeight")));
+        response.put("applicationdetail", orderedMap(
+                "registrationPeriods", toRegistrationPeriods(application, applicationDateRows),
+                "stallSize", stallSize(application),
+                "stallZone", application.get("stallZoneName"),
+                "stallCategory", application.get("categoryName"),
+                "vehicleNo", application.get("vehicleNo"),
+                "applicantNote", application.get("applicantNote"),
+                "reviewNote", reviewNote.get("reviewNote"),
+                "reviewNoteDetail", reviewNote.get("reviewNoteDetail")));
+
+        response.put("stall", toStallResponses(applicationDateRows));
 
         Object baseFee = application.get("baseFee");
         Object depositAmount = application.get("depositAmount");
         Object totalAmount = application.get("totalAmount");
-        BigDecimal equipmentRentalFee = sumEquipmentRentalFee(equipmentRentalRows);
-        if (equipmentRentalFee == null) {
-            equipmentRentalFee = subtractAmounts(totalAmount, baseFee, depositAmount);
-        }
-        String stallFeeNote = stallFeeNote(application);
-        String rentalFeeNote = rentalFeeNote(equipmentRentalRows);
+        BigDecimal equipmentRentalFee = sumEquipmentRentalFee(equipmentRentalRows, "EQUIPMENT");
+        BigDecimal extraPowerFee = sumEquipmentRentalFee(equipmentRentalRows, "POWER");
+        Integer applicationDays = applicationDateRows.isEmpty()
+                ? applicationDays(application.get("applyDates"))
+                : applicationDateRows.size();
+        BigDecimal applicationFee = multiply(baseFee, applicationDays);
         response.put("fee", orderedMap(
-                "stallFee", baseFee,
-                "stallFeeNote", stallFeeNote,
-                "rentalFee", equipmentRentalFee,
-                "rentalFeeNote", rentalFeeNote,
-                "equipmentRentalFee", equipmentRentalFee,
-                "depositAmount", depositAmount,
-                "depositNote", null,
-                "totalAmount", totalAmount));
-        response.put("equipmentRentals", toEquipmentRentalResponses(equipmentRentalRows));
+                "paymentStatus", displayPaymentStatus(application),
+                "paymentMethod", application.get("paymentProvider"),
+                "paymentNo", application.get("paymentNo"),
+                "paymentAmount", firstPresent(application.get("paymentAmount"), totalAmount)));
+        response.put("feedetail", toFeeDetail(
+                baseFee,
+                applicationDays,
+                applicationDateRows,
+                toEquipmentRentalResponses(equipmentRentalRows),
+                applicationFee,
+                equipmentRentalFee,
+                extraPowerFee,
+                depositAmount,
+                totalAmount));
+        response.put("equipmentRentals", toEquipmentRentalGroups(
+                toEquipmentRentalResponses(equipmentRentalRows),
+                applicationDays));
 
         return response;
     }
@@ -412,6 +625,266 @@ public class OrganizerService {
         return orderedMap(
                 "reviewNote", text,
                 "reviewNoteDetail", null);
+    }
+
+    private String displayEventStatus(Map<String, Object> application) {
+        LocalDateTime startAt = toLocalDateTime(application.get("eventStartAt"));
+        LocalDateTime endAt = toLocalDateTime(application.get("eventEndAt"));
+        LocalDateTime now = LocalDateTime.now();
+        if (endAt != null && now.isAfter(endAt)) {
+            return "已結束";
+        }
+        if (startAt != null && !now.isBefore(startAt) && (endAt == null || !now.isAfter(endAt))) {
+            return "進行中";
+        }
+        if (startAt != null && !now.toLocalDate().isBefore(startAt.toLocalDate().minusDays(7))) {
+            return "即將開始";
+        }
+        return "活動預告";
+    }
+
+    private String displayStallEventStatus(Map<String, Object> event) {
+        String workflowStatus = statusText(event.get("workflowStatus"));
+        if ("UNPUBLISHED".equals(workflowStatus) || "CANCELLED".equals(workflowStatus)) {
+            return "已下架";
+        }
+        if ("READY_TO_PUBLISH".equals(workflowStatus)) {
+            return "待發布";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+        LocalDateTime brandsPublicAt = toLocalDateTime(event.get("brandsPublicAt"));
+        LocalDateTime startAt = toLocalDateTime(event.get("eventStartAt"));
+        LocalDateTime endAt = toLocalDateTime(event.get("eventEndAt"));
+
+        if (endAt != null && now.isAfter(endAt)) {
+            return "已結束";
+        }
+        if (startAt != null && !now.isBefore(startAt) && (endAt == null || !now.isAfter(endAt))) {
+            return "進行中";
+        }
+        if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+            return "待發布";
+        }
+        if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
+            return isStallEventFull(event) ? "已額滿" : "報名中";
+        }
+        if (brandsPublicAt == null || !now.isBefore(brandsPublicAt)) {
+            return "品牌已公開";
+        }
+        return "品牌已公開";
+    }
+
+    private boolean isStallEventFull(Map<String, Object> event) {
+        return isTrue(event.get("isFullySelected"));
+    }
+
+    private String toRegistrationPeriods(
+            Map<String, Object> application,
+            List<Map<String, Object>> applicationDateRows) {
+        return applicationDateRows.stream()
+                .map(row -> registrationPeriodText(row.get("applyDate"), application))
+                .filter(period -> period != null && !period.isBlank())
+                .reduce((left, right) -> left + " - " + right)
+                .orElse(null);
+    }
+
+    private String registrationPeriodText(Object applyDate, Map<String, Object> application) {
+        String date = formatDate(applyDate);
+        String startTime = formatTime(application.get("eventStartAt"));
+        String endTime = formatTime(application.get("eventEndAt"));
+        if (date == null || startTime == null || endTime == null) {
+            return null;
+        }
+        return date + " " + startTime + "-" + endTime;
+    }
+
+    private List<Map<String, Object>> toStallResponses(List<Map<String, Object>> applicationDateRows) {
+        return applicationDateRows.stream()
+                .map(row -> orderedMap(
+                        "applyDate", formatDate(row.get("applyDate")),
+                        "stallNo", row.get("stallNo"),
+                        "zoneName", row.get("zoneName"),
+                        "selectionStatus", row.get("selectedStallId") == null ? "未選擇" : "已選擇"))
+                .toList();
+    }
+
+    private String stallSize(Map<String, Object> application) {
+        String length = decimalText(application.get("stallLength"));
+        String height = decimalText(application.get("stallHeight"));
+        if (length == null || height == null) {
+            return null;
+        }
+        return length + "x" + height;
+    }
+
+    private List<Map<String, Object>> toFeeDetail(
+            Object baseFee,
+            Integer applicationDays,
+            List<Map<String, Object>> applicationDateRows,
+            List<Map<String, Object>> rentalRows,
+            BigDecimal applicationFee,
+            BigDecimal equipmentRentalFee,
+            BigDecimal extraPowerFee,
+            Object depositAmount,
+            Object totalAmount) {
+        List<Map<String, Object>> details = new ArrayList<>();
+        details.add(orderedMap(
+                "item", "報名費",
+                "content", applicationFeeContent(applicationDays, applicationDateRows),
+                "amount", applicationFee));
+        details.add(orderedMap(
+                "item", "設備租借費",
+                "content", equipmentFeeContent(rentalRows),
+                "amount", zeroIfNull(equipmentRentalFee)));
+        details.add(orderedMap(
+                "item", "額外電費",
+                "content", powerFeeContent(rentalRows),
+                "amount", zeroIfNull(extraPowerFee)));
+        details.add(orderedMap(
+                "item", "保證金",
+                "content", "保證金",
+                "amount", depositAmount));
+        details.add(orderedMap(
+                "item", "總計",
+                "content", null,
+                "amount", totalAmount));
+        return details;
+    }
+
+    private Map<String, Object> toEquipmentRentalGroups(
+            List<Map<String, Object>> rentalRows,
+            Integer applicationDays) {
+        List<Map<String, Object>> freeEquipmentRows = rentalRows.stream()
+                .filter(row -> "FREE".equals(statusText(row.get("chargeType"))))
+                .filter(row -> "EQUIPMENT".equals(statusText(row.get("itemType"))))
+                .toList();
+        List<Map<String, Object>> freePowerRows = rentalRows.stream()
+                .filter(row -> "FREE".equals(statusText(row.get("chargeType"))))
+                .filter(row -> "POWER".equals(statusText(row.get("itemType"))))
+                .toList();
+        return orderedMap(
+                "freeEquipments", freeEquipmentRows.stream()
+                        .filter(row -> "FREE".equals(statusText(row.get("chargeType"))))
+                        .filter(row -> "EQUIPMENT".equals(statusText(row.get("itemType"))))
+                        .map(row -> toFreeEquipmentResponse(row, applicationDays))
+                        .toList(),
+                "freeBasicPower", freePowerRows.stream()
+                        .filter(row -> "FREE".equals(statusText(row.get("chargeType"))))
+                        .filter(row -> "POWER".equals(statusText(row.get("itemType"))))
+                        .map(this::toFreePowerResponse)
+                        .toList(),
+                "rentalEquipments", rentalRows.stream()
+                        .filter(row -> "PAID".equals(statusText(row.get("chargeType"))))
+                        .filter(row -> "EQUIPMENT".equals(statusText(row.get("itemType"))))
+                        .map(row -> toPaidEquipmentResponse(row, applicationDays))
+                        .toList(),
+                "extraPower", rentalRows.stream()
+                        .filter(row -> "PAID".equals(statusText(row.get("chargeType"))))
+                        .filter(row -> "POWER".equals(statusText(row.get("itemType"))))
+                        .map(row -> toPaidPowerResponse(row, applicationDays))
+                        .toList());
+    }
+
+    private Map<String, Object> toFreeEquipmentResponse(Map<String, Object> row, Integer applicationDays) {
+        return orderedMap(
+                "equipmentName", row.get("equipmentName"),
+                "specification", row.get("equipmentDescription"),
+                "quantity", firstPresent(row.get("quantity"), row.get("stockQuantity")),
+                "unit", "個",
+                "subtotal", BigDecimal.ZERO);
+    }
+
+    private Map<String, Object> toPaidEquipmentResponse(Map<String, Object> row, Integer applicationDays) {
+        return orderedMap(
+                "equipmentName", row.get("equipmentName"),
+                "specification", row.get("equipmentDescription"),
+                "quantity", row.get("quantity"),
+                "unit", quantityUnit(row),
+                "subtotal", row.get("subtotal"),
+                "subtotalContent", unitContent("共", applicationDays, "天"),
+                "total", row.get("subtotal"));
+    }
+
+    private Map<String, Object> toFreePowerResponse(Map<String, Object> row) {
+        return orderedMap(
+                "powerSpecification", powerSpecification(row),
+                "wattage", row.get("wattageLimit"),
+                "unitPrice", row.get("rentalFee"),
+                "subtotal", BigDecimal.ZERO);
+    }
+
+    private Map<String, Object> toPaidPowerResponse(Map<String, Object> row, Integer applicationDays) {
+        return orderedMap(
+                "powerSpecification", powerSpecification(row),
+                "wattage", firstPresent(row.get("totalWattage"), row.get("wattageLimit")),
+                "unitPrice", row.get("rentalFee"),
+                "unit", pricingUnitText(row.get("pricingUnit")),
+                "subtotal", row.get("subtotal"),
+                "subtotalContent", unitContent("共", applicationDays, "天"),
+                "total", row.get("subtotal"));
+    }
+
+    private String powerSpecification(Map<String, Object> row) {
+        String description = normalizeText(row.get("equipmentDescription"));
+        if (description != null) {
+            return description;
+        }
+        String wattage = integerText(firstPresent(row.get("wattageLimit"), row.get("totalWattage")));
+        return wattage == null ? null : wattage + "W";
+    }
+
+    private String applicationFeeContent(Integer applicationDays, List<Map<String, Object>> applicationDateRows) {
+        String dateText = applicationDateRows.stream()
+                .map(row -> formatDate(row.get("applyDate")))
+                .filter(date -> date != null && !date.isBlank())
+                .reduce((left, right) -> left + "、" + right)
+                .orElse(null);
+        String dayText = unitContent("", applicationDays, "天");
+        if (dayText == null) {
+            return dateText;
+        }
+        return dateText == null ? dayText : dayText + " (" + dateText + ")";
+    }
+
+    private String equipmentFeeContent(List<Map<String, Object>> rentalRows) {
+        String content = rentalRows.stream()
+                .filter(row -> "PAID".equals(statusText(row.get("chargeType"))))
+                .filter(row -> "EQUIPMENT".equals(statusText(row.get("itemType"))))
+                .map(this::equipmentContent)
+                .filter(text -> text != null && !text.isBlank())
+                .reduce((left, right) -> left + "、" + right)
+                .orElse(null);
+        return content == null ? "無租借設備" : content;
+    }
+
+    private String equipmentContent(Map<String, Object> row) {
+        String equipmentName = normalizeText(row.get("equipmentName"));
+        String quantity = integerText(row.get("quantity"));
+        if (equipmentName == null) {
+            return null;
+        }
+        return quantity == null ? equipmentName : equipmentName + "*" + quantity;
+    }
+
+    private String powerFeeContent(List<Map<String, Object>> rentalRows) {
+        String content = rentalRows.stream()
+                .filter(row -> "PAID".equals(statusText(row.get("chargeType"))))
+                .filter(row -> "POWER".equals(statusText(row.get("itemType"))))
+                .map(row -> {
+                    String specification = powerSpecification(row);
+                    String quantity = integerText(row.get("quantity"));
+                    if (specification == null) {
+                        return null;
+                    }
+                    return quantity == null ? specification : specification + "*" + quantity;
+                })
+                .filter(text -> text != null && !text.isBlank())
+                .reduce((left, right) -> left + "、" + right)
+                .orElse(null);
+        return content == null ? "無額外申請用電" : content;
     }
 
     private String stallFeeNote(Map<String, Object> application) {
@@ -482,6 +955,10 @@ public class OrganizerService {
                     "equipmentRentalId", id,
                     "eventEquipmentId", row.get("eventEquipmentId"),
                     "equipmentName", row.get("equipmentName"),
+                    "equipmentDescription", row.get("equipmentDescription"),
+                    "chargeType", row.get("chargeType"),
+                    "itemType", row.get("itemType"),
+                    "wattageLimit", row.get("wattageLimit"),
                     "rentalFee", row.get("rentalFee"),
                     "pricingUnit", row.get("pricingUnit"),
                     "quantity", row.get("quantity"),
@@ -509,6 +986,23 @@ public class OrganizerService {
             }
         }
         return new ArrayList<>(rentalsById.values());
+    }
+
+    private BigDecimal sumEquipmentRentalFee(List<Map<String, Object>> rows, String itemType) {
+        Map<Long, BigDecimal> subtotalsByRentalId = new LinkedHashMap<>();
+        String normalizedItemType = statusText(itemType);
+        for (Map<String, Object> row : rows) {
+            Long rentalId = toLong(row.get("equipmentRentalId"));
+            BigDecimal subtotal = toBigDecimal(row.get("subtotal"));
+            if (rentalId != null
+                    && subtotal != null
+                    && "PAID".equals(statusText(row.get("chargeType")))
+                    && normalizedItemType.equals(statusText(row.get("itemType")))) {
+                subtotalsByRentalId.putIfAbsent(rentalId, subtotal);
+            }
+        }
+        return subtotalsByRentalId.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal sumEquipmentRentalFee(List<Map<String, Object>> rows) {
@@ -712,6 +1206,7 @@ public class OrganizerService {
             case "READY_TO_PUBLISH" -> "\u5f85\u767c\u5e03";
             case "PUBLISHED" -> "\u5df2\u767c\u5e03";
             case "BRANDS_PUBLISHED" -> "\u6524\u5546\u540d\u55ae\u5df2\u767c\u5e03";
+            case "FINAL_REVIEW" -> "\u54c1\u724c\u516c\u958b\u524d\u9a57\u6536";
             case "UNPUBLISH_REQUESTED" -> "\u4e0b\u67b6\u7533\u8acb\u4e2d";
             case "UNPUBLISHED" -> "\u5df2\u4e0b\u67b6";
             case "CANCELLED" -> "\u5df2\u53d6\u6d88";
@@ -775,6 +1270,16 @@ public class OrganizerService {
     private String formatDateTime(Object value) {
         LocalDateTime dateTime = toLocalDateTime(value);
         return dateTime == null ? null : dateTime.format(DISPLAY_DATE_TIME_FORMATTER);
+    }
+
+    private String formatDate(Object value) {
+        LocalDate date = toLocalDate(value);
+        return date == null ? null : date.format(DISPLAY_DATE_FORMATTER);
+    }
+
+    private String formatTime(Object value) {
+        LocalDateTime dateTime = toLocalDateTime(value);
+        return dateTime == null ? null : dateTime.toLocalTime().format(SERVICE_TIME_FORMATTER);
     }
 
     private String normalizeText(Object value) {
@@ -851,6 +1356,18 @@ public class OrganizerService {
         };
     }
 
+    private String quantityUnit(Map<String, Object> row) {
+        String pricingUnit = pricingUnitText(row.get("pricingUnit"));
+        return pricingUnit == null ? "個數" : pricingUnit;
+    }
+
+    private String unitContent(String prefix, Integer count, String unit) {
+        if (count == null) {
+            return null;
+        }
+        return prefix + count + unit;
+    }
+
     private String statusText(Object value) {
         String text = normalizeText(value);
         return text == null ? null : text.toUpperCase();
@@ -902,6 +1419,18 @@ public class OrganizerService {
                 .subtract(deposit == null ? BigDecimal.ZERO : deposit);
     }
 
+    private BigDecimal multiply(Object amount, Integer multiplier) {
+        BigDecimal value = toBigDecimal(amount);
+        if (value == null || multiplier == null) {
+            return value;
+        }
+        return value.multiply(BigDecimal.valueOf(multiplier));
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
     private BigDecimal toBigDecimal(Object value) {
         if (value instanceof BigDecimal bigDecimal) {
             return bigDecimal;
@@ -923,6 +1452,30 @@ public class OrganizerService {
     private LocalDateTime appliedAtForSort(Map<String, Object> application) {
         Object value = application.get("appliedAt");
         return toLocalDateTime(value);
+    }
+
+    private LocalDate toLocalDate(Object value) {
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime.toLocalDate();
+        }
+        if (value instanceof java.sql.Date sqlDate) {
+            return sqlDate.toLocalDate();
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime().toLocalDate();
+        }
+        String text = normalizeText(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(text.length() > 10 ? text.substring(0, 10) : text);
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
     }
 
     private LocalDateTime toLocalDateTime(Object value) {

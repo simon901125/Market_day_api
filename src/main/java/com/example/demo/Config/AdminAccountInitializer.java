@@ -26,9 +26,6 @@ public class AdminAccountInitializer implements ApplicationRunner {
     @Value("${admin.password:}")
     private String adminPassword;
 
-    @Value("${admin.name:Admin}")
-    private String adminName;
-
     public AdminAccountInitializer(UserRepository userRepository, AuthService authService) {
         this.userRepository = userRepository;
         this.authService = authService;
@@ -55,13 +52,11 @@ public class AdminAccountInitializer implements ApplicationRunner {
                 return;
             }
 
-            userRepository.updateSystemAdminName(adminEmail, adminName);
             logger.info("Default admin account already exists: {}", adminEmail);
             return;
         }
 
         userRepository.createSystemAdmin(
-                adminName,
                 adminEmail,
                 authService.hashPassword(adminPassword));
         logger.info("Default admin account created: {}", adminEmail);
