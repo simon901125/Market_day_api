@@ -15,6 +15,14 @@ Market Day 後端 API 專案，使用 Spring Boot 建置，包含帳號註冊、
 - `GET /api/organizer/applications/{id}` 的 `stall` 改為依報名日期回傳陣列；每列包含日期、攤位編號、攤位區域與選擇狀態，未選位日期也會保留一列。
 - `GET /api/organizer/applications/{id}` 的 `fee` 簡化為付款狀態、付款方式、付款編號與付款金額；新增 `feedetail` 回傳報名費、設備租借費、額外電費、保證金與總計。
 - `GET /api/organizer/applications/{id}` 的 `equipmentRentals` 改為四區：`freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower`；付費租借與額外用電的 `unit` 只回單位文字。
+- 新增 `GET /api/organizer/stalls/search` 主辦方攤位管理活動列表，支援依活動名稱、狀態、開始日期與結束日期篩選；回傳活動名稱、活動日期、活動地點、攤位總數與前端列表狀態。
+- 主辦方攤位詳情 API 由 `GET /api/organizer/stall-map/{eventId}` 改為 `GET /api/organizer/stall/{eventId}`，輸入維持 `eventId` 與 `applyDate`，並新增 `keyword`、`status` 篩選攤位列表。
+- `GET /api/organizer/stall/{eventId}` 的活動資訊新增 `locationName`、`eventStatus`、`totalStallCount`；已選攤位會回傳 `selectedVendor`，包含品牌名稱、品牌類型、攤主姓名與選位時間。
+- 主辦方單一攤位詳情 API 由 `GET /api/organizer/stall-map/{eventId}/stalls/{stallNo}` 改為 `GET /api/organizer/stall/{eventId}/{stallNo}`，用於點擊攤位後查詢該攤位與已選攤主/申請資料。
+- 攤位管理的 `已額滿` 判定改為活動期間每一天都已選滿攤位才成立；只要任一天仍有可選攤位，就不會顯示 `已額滿`。
+- 新增 `GET /api/organizer/accounts/search` 主辦方帳務活動列表，支援活動名稱、狀態與活動日期區間篩選，並回傳收款總額、退款總額、已退/未退保證金與實收總額。
+- 新增 `GET /api/organizer/accounts/{eventId}` 主辦方活動帳務詳情，回傳活動資訊、帳務摘要、付款/退款/保證金統計與付款明細。
+- `GET /api/organizer/accounts/{eventId}` 的 `payments` 明細不回傳 `stallNo`；`refundAmount` 只在退款狀態為 `REFUNDED` 時納入計算與顯示，退款申請中與退款處理中固定回 `0`。
 
 
 
@@ -228,10 +236,12 @@ GET  /api/vendor/account
 GET  /api/vendor/stall-map/{applicationNo}
 POST /api/stalls/select
 GET  /api/organizer/account
+GET  /api/organizer/accounts/{eventId}
+GET  /api/organizer/stalls/search
+GET  /api/organizer/stall/{eventId}
+GET  /api/organizer/stall/{eventId}/{stallNo}
 GET  /api/organizer/applications/search
 GET  /api/organizer/applications/{id}
-GET  /api/organizer/stall-map/{eventId}
-GET  /api/organizer/stall-map/{eventId}/stalls/{stallNo}
 POST /api/organizer/applications/{id}/approve
 POST /api/organizer/applications/{id}/reject
 ```
@@ -275,10 +285,13 @@ POST /api/organizer/applications/{id}/reject
 | Method | API                                                     | Request              | JWT | 說明                                                             |
 | ------ | ------------------------------------------------------- | -------------------- | --- | ---------------------------------------------------------------- |
 | GET    | `/api/organizer/account`                              | Authorization header | 是  | 取得目前登入主辦方資料。                                         |
+| GET    | `/api/organizer/accounts/search`                     | Query params         | 是  | 查詢主辦方帳務活動列表，可依活動名稱、狀態與活動日期篩選。       |
+| GET    | `/api/organizer/accounts/{eventId}`                  | Query params         | 是  | 查詢活動帳務詳情，可依帳務狀態篩選付款明細。                     |
 | GET    | `/api/organizer/applications/search`                  | Authorization header | 是  | 查詢目前主辦方 published 活動的全部申請資料，依申請時間倒序。    |
 | GET    | `/api/organizer/applications/{id}`                    | Authorization header | 是  | 查詢主辦方申請明細。                                             |
-| GET    | `/api/organizer/stall-map/{eventId}`                  | Authorization header | 是  | 查詢主辦方活動指定日期的攤位選位狀況；未帶日期時預設活動第一天。 |
-| GET    | `/api/organizer/stall-map/{eventId}/stalls/{stallNo}` | Authorization header | 是  | 查詢主辦方活動指定日期單一攤位的攤主與申請資訊。                 |
+| GET    | `/api/organizer/stalls/search`                       | Query params         | 是  | 查詢主辦方攤位管理活動列表。                                     |
+| GET    | `/api/organizer/stall/{eventId}`                     | Query params         | 是  | 查詢主辦方活動指定日期的攤位選位狀況，可依關鍵字與選位狀態篩選。 |
+| GET    | `/api/organizer/stall/{eventId}/{stallNo}`           | Query params         | 是  | 查詢主辦方活動指定日期單一攤位的攤主與申請資訊。                 |
 | POST   | `/api/organizer/applications/{id}/approve`            | Authorization header | 是  | 通過主辦方報名審核。                                             |
 | POST   | `/api/organizer/applications/{id}/reject`             | Authorization header | 是  | 退回主辦方報名審核，可填寫退件原因。                             |
 
@@ -296,6 +309,17 @@ POST /api/organizer/applications/{id}/reject
 | `feedetail`         | 報名費、設備租借費、額外電費、保證金、總計。                                                     |
 | `equipmentRentals`  | `freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower` 四區設備/用電資訊。 |
 | `status`            | 固定狀態流清單與各節點時間。                                                                     |
+
+`GET /api/organizer/accounts/{eventId}` 目前主要回傳區塊：
+
+| 區塊 | 說明 |
+| --- | --- |
+| `event` | 活動圖片、名稱、狀態、日期、地點、攤位總數與已付款攤位數。 |
+| `summary` | 收款總額、退款總額、已退款保證金、未退款保證金與實收總額。 |
+| `statistics` | 付款、退款、保證金統計。 |
+| `payments` | 付款明細；可用 `status` 篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`。 |
+
+`payments` 每列包含 `paymentNo`、`brandName`、`paidAt`、`paymentAmount`、`refundAmount`、`depositStatus`、`accountingStatus`。`refundAmount` 只代表已完成退款金額，退款申請中與退款處理中會回 `0`。
 
 ## 文件維護規則
 

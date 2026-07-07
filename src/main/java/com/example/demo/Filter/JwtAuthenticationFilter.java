@@ -38,8 +38,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/account"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/applications/search"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/applications/{id}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall-map/{eventId}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall-map/{eventId}/stalls/{stallNo}"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/accounts/{eventId}"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stalls/search"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall/{eventId}"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall/{eventId}/{stallNo}"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/approve"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject"));
 
