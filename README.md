@@ -17,6 +17,12 @@ Market Day 後端 API 專案，使用 Spring Boot 建置，包含帳號註冊、
 - `GET /api/organizer/applications/{id}` 的 `equipmentRentals` 改為四區：`freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower`；付費租借與額外用電的 `unit` 只回單位文字。
 - `sql/test5.sql` 補上活動設備與每筆申請單的設備租借測資；免費設備分散到不同申請單，並補上付費設備、額外用電與 appliance 瓦數明細。
 
+### 2026-07-06
+
+#### yushuan branch
+
+- `POST /api/markets/search` 新增市集活動列表查詢 API，支援依關鍵字、縣市、活動狀態、活動日期區間、分類名稱與活動類型篩選市集活動；回傳已發布且審核通過的市集活動列表，並包含活動狀態與分類資料。
+- `GET /api/markets/{id}` 新增市集活動詳細資料 API，依市集活動 ID 查詢單筆已發布且審核通過的活動詳情；回傳活動介紹、地點、日期時間、報名時間、攤位資訊、費用、封面圖、地圖圖、分類與活動狀態等資料。
 ### 2026-07-02
 
 #### simon branch
