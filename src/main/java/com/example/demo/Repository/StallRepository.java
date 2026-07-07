@@ -221,10 +221,14 @@ public class StallRepository {
                     ad.id AS applicationDateId,
                     ad.apply_date AS applyDate,
                     ad.selected_stall_id AS selectedStallId,
-                    s.stall_no AS stallNo
+                    s.stall_no AS stallNo,
+                    z.zone_name AS zoneName,
+                    s.width,
+                    s.length
                 FROM dbo.event_applications a
                 INNER JOIN dbo.application_dates ad ON ad.application_id = a.id
                 INNER JOIN dbo.event_stalls s ON s.id = ad.selected_stall_id
+                LEFT JOIN dbo.event_stall_zones z ON z.id = s.zone_id
                 WHERE a.application_no = :applicationNo
                 ORDER BY ad.apply_date ASC
                 """;

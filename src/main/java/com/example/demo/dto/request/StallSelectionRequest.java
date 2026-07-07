@@ -21,7 +21,7 @@ public class StallSelectionRequest {
 
     @Valid
     @NotEmpty(message = "Stall selections are required")
-    @Schema(description = "Selections for every application date")
+    @Schema(description = "Selections for one or more unselected application dates")
     private List<Selection> selections;
 
     public String getApplicationNo() {

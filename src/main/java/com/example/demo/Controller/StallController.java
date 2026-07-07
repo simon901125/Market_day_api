@@ -32,7 +32,7 @@ public class StallController {
     @Autowired
     private StallService stallService;
 
-    @Operation(summary = "送出活動攤位選位", description = "攤主針對同一筆申請單一次送出所有報名日期的選位結果。")
+    @Operation(summary = "送出活動攤位選位", description = "攤主針對同一筆申請單送出一個或多個尚未選位日期的選位結果；已選位日期不可重複送出。")
     @PostMapping("/api/stalls/select")
     public ApiResponse<StallSelectionResponse> selectEventStall(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -41,10 +41,6 @@ public class StallController {
                             {
                               "applicationNo": "MD0101-APP01",
                               "selections": [
-                                {
-                                  "applyDate": "2026-08-01",
-                                  "stallNo": "A05"
-                                },
                                 {
                                   "applyDate": "2026-08-02",
                                   "stallNo": "A06"

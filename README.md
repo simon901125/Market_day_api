@@ -6,6 +6,17 @@ Market Day 後端 API 專案，使用 Spring Boot 建置，包含帳號註冊、
 
 > 更新日誌請依日期與 branch 分區：日期使用 `###`，branch 使用 `####`，避免不同分支的更動混在同一段。
 
+### 2026-07-07
+
+#### simon branch
+
+- `GET /api/organizer/applications/{id}` 的 `event` 新增 `eventStatus`，統一回傳 `活動預告`、`即將開始`、`進行中`、`已結束`。
+- `GET /api/organizer/applications/{id}` 新增 `applicationdetail`，包含單一字串格式的 `registrationPeriods`、攤位尺寸、攤位區域、攤位類別、車牌、申請備註與審核備註。
+- `GET /api/organizer/applications/{id}` 的 `stall` 改為依報名日期回傳陣列；每列包含日期、攤位編號、攤位區域與選擇狀態，未選位日期也會保留一列。
+- `GET /api/organizer/applications/{id}` 的 `fee` 簡化為付款狀態、付款方式、付款編號與付款金額；新增 `feedetail` 回傳報名費、設備租借費、額外電費、保證金與總計。
+- `GET /api/organizer/applications/{id}` 的 `equipmentRentals` 改為四區：`freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower`；付費租借與額外用電的 `unit` 只回單位文字。
+- `sql/test5.sql` 補上活動設備與每筆申請單的設備租借測資；免費設備分散到不同申請單，並補上付費設備、額外用電與 appliance 瓦數明細。
+
 ### 2026-07-02
 
 #### simon branch
@@ -23,7 +34,7 @@ Market Day 後端 API 專案，使用 Spring Boot 建置，包含帳號註冊、
 
 - `GET /api/organizer/applications/{id}` 回傳補上租借設備資料 `equipmentRentals`，並讓費用區塊使用實際租借明細加總。
 - `GET /api/organizer/applications/{id}` 的 `status` 改為固定狀態流清單，包含報名、審核、取消、付款、退款申請、退款審核、已退款、選位、保證金退還；未到達的節點回傳 `value: null` 與 `createdAt: null`。
-- `GET /api/organizer/applications/{id}` 的 `fee` 補上 `stallFeeNote`、`rentalFee`、`rentalFeeNote`、`depositNote`，移除重複的 `items` 結構，方便前端直接顯示報名費用明細。
+- `GET /api/organizer/applications/{id}` 當時曾在 `fee` 補上費用 note；目前格式已由 2026-07-07 的簡化 `fee` 與 `feedetail` 取代。
 - `ApiResponse.success(...)` 與 `ApiResponse.fail(...)` 訊息統一轉為中文；未列入 mapping 的英文成功訊息會 fallback 為 `操作成功`。
 - `POST /api/stalls/select` 的 `StallSelectionRequest` 移除 `applicationNo`、`stallNo` 的格式 pattern 限制，僅保留必填檢查。
 - `POST /api/stalls/select` 的錯誤訊息拆分為申請單狀態問題與攤位選位機制問題，方便測試時判斷是審核、付款、已選位、攤位不存在或攤位已被選走。
@@ -262,6 +273,21 @@ POST /api/organizer/applications/{id}/reject
 | POST | `/api/organizer/applications/{id}/approve` | Authorization header | 是 | 通過主辦方報名審核。 |
 | POST | `/api/organizer/applications/{id}/reject` | Authorization header | 是 | 退回主辦方報名審核，可填寫退件原因。 |
 
+`GET /api/organizer/applications/{id}` 目前主要回傳區塊：
+
+| 區塊 | 說明 |
+| --- | --- |
+| `application` | 申請 ID、申請編號與後端計算後的申請狀態。 |
+| `event` | 活動名稱、活動狀態、活動日期與地址。 |
+| `vendor` | 攤主聯絡資訊。 |
+| `brand` | 品牌名稱、類別與描述。 |
+| `applicationdetail` | 報名時段、攤位尺寸、攤位區域、攤位類別、車牌、申請備註與審核備註。 |
+| `stall` | 每個報名日期的攤位選擇列，未選位也會回傳日期與 `未選擇`。 |
+| `fee` | 付款狀態、付款方式、付款編號與付款金額。 |
+| `feedetail` | 報名費、設備租借費、額外電費、保證金、總計。 |
+| `equipmentRentals` | `freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower` 四區設備/用電資訊。 |
+| `status` | 固定狀態流清單與各節點時間。 |
+
 ## 文件維護規則
 
 - README 的更新紀錄請放在「更新日誌」底下，並以日期分區。
@@ -282,4 +308,4 @@ http://localhost:8081/test_2.html
 
 - `POST /api/organizer/applications/{id}/approve` 與 `POST /api/organizer/applications/{id}/reject` 拆分主辦方報名審核 API；申請 `id` 改由 path params 傳入，通過不需 body，退件 body 可帶 `reviewNote`、`reviewNoteDetail`。
 - 退件原因在不變更 SQL 結構下以 JSON 字串存入 `event_applications.review_note`，格式為 `{"reviewNote":"...","reviewNoteDetail":"..."}`。
-- `GET /api/organizer/applications/{id}` 會解析 `event_applications.review_note`，回傳 `application.reviewNote` 與 `application.reviewNoteDetail`；若遇到舊純文字資料，會以 `reviewNote` 回傳並讓 `reviewNoteDetail` 為 `null`。
+- `GET /api/organizer/applications/{id}` 會解析 `event_applications.review_note`，並在 `applicationdetail.reviewNote` 與 `applicationdetail.reviewNoteDetail` 回傳；若遇到舊純文字資料，會以 `reviewNote` 回傳並讓 `reviewNoteDetail` 為 `null`。

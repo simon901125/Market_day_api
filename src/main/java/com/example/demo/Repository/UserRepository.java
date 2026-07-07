@@ -195,7 +195,7 @@ public class UserRepository {
                 FROM market_events
                 WHERE user_id = :userId
                   AND end_at >= SYSDATETIME()
-                  AND (publish_status IS NULL OR publish_status NOT IN (N'UNPUBLISHED', N'CANCELLED'))
+                  AND workflow_status NOT IN (N'UNPUBLISHED', N'CANCELLED')
                 """;
         Map<String, Object> map = new HashMap<>();
         map.put("userId", userId);
