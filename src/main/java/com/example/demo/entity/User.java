@@ -33,21 +33,18 @@ public class User {
     @Column(name = "role", length = 30, nullable = false)
     private Role role;
 
-    @Column(name = "name", length = 100, nullable = false)
-    private String name;
-
     @Column(name = "email", length = 255, nullable = false, unique = true)
     private String email;
 
     @Column(name = "password_hash", length = 255)
     private String passwordHash;
 
-    @Column(name = "phone", length = 30)
-    private String phone;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", length = 30, nullable = false)
     private Provider provider;
+
+    @Column(name = "google_sub", length = 255)
+    private String googleSub;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
@@ -73,6 +70,7 @@ public class User {
 
     public enum Provider {
         GOOGLE,
+        BOTH,
         LOCAL
     }
 

@@ -89,7 +89,7 @@ public class LocalLoginRequest {
 | --- | --- |
 | `email` | 必填，需符合 Email 格式。 |
 | `password` | 必填，至少 8 碼，需包含英文與數字。 |
-| `phone` | 選填；若有提供，需符合 `09xxxxxxxx`。 |
+| `name` | 本地註冊必填，最多 20 個字元。 |
 | `code` | 必填，6 位數驗證碼。 |
 | `resetToken` | 重設密碼時必填。 |
 | `applicationNo` | 攤位選擇與攤位圖查詢使用。 |
@@ -172,8 +172,8 @@ Bearer <JWT_TOKEN>
 | Method | API |
 | --- | --- |
 | POST | `/api/auth/logout` |
+| POST | `/api/auth/google-bind` |
 | GET | `/api/auth/me` |
-| POST | `/api/users/me` |
 | POST | `/api/account/deactivate` |
 | GET | `/api/vendor/account` |
 | GET | `/api/vendor/stall-map/{applicationNo}` |
@@ -202,13 +202,13 @@ Bearer <JWT_TOKEN>
 | POST | `/api/admin/local-login` | `LocalLoginRequest` | 否 | 管理員本地登入。 |
 | POST | `/api/vendor/google-login` | `GoogleCredentialRequest` | 否 | 攤主 Google 登入。 |
 | POST | `/api/organizer/google-login` | `GoogleCredentialRequest` | 否 | 主辦方 Google 登入。 |
+| POST | `/api/auth/google-bind` | `GoogleCredentialRequest` | 是 | 綁定目前登入帳號與 Google。 |
 | POST | `/api/auth/createAccount/emailVerify` | `EmailVerificationRequest` | 否 | 註冊 Email 驗證。 |
 | POST | `/api/auth/resetPassword/request` | `RequestPasswordResetRequest` | 否 | 申請重設密碼驗證碼。 |
 | POST | `/api/auth/resetPassword/emailVerify` | `EmailVerificationRequest` | 否 | 驗證重設密碼 Email 驗證碼，成功後回傳 reset token。 |
 | POST | `/api/auth/resetPassword/reset` | `ResetPasswordRequest` | 否 | 使用 reset token 重設密碼。 |
 | POST | `/api/auth/logout` | - | 是 | 登出。 |
 | GET | `/api/auth/me` | - | 是 | 取得目前登入使用者資料。 |
-| POST | `/api/users/me` | `UpdateUserProfileRequest` | 是 | 更新目前登入使用者資料。 |
 | POST | `/api/account/deactivate` | - | 是 | 停用目前登入帳號。 |
 
 ### 攤主與攤位 API

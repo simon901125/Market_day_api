@@ -171,7 +171,7 @@ public class OrganizerRepository {
                     e.start_at AS eventStartAt,
                     e.end_at AS eventEndAt,
                     vendor_up.name AS vendorName,
-                    vendor_user.name AS vendorOwnerName,
+                    vendor_up.contact_name AS vendorOwnerName,
                     vp.brand_type AS brandType,
                     a.created_at AS appliedAt,
                     application_dates.applyDates,
@@ -184,7 +184,6 @@ public class OrganizerRepository {
                     refund_data.refundStatus
                 FROM dbo.event_applications a
                 INNER JOIN dbo.market_events e ON e.id = a.event_id
-                INNER JOIN dbo.users vendor_user ON vendor_user.id = a.user_id
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
                 INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
                 OUTER APPLY (
@@ -306,7 +305,6 @@ public class OrganizerRepository {
                     latest_refund.refundedAt
                 FROM dbo.event_applications a
                 INNER JOIN dbo.market_events e ON e.id = a.event_id
-                INNER JOIN dbo.users vendor_user ON vendor_user.id = a.user_id
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
                 INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
                 INNER JOIN dbo.categories c ON c.id = vp.category_id

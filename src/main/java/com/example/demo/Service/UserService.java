@@ -28,7 +28,6 @@ import com.example.demo.dto.request.LocalLoginRequest;
 import com.example.demo.dto.request.LocalRegisterRequest;
 import com.example.demo.dto.request.RequestPasswordResetRequest;
 import com.example.demo.dto.request.ResetPasswordRequest;
-import com.example.demo.dto.request.UpdateUserProfileRequest;
 import com.example.demo.dto.response.GoogleTokenInfo;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.dto.response.LoginUserResponse;
@@ -65,6 +64,7 @@ public class UserService {
         return ApiResponse.success("Users retrieved successfully", userRepository.findAllUsers());
     }
 
+    @Transactional
     public ApiResponse<Void> registerLocal(LocalRegisterRequest user, String role) {
         if (isAdminRole(role)) {
             return ApiResponse.fail("Admin accounts must be created by the system");
@@ -75,10 +75,9 @@ public class UserService {
 
         Long userId = userRepository.createLocalUser(
                 role,
-                user.getName(),
                 user.getEmail(),
-                authService.hashPassword(user.getPassword()),
-                user.getPhone());
+                authService.hashPassword(user.getPassword()));
+        userRepository.createUserProfile(userId, role, user.getName(), user.getEmail());
 
         String verificationCode = generateVerificationCode();
         userRepository.deleteEmailVerificationTokensByUserId(userId);
@@ -87,6 +86,7 @@ public class UserService {
         return ApiResponse.success("User registered successfully. Verification code has been sent to email");
     }
 
+    @Transactional
     public ApiResponse<Void> registerGoogle(GoogleCredentialRequest body, String role) {
         if (isAdminRole(role)) {
             return ApiResponse.fail("Admin accounts do not support Google registration");
@@ -110,7 +110,11 @@ public class UserService {
             return ApiResponse.fail("Google account has already register");
         }
 
-        Long userId = userRepository.createGoogleUser(role, tokenInfo.getName(), tokenInfo.getEmail());
+        Long userId = userRepository.createGoogleUser(
+                role,
+                tokenInfo.getEmail(),
+                tokenInfo.getSub());
+        userRepository.createUserProfile(userId, role, tokenInfo.getName(), tokenInfo.getEmail());
 
         String verificationCode = generateVerificationCode();
         userRepository.deleteEmailVerificationTokensByUserId(userId);
@@ -173,7 +177,7 @@ public class UserService {
         if (validationMessage != null) {
             return ApiResponse.fail(validationMessage);
         }
-        Optional<Map<String, Object>> userData = userRepository.findProfileByEmail(tokenInfo.getEmail());
+        Optional<Map<String, Object>> userData = userRepository.findGoogleUserBySub(tokenInfo.getSub());
         if (userData.isEmpty()) {
             return ApiResponse.fail("Google account is not registered");
         }
@@ -202,6 +206,67 @@ public class UserService {
                 userData.get(),
                 "Google login successful",
                 sessionExpiresAt);
+    }
+
+    @Transactional
+    public ApiResponse<Void> bindGoogle(String authorizationHeader, GoogleCredentialRequest body) {
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank()) {
+            return ApiResponse.fail("Authorization token is required");
+        }
+        if (!jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("Invalid or expired token");
+        }
+
+        String email = jwtService.getEmail(token);
+        String tokenRole = jwtService.getRole(token);
+        Map<String, Object> user = userRepository.findProfileByEmail(email)
+                .orElse(null);
+        if (user == null) {
+            return ApiResponse.fail("User not found");
+        }
+        if (!tokenRole.equals(user.get("role").toString())) {
+            return ApiResponse.fail("Account role does not match token role");
+        }
+        if (!"ACTIVE".equals(user.get("status"))) {
+            return ApiResponse.fail("Account is not active");
+        }
+
+        String provider = user.get("provider").toString();
+        Object currentGoogleSub = user.get("googleSub");
+        if (!"LOCAL".equals(provider) || currentGoogleSub != null) {
+            return ApiResponse.fail("Google account is already bound");
+        }
+
+        String credential = body.getCredential();
+        if (credential == null || credential.isBlank()) {
+            return ApiResponse.fail("Google credential is required");
+        }
+
+        GoogleTokenInfo tokenInfo = authService.verifyGoogleCredential(credential);
+        if (tokenInfo == null) {
+            return ApiResponse.fail("Invalid Google credential");
+        }
+
+        String validationMessage = validateGoogleTokenInfo(tokenInfo);
+        if (validationMessage != null) {
+            return ApiResponse.fail(validationMessage);
+        }
+        if (!email.equalsIgnoreCase(tokenInfo.getEmail())) {
+            return ApiResponse.fail("Google email does not match current account");
+        }
+
+        Optional<Map<String, Object>> boundGoogleUser = userRepository.findGoogleUserBySub(tokenInfo.getSub());
+        if (boundGoogleUser.isPresent()) {
+            return ApiResponse.fail("Google account is already bound");
+        }
+
+        int boundRows = userRepository.bindGoogleAccountByEmail(email, tokenInfo.getSub());
+        if (boundRows == 0) {
+            return ApiResponse.fail("Google account binding failed");
+        }
+
+        return ApiResponse.success("Google account bound successfully");
     }
 
     public ApiResponse<Void> logout(String authorizationHeader) {
@@ -248,21 +313,6 @@ public class UserService {
         String email = jwtService.getEmail(token);
         return userRepository.findProfileByEmail(email)
                 .map(user -> ApiResponse.success("User info retrieved successfully", new UserProfileResponse(user)))
-                .orElseGet(() -> ApiResponse.fail("User not found"));
-    }
-
-    public ApiResponse<UserProfileResponse> updateCurrentUser(String authorizationHeader, UpdateUserProfileRequest body) {
-        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
-
-        String email = jwtService.getEmail(token);
-        //////////////////////////
-        int updatedRows = userRepository.updateProfileByEmail(email, body.getName(), body.getPhone());
-        if (updatedRows == 0) {
-            return ApiResponse.fail("User not found");
-        }
-
-        return userRepository.findProfileByEmail(email)
-                .map(user -> ApiResponse.success("User profile updated successfully", new UserProfileResponse(user)))
                 .orElseGet(() -> ApiResponse.fail("User not found"));
     }
 
@@ -486,6 +536,14 @@ public class UserService {
     }
 
     private String validateGoogleTokenInfo(GoogleTokenInfo tokenInfo) {
+        if (tokenInfo.getSub() == null || tokenInfo.getSub().isBlank()) {
+            return "Invalid Google credential";
+        }
+
+        if (tokenInfo.getEmail() == null || tokenInfo.getEmail().isBlank()) {
+            return "Invalid Google credential";
+        }
+
         if (!googleClientId.equals(tokenInfo.getAud())) {
             return "Google client id does not match";
         }
