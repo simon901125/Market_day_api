@@ -110,7 +110,7 @@ Response data:
 | --- | --- |
 | `LoginResponse` | local / Google login |
 | `LoginUserResponse` | `LoginResponse.user` |
-| `UserProfileResponse` | `/api/auth/me`、`/api/users/me` |
+| `UserProfileResponse` | `/api/auth/me` |
 | `UserResponse` | `/usersall` |
 | `VendorAccountResponse` | `/api/vendor/account` |
 | `VendorStallMapResponse` | `/api/vendor/stall-map/{applicationNo}` |
@@ -136,8 +136,8 @@ Response data:
       "email": "vendor@example.com",
       "name": "vendor1",
       "role": "VENDOR",
-      "provider": "LOCAL",
-      "emailVerified": true
+      "status": "ACTIVE",
+      "isLogin": true
     }
   }
 }

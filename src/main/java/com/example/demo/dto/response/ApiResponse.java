@@ -120,6 +120,7 @@ public class ApiResponse<T> {
             case "Google user registered successfully. Verification code has been sent to email" -> "Google \u8a3b\u518a\u6210\u529f\uff0c\u9a57\u8b49\u78bc\u5df2\u5bc4\u9001\u81f3 Email";
             case "Login successful" -> "\u767b\u5165\u6210\u529f";
             case "Google login successful" -> "Google \u767b\u5165\u6210\u529f";
+            case "Google account bound successfully" -> "Google \u5e33\u865f\u7d81\u5b9a\u6210\u529f";
             case "Logout successful" -> "\u767b\u51fa\u6210\u529f";
             case "User info retrieved successfully" -> "\u4f7f\u7528\u8005\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
             case "User profile updated successfully" -> "\u4f7f\u7528\u8005\u8cc7\u6599\u66f4\u65b0\u6210\u529f";
@@ -162,6 +163,9 @@ public class ApiResponse<T> {
             case "Phone must be 10 digits and start with 09" -> "\u96fb\u8a71\u5fc5\u9808\u70ba 09 \u958b\u982d\u7684 10 \u4f4d\u6578\u5b57";
             case "Google account has already register" -> "\u6b64 Google \u5e33\u865f\u5df2\u88ab\u8a3b\u518a";
             case "Google account is not registered" -> "\u6b64 Google \u5e33\u865f\u5c1a\u672a\u8a3b\u518a";
+            case "Google account is already bound" -> "\u6b64 Google \u5e33\u865f\u5df2\u7d81\u5b9a";
+            case "Google email does not match current account" -> "Google Email \u8207\u76ee\u524d\u767b\u5165\u5e33\u865f\u4e0d\u7b26";
+            case "Google account binding failed" -> "Google \u5e33\u865f\u7d81\u5b9a\u5931\u6557";
             case "Google credential is required" -> "\u8acb\u63d0\u4f9b Google \u767b\u5165\u6191\u8b49";
             case "Invalid Google credential" -> "Google \u767b\u5165\u6191\u8b49\u7121\u6548";
             case "Google client id does not match" -> "Google client id \u4e0d\u7b26\u5408";

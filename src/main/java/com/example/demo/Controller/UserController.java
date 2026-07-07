@@ -10,28 +10,27 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.UserService;
-import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.request.EmailVerificationRequest;
 import com.example.demo.dto.request.GoogleCredentialRequest;
 import com.example.demo.dto.request.LocalLoginRequest;
 import com.example.demo.dto.request.LocalRegisterRequest;
 import com.example.demo.dto.request.RequestPasswordResetRequest;
 import com.example.demo.dto.request.ResetPasswordRequest;
-import com.example.demo.dto.request.UpdateUserProfileRequest;
+import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.dto.response.PasswordResetVerificationResponse;
 import com.example.demo.dto.response.UserProfileResponse;
 import com.example.demo.dto.response.UserResponse;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
-@Tag(name = "使用者與驗證 API", description = "提供使用者註冊、登入、登出、信箱驗證、密碼重設、目前登入者資料與帳號管理功能。")
+@Tag(name = "使用者與驗證 API", description = "提供註冊、登入、登出、信箱驗證、密碼重設與帳號管理功能。")
 public class UserController {
 
     @Autowired
@@ -43,13 +42,13 @@ public class UserController {
         return userService.findAllUsers();
     }
 
-    @Operation(summary = "攤主本地端註冊", description = "使用 email、密碼、姓名與電話建立 VENDOR 帳號，並寄送信箱驗證碼。")
+    @Operation(summary = "攤主本地端註冊", description = "使用 email、密碼與姓名建立 VENDOR 帳號，並寄送信箱驗證碼。")
     @PostMapping("/api/vendor/local-register")
     public ApiResponse<Void> vendorRegister(@Valid @RequestBody LocalRegisterRequest user) {
         return userService.registerLocal(user, "VENDOR");
     }
 
-    @Operation(summary = "主辦方本地端註冊", description = "使用 email、密碼、姓名與電話建立 ORGANIZER 帳號，並寄送信箱驗證碼。")
+    @Operation(summary = "主辦方本地端註冊", description = "使用 email、密碼與姓名建立 ORGANIZER 帳號，並寄送信箱驗證碼。")
     @PostMapping("/api/organizer/local-register")
     public ApiResponse<Void> organizerRegister(@Valid @RequestBody LocalRegisterRequest user) {
         return userService.registerLocal(user, "ORGANIZER");
@@ -113,6 +112,15 @@ public class UserController {
         return userService.loginGoogle(body, "ORGANIZER");
     }
 
+    @Operation(summary = "綁定 Google 帳號", description = "需要 Authorization header 帶入 Bearer JWT；Google credential 的 email 必須與目前登入帳號相同。")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/api/auth/google-bind")
+    public ApiResponse<Void> bindGoogle(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @Valid @RequestBody GoogleCredentialRequest body) {
+        return userService.bindGoogle(authorizationHeader, body);
+    }
+
     @Operation(summary = "驗證註冊信箱", description = "使用 email 與 6 位數驗證碼完成註冊信箱驗證，驗證成功後啟用帳號。")
     @PostMapping("/api/auth/createAccount/emailVerify")
     public ApiResponse<Void> verifyCreateAccountEmail(@Valid @RequestBody EmailVerificationRequest body) {
@@ -149,15 +157,6 @@ public class UserController {
     @GetMapping("/api/auth/me")
     public ApiResponse<UserProfileResponse> me(@RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         return userService.getCurrentUser(authorizationHeader);
-    }
-
-    @Operation(summary = "更新目前登入者資料", description = "需要 Authorization header 帶入 Bearer JWT；可更新目前登入者的姓名與電話。")
-    @SecurityRequirement(name = "bearerAuth")
-    @PostMapping("/api/users/me")
-    public ApiResponse<UserProfileResponse> updateMe(
-            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @Valid @RequestBody UpdateUserProfileRequest body) {
-        return userService.updateCurrentUser(authorizationHeader, body);
     }
 
     @Operation(summary = "停用目前登入帳號", description = "需要 Authorization header 帶入 Bearer JWT；依帳號角色檢查是否仍有進行中的活動或申請，通過後停用帳號並登出。")

@@ -29,8 +29,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     //api放置處
     private final Set<ProtectedApi> protectedApis = Set.of(
             new ProtectedApi(HttpMethod.POST.name(), "/api/auth/logout"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/auth/google-bind"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/auth/me"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/users/me"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/account/deactivate"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/account"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/stall-map/{applicationNo}"),

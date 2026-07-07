@@ -9,11 +9,10 @@ public class UserResponse {
 
     private Long id;
     private String role;
-    private String name;
     private String email;
     private String passwordHash;
-    private String phone;
     private String provider;
+    private String googleSub;
     private String status;
     private Boolean isLogin;
     private LocalDateTime emailVerifiedAt;
@@ -37,14 +36,6 @@ public class UserResponse {
         this.role = role;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
     public String getEmail() {
         return email;
     }
@@ -61,20 +52,20 @@ public class UserResponse {
         this.passwordHash = passwordHash;
     }
 
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
     public String getProvider() {
         return provider;
     }
 
     public void setProvider(String provider) {
         this.provider = provider;
+    }
+
+    public String getGoogleSub() {
+        return googleSub;
+    }
+
+    public void setGoogleSub(String googleSub) {
+        this.googleSub = googleSub;
     }
 
     public String getStatus() {
