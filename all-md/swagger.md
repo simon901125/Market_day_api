@@ -297,13 +297,32 @@ Bearer <JWT_TOKEN>
 
 | 區塊 | 說明 |
 | --- | --- |
-| `event` | 活動名稱、時間、地點、封面圖。 |
-| `application` | 申請、審核、付款、保證金、退款與備註狀態。 |
-| `statusTimeline` | 申請、付款、退款相關時間。 |
+| `application` | 申請 ID、申請編號與後端計算後的申請狀態。 |
+| `event` | 活動名稱、活動狀態、活動日期與地址；`eventStatus` 固定為 `活動預告`、`即將開始`、`進行中`、`已結束`。 |
 | `vendor` | 攤主聯絡資訊。 |
 | `brand` | 品牌資訊。 |
-| `registration` | 報名日期與攤位資訊。 |
-| `fee` | 費用、付款與退款資訊。 |
+| `applicationdetail` | 報名時段、攤位尺寸、攤位區域、攤位類別、車牌、申請備註與審核備註；`registrationPeriods` 為單一字串。 |
+| `stall` | 依報名日期回傳攤位列；每列包含日期、攤位編號、區域與選擇狀態。 |
+| `fee` | 付款狀態、付款方式、付款編號與付款金額。 |
+| `feedetail` | 報名費、設備租借費、額外電費、保證金與總計。 |
+| `equipmentRentals` | 四區設備/用電資訊：`freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower`。 |
+| `status` | 固定狀態流清單與各節點時間。 |
+
+`applicationdetail.registrationPeriods` 範例：
+
+```text
+2026-06-28 11:00-19:00 - 2026-06-29 11:00-19:00
+```
+
+`feedetail.content` 範例：
+
+| 項目 | content 範例 |
+| --- | --- |
+| 報名費 | `2天 (2026-06-28、2026-06-29)` |
+| 設備租借費 | `帳篷租借*1、冷藏櫃租借*1` |
+| 額外電費 | `110V / 500W*2` |
+
+`rentalEquipments.unit` 與 `extraPower.unit` 只回單位文字，例如 `天`，不包含 `/`。
 
 ## 文件維護規則
 

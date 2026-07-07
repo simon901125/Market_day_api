@@ -190,6 +190,7 @@ public class ApiResponse<T> {
             case "Application payment is not paid" -> "\u7533\u8acb\u4ed8\u6b3e\u72c0\u614b\u4e0d\u662f\u5df2\u4ed8\u6b3e";
             case "Application dates are required" -> "\u627e\u4e0d\u5230\u7533\u8acb\u65e5\u671f\u8cc7\u6599";
             case "Application has already selected a stall" -> "\u6b64\u7533\u8acb\u5df2\u5b8c\u6210\u9078\u4f4d";
+            case "Application date has already selected a stall", "Application date has already been selected" -> "\u6b64\u7533\u8acb\u65e5\u671f\u5df2\u5b8c\u6210\u9078\u4f4d";
             case "Application status changed during stall selection" -> "\u7533\u8acb\u72c0\u614b\u5df2\u8b8a\u66f4\uff0c\u8acb\u91cd\u65b0\u78ba\u8a8d\u5f8c\u518d\u9078\u4f4d";
             case "Apply date is required" -> "\u8acb\u63d0\u4f9b\u7533\u8acb\u65e5\u671f";
             case "Apply date is not part of this event" -> "\u7533\u8acb\u65e5\u671f\u4e0d\u5c6c\u65bc\u6b64\u6d3b\u52d5";
@@ -197,6 +198,7 @@ public class ApiResponse<T> {
             case "Event id is required" -> "\u8acb\u63d0\u4f9b\u6d3b\u52d5 ID";
             case "Event not found" -> "\u627e\u4e0d\u5230\u6d3b\u52d5\u8cc7\u6599";
             case "Stall not found" -> "\u627e\u4e0d\u5230\u6524\u4f4d\u8cc7\u6599";
+            case "Invalid stall selection" -> "\u932f\u8aa4\u7684\u6524\u4f4d\u9078\u64c7";
             case "Application binding failed" -> "\u7533\u8acb\u7d81\u5b9a\u6524\u4f4d\u5931\u6557";
             case "Review request is required" -> "\u8acb\u63d0\u4f9b\u5be9\u6838\u8cc7\u6599";
             case "Review status is invalid" -> "\u5be9\u6838\u72c0\u614b\u7121\u6548";

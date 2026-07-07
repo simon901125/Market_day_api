@@ -82,7 +82,7 @@ public class OrganizerRepository {
                 SELECT
                     e.id AS eventId,
                     e.title AS eventTitle,
-                    e.publish_status AS publishStatus,
+                    e.workflow_status AS publishStatus,
                     e.start_at AS eventStartAt,
                     e.end_at AS eventEndAt,
                     COALESCE(SUM(CASE
@@ -132,7 +132,7 @@ public class OrganizerRepository {
                 GROUP BY
                     e.id,
                     e.title,
-                    e.publish_status,
+                    e.workflow_status,
                     e.start_at,
                     e.end_at,
                     e.max_booths,
@@ -210,7 +210,12 @@ public class OrganizerRepository {
                         r.id DESC
                 ) refund_data
                 WHERE e.user_id = :organizerUserId
-                  AND e.publish_status = N'PUBLISHED'
+                  AND e.workflow_status IN (
+                      N'PUBLISHED',
+                      N'FINAL_REVIEW',
+                      N'UNPUBLISH_REQUESTED',
+                      N'UNPUBLISHED'
+                  )
                   AND (:eventTitle IS NULL OR e.title LIKE N'%' + :eventTitle + N'%')
                   AND (:brandName IS NULL OR vendor_up.name LIKE N'%' + :brandName + N'%')
                   AND (:appliedStartAt IS NULL OR a.created_at >= :appliedStartAt)
@@ -245,6 +250,8 @@ public class OrganizerRepository {
                     e.address AS eventAddress,
                     e.start_at AS eventStartAt,
                     e.end_at AS eventEndAt,
+                    e.registration_start_at AS registrationStartAt,
+                    e.registration_end_at AS registrationEndAt,
                     e.base_fee AS baseFee,
                     e.cover_image_url AS eventCoverImageUrl,
                     vendor_user.id AS vendorUserId,
@@ -408,6 +415,10 @@ public class OrganizerRepository {
                     er.id AS equipmentRentalId,
                     er.event_equipment_id AS eventEquipmentId,
                     er.equipment_name AS equipmentName,
+                    ee.description AS equipmentDescription,
+                    ee.charge_type AS chargeType,
+                    ee.item_type AS itemType,
+                    ee.wattage_limit AS wattageLimit,
                     er.rental_fee AS rentalFee,
                     er.pricing_unit AS pricingUnit,
                     er.quantity,
@@ -417,6 +428,7 @@ public class OrganizerRepository {
                     ra.appliance_name AS applianceName,
                     ra.wattage
                 FROM dbo.equipment_rentals er
+                INNER JOIN dbo.event_equipments ee ON ee.id = er.event_equipment_id
                 LEFT JOIN dbo.rental_appliances ra ON ra.equipment_rental_id = er.id
                 WHERE er.application_id = :applicationId
                 ORDER BY er.id ASC, ra.id ASC
@@ -424,6 +436,51 @@ public class OrganizerRepository {
 
         Map<String, Object> map = new HashMap<>();
         map.put("applicationId", applicationId);
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
+    public List<Map<String, Object>> findApplicationDates(Long applicationId) {
+        String sql = """
+                SELECT
+                    ad.id AS applicationDateId,
+                    ad.apply_date AS applyDate,
+                    ad.selected_stall_id AS selectedStallId,
+                    s.stall_no AS stallNo,
+                    z.zone_name AS zoneName,
+                    s.width,
+                    s.length,
+                    s.height
+                FROM dbo.application_dates ad
+                LEFT JOIN dbo.event_stalls s ON s.id = ad.selected_stall_id
+                LEFT JOIN dbo.event_stall_zones z ON z.id = s.zone_id
+                WHERE ad.application_id = :applicationId
+                ORDER BY ad.apply_date ASC, ad.id ASC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("applicationId", applicationId);
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
+    public List<Map<String, Object>> findEventEquipments(Long eventId) {
+        String sql = """
+                SELECT
+                    ee.id AS eventEquipmentId,
+                    ee.name AS equipmentName,
+                    ee.description AS equipmentDescription,
+                    ee.rental_fee AS rentalFee,
+                    ee.pricing_unit AS pricingUnit,
+                    ee.charge_type AS chargeType,
+                    ee.item_type AS itemType,
+                    ee.stock_quantity AS stockQuantity,
+                    ee.wattage_limit AS wattageLimit
+                FROM dbo.event_equipments ee
+                WHERE ee.event_id = :eventId
+                ORDER BY ee.charge_type ASC, ee.item_type ASC, ee.id ASC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("eventId", eventId);
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
     }
 
