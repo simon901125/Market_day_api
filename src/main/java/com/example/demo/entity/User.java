@@ -11,6 +11,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
 
@@ -82,6 +83,17 @@ public class User {
     /**使用者的攤位報名清單*/
     @OneToMany(mappedBy = "user")
     private List<EventApplication> eventApplications;
+
+    /**使用者的主辦方/攤主資料清單 */
+    @OneToOne(mappedBy = "user")
+    private UserProfile userProfile;
+
+    public void setUserProfile(UserProfile userProfile){
+        this.userProfile = userProfile;
+        if (userProfile != null) {
+            userProfile.setUser(this);
+        }
+    }
 
     /**帳號登入方式 */
     public enum Provider {

@@ -80,6 +80,10 @@ public class MarketEvent {
     private String notice;
 
     /**活動開始日期時間*/
+    @Column(name = "create_at", nullable = false)
+    private LocalDateTime createAt;
+
+    /**活動建立時間*/
     @Column(name = "start_at", nullable = false)
     private LocalDateTime startAt;
 
