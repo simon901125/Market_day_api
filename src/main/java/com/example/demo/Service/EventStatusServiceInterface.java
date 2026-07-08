@@ -2,19 +2,24 @@ package com.example.demo.Service;
 
 import java.time.LocalDateTime;
 
-import com.example.demo.entity.MarketEvent;
 import com.example.demo.enums.EventStatus;
+import com.example.demo.enums.WorkflowStatus;
 
-public interface EventStatusServiceInterface {
-    /**確定活動目前在資料庫的狀態對應後要傳給前端的狀態 */
-    default EventStatus checkEventStatus(MarketEvent event){
+public interface EventStatusServiceInterface<T> {
+    
+    /** 確定活動目前在資料庫的狀態對應後要傳給前端的狀態 */
+    default EventStatus checkEventStatus(
+        WorkflowStatus WorkflowStatus,
+        LocalDateTime regStartTime,
+        LocalDateTime regEndTime, 
+        LocalDateTime brandPublicTime, 
+        LocalDateTime startTime,
+        LocalDateTime endTime,
+        int maxBooth,
+        int nowBooth 
+    ) {
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime regStartTime = event.getRegistrationStartAt();
-        LocalDateTime regEndTime = event.getRegistrationEndAt();
-        LocalDateTime startTime = event.getStartAt();
-        LocalDateTime endTime = event.getEndAt();
-        
-        switch (event.getWorkflowStatus()) {
+        switch (WorkflowStatus) {
             case DRAFT:
                 return EventStatus.DRAFT;
             case PENDING_REVIEW:
@@ -28,16 +33,18 @@ public interface EventStatusServiceInterface {
             case PUBLISHED:
                 if (regStartTime.isAfter(now)) {
                     return EventStatus.READY_TO_PUBLISH;
-                }else if(regStartTime.isBefore(now) 
-                    && regEndTime.isAfter(now) 
-                    && event.getEventApplications().size() <= event.getMaxBooths()){
+                } else if (regStartTime.isBefore(now)
+                        && regEndTime.isAfter(now)
+                        && nowBooth <= maxBooth) {
                     return EventStatus.REGISTRATION_OPEN;
                 }
                 return EventStatus.FULL;
             case FINAL_REVIEW:
-                if (startTime.isAfter(now)) {
+                if (brandPublicTime.isAfter(now)) {
                     return EventStatus.FULL;
-                } else if(startTime.isBefore(now) && endTime.isAfter(now)){
+                } else if (brandPublicTime.isBefore(now) && startTime.isAfter(now)) {
+                    return EventStatus.PUBLISHED;
+                } else if (startTime.isBefore(now) && endTime.isAfter(now)) {
                     return EventStatus.ACTIVE;
                 }
                 return EventStatus.ENDED;
@@ -50,24 +57,11 @@ public interface EventStatusServiceInterface {
             default:
                 break;
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         return null;
+
     }
+
+    /** 把活動資料轉換成在前端顯示的活動狀態 */
+    EventStatus changeToEventStatus(T data);
+
 }

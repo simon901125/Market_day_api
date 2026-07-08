@@ -65,7 +65,7 @@ public class AdminEventDetailDto {
 
     /**活動狀態log */
     @Data
-    private class StatusLog {
+    public class StatusLog {
         /**狀態更動時的日期時間 */
         private String dateTime;
         /**更動後的狀態 */
