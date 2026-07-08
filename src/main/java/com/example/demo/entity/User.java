@@ -39,6 +39,10 @@ public class User {
     @Column(name = "password_hash", length = 255)
     private String passwordHash;
 
+    @Column(name = "phone", length = 30)
+    private String phone;
+
+    /**帳號登入方式 */
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", length = 30, nullable = false)
     private Provider provider;
@@ -46,38 +50,55 @@ public class User {
     @Column(name = "google_sub", length = 255)
     private String googleSub;
 
+    /**使用者帳號狀態 */
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private Status status = Status.UNACTIVE;
 
+    /**是否已有登入中的裝置 */
     @Column(name = "isLogin", nullable = false)
     private Boolean isLogin = false;
 
+    /**使用者Email驗證完成時間 */
     @Column(name = "email_verified_at")
     private LocalDateTime emailVerifiedAt;
 
+    /**使用者自動登出判斷時間*/
     @Column(name = "expired_time", nullable = false)
     private LocalDateTime expiredTime;
 
+    /**使用者帳號創建時間 */
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    /**使用者帳號更新時間 */
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /**使用者舉辦的活動清單 */
     @OneToMany(mappedBy = "user")
     private List<MarketEvent> marketEvents;
 
+    /**使用者的攤位報名清單*/
+    @OneToMany(mappedBy = "user")
+    private List<EventApplication> eventApplications;
+
+    /**帳號登入方式 */
     public enum Provider {
         GOOGLE,
         BOTH,
         LOCAL
     }
 
+    /**使用者帳號狀態 */
     public enum Status {
+        /**已刪除 */
         IS_DELETED,
+        /**已停用 */
         DISABLED,
+        /**活動中 */
         ACTIVE,
+        /**未激活 */
         UNACTIVE
     }
 }

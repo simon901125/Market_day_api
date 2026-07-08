@@ -2,6 +2,7 @@ package com.example.demo.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,6 +14,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
 
@@ -125,5 +127,9 @@ public class MarketEvent {
     /**補件原因/審核備註 */
     @Column(name = "review_note", columnDefinition = "nvarchar(max)")
     private String reviewNote;
+
+    /**活動的攤位報名清單 */
+    @OneToMany(mappedBy = "event")
+    private List<EventApplication> eventApplications;
 
 }

@@ -10,7 +10,7 @@ import java.util.List;
 import java.time.LocalDateTime;
 
 
-public interface ActivityRepo extends JpaRepository<MarketEvent, Long>{
+public interface EventRepo extends JpaRepository<MarketEvent, Long>{
     int countByWorkflowStatus(WorkflowStatus workflowStatus);
     int countByWorkflowStatusIn(Collection<WorkflowStatus> publishStatuses);
     List<MarketEvent> findByStartAt(LocalDateTime startAt);
