@@ -15,7 +15,6 @@ public enum WorkflowStatus {
     DRAFT("draft", "草稿"),
     /**活動由管理員審核中 */
     PENDING_REVIEW("pendingReview", "待審核"),
-    //TODO:資料庫後續更新後要再確認
     /**管理員審核活動拒絕後，主辦方正在補件 */
     REVISION_REQUIRED("revisionRequired", "補件中"),
     /**活動地圖建置中 */
