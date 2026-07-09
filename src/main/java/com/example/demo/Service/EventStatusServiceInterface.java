@@ -7,7 +7,7 @@ import com.example.demo.enums.WorkflowStatus;
 
 public interface EventStatusServiceInterface<T> {
     
-    /** 確定活動目前在資料庫的狀態對應後要傳給前端的狀態 */
+    /** 確定活動目前在資料庫的狀態對應後要傳給前端的狀態，要和 {@link com.example.demo.Repository.specification.EventSpecification#withStatus}保持一致，修改時要一起改 */
     default EventStatus checkEventStatus(
         WorkflowStatus WorkflowStatus,
         LocalDateTime regStartTime,
