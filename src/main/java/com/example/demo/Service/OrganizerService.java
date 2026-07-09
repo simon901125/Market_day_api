@@ -1,5 +1,8 @@
 package com.example.demo.Service;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -9,11 +12,21 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -37,6 +50,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class OrganizerService {
+
+    public record ReportExport(
+            boolean success,
+            byte[] content,
+            String filename,
+            String contentType,
+            String errorMessage) {
+
+        public static ReportExport excel(String filename, byte[] content) {
+            return new ReportExport(
+                    true,
+                    content,
+                    filename,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    null);
+        }
+
+        public static ReportExport fail(String message) {
+            return new ReportExport(false, null, null, "text/plain; charset=UTF-8", message);
+        }
+    }
 
     private static final DateTimeFormatter SERVICE_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter SPACE_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -127,12 +161,39 @@ public class OrganizerService {
             String authorizationHeader,
             Long eventId,
             String status) {
+        Map<String, Object> response = buildOrganizerAccountDetail(authorizationHeader, eventId, status);
+        if (response.containsKey("message")) {
+            return ApiResponse.fail(response.get("message").toString());
+        }
+
+        return ApiResponse.success(
+                "Organizer accounting detail retrieved successfully",
+                new MapBackedResponse(response));
+    }
+
+    public ReportExport exportOrganizerAccountReport(
+            String authorizationHeader,
+            Long eventId,
+            String status) {
+        Map<String, Object> response = buildOrganizerAccountDetail(authorizationHeader, eventId, status);
+        if (response.containsKey("message")) {
+            return ReportExport.fail(response.get("message").toString());
+        }
+        return ReportExport.excel(
+                reportFilename("account-report", response.get("event"), eventId),
+                buildAccountReportWorkbook(response));
+    }
+
+    private Map<String, Object> buildOrganizerAccountDetail(
+            String authorizationHeader,
+            Long eventId,
+            String status) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
-            return ApiResponse.fail(organizer.get("message").toString());
+            return organizer;
         }
         if (eventId == null) {
-            return ApiResponse.fail("Event id is required");
+            return message("Event id is required");
         }
 
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
@@ -140,7 +201,7 @@ public class OrganizerService {
                 .findOrganizerAccountingEventDetail(organizerUserId, eventId)
                 .orElse(null);
         if (account == null) {
-            return ApiResponse.fail("Event not found");
+            return message("Event not found");
         }
 
         List<Map<String, Object>> payments = organizerRepository
@@ -150,13 +211,11 @@ public class OrganizerService {
                 .filter(payment -> matchesAccountingStatus(payment, status))
                 .toList();
 
-        return ApiResponse.success(
-                "Organizer accounting detail retrieved successfully",
-                new MapBackedResponse(orderedMap(
-                        "event", toAccountingEventResponse(withDisplayPublishStatus(account)),
-                        "summary", toAccountingFinancialSummary(account),
-                        "statistics", toAccountingStatistics(account),
-                        "payments", payments)));
+        return orderedMap(
+                "event", toAccountingEventResponse(withDisplayPublishStatus(account)),
+                "summary", toAccountingFinancialSummary(account),
+                "statistics", toAccountingStatistics(account),
+                "payments", payments);
     }
 
     public ApiResponse<OrganizerApplicationSearchResponse> searchOrganizerApplications(
@@ -244,12 +303,33 @@ public class OrganizerService {
     }
 
     public ApiResponse<MapBackedResponse> getOrganizerEquipmentDetail(String authorizationHeader, Long eventId) {
+        Map<String, Object> response = buildOrganizerEquipmentDetail(authorizationHeader, eventId);
+        if (response.containsKey("message")) {
+            return ApiResponse.fail(response.get("message").toString());
+        }
+
+        return ApiResponse.success(
+                "Organizer equipment detail retrieved successfully",
+                new MapBackedResponse(response));
+    }
+
+    public ReportExport exportOrganizerEquipmentReport(String authorizationHeader, Long eventId) {
+        Map<String, Object> response = buildOrganizerEquipmentDetail(authorizationHeader, eventId);
+        if (response.containsKey("message")) {
+            return ReportExport.fail(response.get("message").toString());
+        }
+        return ReportExport.excel(
+                reportFilename("equipment-report", response.get("event"), eventId),
+                buildEquipmentReportWorkbook(response));
+    }
+
+    private Map<String, Object> buildOrganizerEquipmentDetail(String authorizationHeader, Long eventId) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
-            return ApiResponse.fail(organizer.get("message").toString());
+            return organizer;
         }
         if (eventId == null) {
-            return ApiResponse.fail("Event id is required");
+            return message("Event id is required");
         }
 
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
@@ -257,7 +337,7 @@ public class OrganizerService {
                 .findOrganizerEquipmentEventDetail(organizerUserId, eventId)
                 .orElse(null);
         if (event == null) {
-            return ApiResponse.fail("Event not found");
+            return message("Event not found");
         }
 
         List<Map<String, Object>> equipments = organizerRepository.findEventEquipments(eventId);
@@ -266,7 +346,7 @@ public class OrganizerService {
         List<Map<String, Object>> powerManagementRows = organizerRepository.findOrganizerPowerManagementRows(eventId);
         List<Map<String, Object>> vehicleManagementRows = organizerRepository.findOrganizerVehicleManagementRows(eventId);
 
-        Map<String, Object> response = orderedMap(
+        return orderedMap(
                 "event", toEquipmentDetailEventResponse(withDisplayEquipmentEventStatus(event)),
                 "eventEquipments", toEventEquipmentRows(equipments),
                 "basicPowers", toBasicPowerRows(equipments),
@@ -277,10 +357,6 @@ public class OrganizerService {
                 "equipmentRentalManagement", toEquipmentRentalManagement(vehicleManagementRows, equipmentManagementRows, equipments),
                 "extraPowerManagement", toExtraPowerManagement(vehicleManagementRows, powerManagementRows),
                 "vehicleManagement", toVehicleManagement(vehicleManagementRows));
-
-        return ApiResponse.success(
-                "Organizer equipment detail retrieved successfully",
-                new MapBackedResponse(response));
     }
 
     public ApiResponse<OrganizerApplicationDetailResponse> getOrganizerApplicationDetail(String authorizationHeader, Long applicationId) {
@@ -723,25 +799,52 @@ public class OrganizerService {
                         "eventEquipmentId", row.get("eventEquipmentId"),
                         "equipmentName", row.get("equipmentName"),
                         "powerPlan", powerPlan(row),
-                        "dailyRentableQuantity", row.get("perStallRentalLimit"),
-                        "stockQuantity", row.get("stockQuantity")))
+                        "perStallProvidedQuantity", row.get("perStallRentalLimit"),
+                        "availableGroupQuantity", row.get("stockQuantity")))
                 .toList();
     }
 
     private List<Map<String, Object>> toEquipmentRentalStatistics(List<Map<String, Object>> stats) {
-        List<Map<String, Object>> rows = new ArrayList<>();
-        int totalRented = 0;
-        int totalStock = 0;
-        boolean hasTotalStock = false;
+        Map<String, Map<String, Object>> rowsByGroup = new LinkedHashMap<>();
+        Map<String, Integer> rentedByGroup = new LinkedHashMap<>();
+        Map<String, Integer> stockByGroup = new LinkedHashMap<>();
+        Set<String> groupsWithStock = new LinkedHashSet<>();
+
         for (Map<String, Object> row : stats) {
             if (!"EQUIPMENT".equals(statusText(row.get("itemType")))) {
                 continue;
             }
-            int rented = intValue(row.get("rentedQuantity"));
+
+            String groupKey = eventEquipmentGroupKey(row);
+            rowsByGroup.computeIfAbsent(
+                    groupKey,
+                    key -> orderedMap(
+                            "eventEquipmentId", row.get("eventEquipmentId"),
+                            "equipmentGroupKey", row.get("equipmentGroupKey"),
+                            "equipmentName", row.get("equipmentName")));
+
+            rentedByGroup.merge(groupKey, intValue(row.get("rentedQuantity")), Integer::sum);
             Integer stock = nullableInt(row.get("stockQuantity"));
+            if (stock != null) {
+                stockByGroup.merge(groupKey, stock, Integer::sum);
+                groupsWithStock.add(groupKey);
+            }
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int totalRented = 0;
+        int totalStock = 0;
+        boolean hasTotalStock = false;
+
+        for (Map.Entry<String, Map<String, Object>> entry : rowsByGroup.entrySet()) {
+            String groupKey = entry.getKey();
+            Map<String, Object> row = entry.getValue();
+            int rented = rentedByGroup.getOrDefault(groupKey, 0);
+            Integer stock = groupsWithStock.contains(groupKey) ? stockByGroup.getOrDefault(groupKey, 0) : null;
             Integer remaining = stock == null ? null : Math.max(stock - rented, 0);
             rows.add(orderedMap(
                     "eventEquipmentId", row.get("eventEquipmentId"),
+                    "equipmentGroupKey", row.get("equipmentGroupKey"),
                     "equipmentName", row.get("equipmentName"),
                     "rentedQuantity", rented,
                     "rentableQuantity", stock,
@@ -755,6 +858,7 @@ public class OrganizerService {
         }
         rows.add(orderedMap(
                 "eventEquipmentId", null,
+                "equipmentGroupKey", null,
                 "equipmentName", "\u7e3d\u8a08",
                 "rentedQuantity", totalRented,
                 "rentableQuantity", hasTotalStock ? totalStock : null,
@@ -1840,6 +1944,245 @@ public class OrganizerService {
             return null;
         }
         return intValue(first) + intValue(second);
+    }
+
+    private byte[] buildEquipmentReportWorkbook(Map<String, Object> response) {
+        Map<String, Object> equipmentRentalManagement = mapValue(response.get("equipmentRentalManagement"));
+        List<Map<String, Object>> equipmentRentalItems = listValue(equipmentRentalManagement.get("items"));
+        List<String> equipmentColumns = dynamicQuantityColumns(equipmentRentalItems);
+
+        return workbookBytes(List.of(
+                sheet("活動資訊",
+                        List.of("活動ID", "活動名稱", "狀態", "狀態說明", "活動時間", "地點", "地址"),
+                        List.of(row(response.get("event"),
+                                "eventId", "eventTitle", "status", "statusNote", "eventTime", "locationName", "address"))),
+                sheet("活動設備",
+                        List.of("設備名稱", "設備類型", "單位", "免費提供數量", "付費租借上限", "每日可租借總數", "付費租金", "計費單位", "租借狀態", "說明"),
+                        rows(response.get("eventEquipments"),
+                                "equipmentName", "itemType", "unit", "freeProvided", "perStallRentalLimit",
+                                "dailyRentableQuantity", "paidRentalFee", "pricingUnit", "rentalStatus", "description")),
+                sheet("基本用電",
+                        List.of("用電名稱", "電壓", "免費瓦數"),
+                        rows(response.get("basicPowers"), "equipmentName", "voltageType", "freeWattage")),
+                sheet("加購用電",
+                        List.of("用電名稱", "用電方案", "每攤可提供組數", "可提供組數"),
+                        rows(response.get("extraPowers"), "equipmentName", "powerPlan", "perStallProvidedQuantity", "availableGroupQuantity")),
+                sheet("設備租借統計",
+                        List.of("設備名稱", "已租借數量", "可租借數量", "剩餘數量", "租借/總計"),
+                        rows(response.get("equipmentRentalStatistics"),
+                                "equipmentName", "rentedQuantity", "rentableQuantity", "remainingQuantity", "rentedText")),
+                sheet("設備租借管理",
+                        equipmentManagementHeaders(equipmentColumns),
+                        equipmentManagementRows(equipmentRentalItems, equipmentColumns)),
+                sheet("加購用電管理",
+                        List.of("攤位編號", "品牌名稱", "用電方案"),
+                        rows(mapValue(response.get("extraPowerManagement")).get("items"), "stallNo", "brandName", "powerPlan")),
+                sheet("車輛管理",
+                        List.of("攤位編號", "品牌名稱", "聯絡人", "車牌號碼"),
+                        rows(mapValue(response.get("vehicleManagement")).get("items"), "stallNo", "brandName", "contactName", "vehicleNo"))));
+    }
+
+    private byte[] buildAccountReportWorkbook(Map<String, Object> response) {
+        Map<String, Object> summary = mapValue(response.get("summary"));
+        Map<String, Object> statistics = mapValue(response.get("statistics"));
+        Map<String, Object> payment = mapValue(statistics.get("payment"));
+        Map<String, Object> refund = mapValue(statistics.get("refund"));
+        Map<String, Object> deposit = mapValue(statistics.get("deposit"));
+
+        List<List<Object>> summaryRows = List.of(
+                reportRow("收款總額", value(summary, "grossRevenue")),
+                reportRow("退款總額", value(summary, "refundAmount")),
+                reportRow("已退保證金總額", value(summary, "returnedDepositAmount")),
+                reportRow("未退保證金總額", value(summary, "unreturnedDepositAmount")),
+                reportRow("實收總額", value(summary, "netRevenue")),
+                reportRow("總攤位數", value(payment, "totalStallCount")),
+                reportRow("已付款攤位數", value(payment, "paidStallCount")),
+                reportRow("待付款攤位數", value(payment, "pendingPaymentStallCount")),
+                reportRow("退款筆數", value(refund, "refundCount")),
+                reportRow("已退款筆數", value(refund, "refundedCount")),
+                reportRow("退款中筆數", value(refund, "refundingCount")),
+                reportRow("已退保證金筆數", value(deposit, "returnedDepositCount")),
+                reportRow("未退保證金筆數", value(deposit, "unreturnedDepositCount")));
+
+        return workbookBytes(List.of(
+                sheet("活動資訊",
+                        List.of("活動ID", "活動名稱", "發布狀態", "狀態文字", "狀態說明", "活動日期", "地點", "地址", "總攤位數", "已付款攤位數"),
+                        List.of(row(response.get("event"),
+                                "eventId", "eventTitle", "publishStatus", "publishStatusText", "statusNote",
+                                "eventDate", "locationName", "address", "totalStallCount", "paidStallCount"))),
+                new ReportSheet("帳務摘要", List.of("項目", "值"), summaryRows),
+                sheet("付款明細",
+                        List.of("付款編號", "品牌名稱", "付款時間", "付款金額", "退款金額", "保證金狀態", "帳務狀態"),
+                        rows(response.get("payments"),
+                                "paymentNo", "brandName", "paidAt", "paymentAmount", "refundAmount", "depositStatus", "accountingStatus"))));
+    }
+
+    private ReportSheet sheet(String name, List<String> headers, List<List<Object>> rows) {
+        return new ReportSheet(name, headers, rows);
+    }
+
+    private List<Object> reportRow(Object... values) {
+        List<Object> row = new ArrayList<>();
+        for (Object value : values) {
+            row.add(value);
+        }
+        return row;
+    }
+
+    private byte[] workbookBytes(List<ReportSheet> reportSheets) {
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+
+            for (ReportSheet reportSheet : reportSheets) {
+                Sheet sheet = workbook.createSheet(safeSheetName(reportSheet.name()));
+                writeSheet(sheet, reportSheet, headerStyle);
+            }
+            workbook.write(bytes);
+            return bytes.toByteArray();
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    private void writeSheet(Sheet sheet, ReportSheet reportSheet, CellStyle headerStyle) {
+        Row headerRow = sheet.createRow(0);
+        for (int columnIndex = 0; columnIndex < reportSheet.headers().size(); columnIndex++) {
+            Cell cell = headerRow.createCell(columnIndex);
+            cell.setCellValue(reportSheet.headers().get(columnIndex));
+            cell.setCellStyle(headerStyle);
+        }
+
+        for (int rowIndex = 0; rowIndex < reportSheet.rows().size(); rowIndex++) {
+            Row excelRow = sheet.createRow(rowIndex + 1);
+            List<Object> rowValues = reportSheet.rows().get(rowIndex);
+            for (int columnIndex = 0; columnIndex < rowValues.size(); columnIndex++) {
+                writeCell(excelRow.createCell(columnIndex), rowValues.get(columnIndex));
+            }
+        }
+
+        sheet.createFreezePane(0, 1);
+        for (int columnIndex = 0; columnIndex < reportSheet.headers().size(); columnIndex++) {
+            sheet.autoSizeColumn(columnIndex);
+            int width = sheet.getColumnWidth(columnIndex);
+            sheet.setColumnWidth(columnIndex, Math.min(Math.max(width + 512, 2800), 12000));
+        }
+    }
+
+    private void writeCell(Cell cell, Object value) {
+        if (value == null) {
+            cell.setBlank();
+            return;
+        }
+        if (value instanceof BigDecimal decimal) {
+            cell.setCellValue(decimal.doubleValue());
+            return;
+        }
+        if (value instanceof Number number) {
+            cell.setCellValue(number.doubleValue());
+            return;
+        }
+        if (value instanceof Boolean bool) {
+            cell.setCellValue(bool);
+            return;
+        }
+        cell.setCellValue(String.valueOf(value));
+    }
+
+    private String safeSheetName(String name) {
+        String safeName = normalizeText(name);
+        if (safeName == null) {
+            return "Sheet";
+        }
+        safeName = safeName.replaceAll("[\\\\/?*\\[\\]:]", "_");
+        return safeName.length() > 31 ? safeName.substring(0, 31) : safeName;
+    }
+
+    private List<List<Object>> rows(Object value, String... keys) {
+        return listValue(value).stream()
+                .map(row -> row(row, keys))
+                .toList();
+    }
+
+    private List<Object> row(Object value, String... keys) {
+        Map<String, Object> map = mapValue(value);
+        List<Object> row = new ArrayList<>();
+        for (String key : keys) {
+            row.add(map.get(key));
+        }
+        return row;
+    }
+
+    private Object value(Map<String, Object> map, String key) {
+        return map == null ? null : map.get(key);
+    }
+
+    private List<String> dynamicQuantityColumns(List<Map<String, Object>> items) {
+        Set<String> columns = new LinkedHashSet<>();
+        for (Map<String, Object> item : items) {
+            mapValue(item.get("equipmentQuantities")).keySet().stream()
+                    .map(this::normalizeText)
+                    .filter(Objects::nonNull)
+                    .forEach(columns::add);
+        }
+        return List.copyOf(columns);
+    }
+
+    private List<String> equipmentManagementHeaders(List<String> equipmentColumns) {
+        List<String> headers = new ArrayList<>(List.of("攤位編號", "品牌名稱"));
+        headers.addAll(equipmentColumns);
+        return headers;
+    }
+
+    private List<List<Object>> equipmentManagementRows(
+            List<Map<String, Object>> items,
+            List<String> equipmentColumns) {
+        List<List<Object>> rows = new ArrayList<>();
+        for (Map<String, Object> item : items) {
+            Map<String, Object> quantities = mapValue(item.get("equipmentQuantities"));
+            List<Object> row = new ArrayList<>();
+            row.add(item.get("stallNo"));
+            row.add(item.get("brandName"));
+            equipmentColumns.forEach(column -> row.add(quantities.get(column)));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private String reportFilename(String prefix, Object eventValue, Long eventId) {
+        String eventTitle = normalizeText(mapValue(eventValue).get("eventTitle"));
+        String suffix = eventTitle == null ? String.valueOf(eventId) : eventTitle;
+        return prefix + "-" + safeFilename(suffix) + ".xlsx";
+    }
+
+    private String safeFilename(String text) {
+        return text.replaceAll("[\\\\/:*?\"<>|]+", "_").replaceAll("\\s+", "-");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> mapValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> listValue(Object value) {
+        if (value instanceof List<?> list) {
+            return (List<Map<String, Object>>) list;
+        }
+        return List.of();
+    }
+
+    private Map<String, Object> message(String message) {
+        return Map.of("message", message);
+    }
+
+    private record ReportSheet(String name, List<String> headers, List<List<Object>> rows) {
     }
 
     private Integer nullableInt(Object value) {

@@ -942,9 +942,11 @@ public class OrganizerRepository {
         String sql = """
                 SELECT
                     ee.id AS eventEquipmentId,
+                    ee.equipment_group_key AS equipmentGroupKey,
                     ee.name AS equipmentName,
                     ee.item_type AS itemType,
                     ee.charge_type AS chargeType,
+                    ee.unit,
                     ee.stock_quantity AS stockQuantity,
                     ee.wattage_limit AS wattageLimit,
                     COALESCE(rental_stats.rentedQuantity, 0) AS rentedQuantity
