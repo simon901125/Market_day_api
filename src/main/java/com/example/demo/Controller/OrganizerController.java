@@ -4,6 +4,11 @@ import java.time.LocalDate;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.OrganizerService;
+import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
 import com.example.demo.dto.response.ApiResponse;
@@ -60,6 +66,15 @@ public class OrganizerController {
             @PathVariable Long eventId,
             @RequestParam(value = "status", required = false) String status) {
         return organizerService.getOrganizerAccountDetail(authorizationHeader, eventId, status);
+    }
+
+    @Operation(summary = "匯出主辦方活動帳務報表", description = "依活動 ID 產出帳務 Excel 報表，內含活動資訊、帳務摘要與付款明細工作表。")
+    @GetMapping("/api/organizer/accounts/{eventId}/export")
+    public ResponseEntity<byte[]> exportOrganizerAccountReport(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId,
+            @RequestParam(value = "status", required = false) String status) {
+        return reportResponse(organizerService.exportOrganizerAccountReport(authorizationHeader, eventId, status));
     }
 
     @Operation(summary = "取得主辦方帳號資訊", description = "回傳目前登入主辦方的主辦方名稱、聯絡資訊、公司資訊、地址與服務時間。")
@@ -127,6 +142,14 @@ public class OrganizerController {
         return organizerService.getOrganizerEquipmentDetail(authorizationHeader, eventId);
     }
 
+    @Operation(summary = "匯出主辦方活動設備報表", description = "依活動 ID 產出設備 Excel 報表，內含設備、用電、統計與管理列表工作表。")
+    @GetMapping("/api/organizer/equipment/{eventId}/export")
+    public ResponseEntity<byte[]> exportOrganizerEquipmentReport(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId) {
+        return reportResponse(organizerService.exportOrganizerEquipmentReport(authorizationHeader, eventId));
+    }
+
     @Operation(summary = "取得主辦方報名詳情", description = "依報名 ID 取得目前主辦方活動底下的攤商報名資料、攤位日期、設備租借與審核狀態流程。")
     @GetMapping("/api/organizer/applications/{id}")
     public ApiResponse<OrganizerApplicationDetailResponse> getOrganizerApplicationDetail(
@@ -171,5 +194,22 @@ public class OrganizerController {
             @PathVariable String stallNo,
             @RequestParam(value = "applyDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate applyDate) {
         return stallService.getOrganizerStallMapDetail(authorizationHeader, eventId, stallNo, applyDate);
+    }
+
+    private ResponseEntity<byte[]> reportResponse(ReportExport export) {
+        if (!export.success()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(export.errorMessage().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(export.contentType()))
+                .contentLength(export.content().length)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(export.filename(), java.nio.charset.StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .body(export.content());
     }
 }

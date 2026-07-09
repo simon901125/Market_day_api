@@ -2,6 +2,7 @@ package com.example.demo.Controller;
 
 import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.server.ServerHttpRequest;
@@ -19,6 +20,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @RestControllerAdvice
 public class GlobalResponseAdvice implements ResponseBodyAdvice<Object> {
 
+    private static final MediaType ZIP_MEDIA_TYPE = MediaType.parseMediaType("application/zip");
+    private static final MediaType EXCEL_MEDIA_TYPE = MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
     private final ObjectMapper objectMapper;
 
     public GlobalResponseAdvice(ObjectMapper objectMapper) {
@@ -29,6 +34,9 @@ public class GlobalResponseAdvice implements ResponseBodyAdvice<Object> {
     public boolean supports(
             MethodParameter returnType,
             Class<? extends HttpMessageConverter<?>> converterType) {
+        if (ResponseEntity.class.isAssignableFrom(returnType.getParameterType())) {
+            return false;
+        }
         Class<?> controllerClass = returnType.getContainingClass();
         return controllerClass == UserController.class
                 || controllerClass == StallController.class
@@ -43,6 +51,10 @@ public class GlobalResponseAdvice implements ResponseBodyAdvice<Object> {
             Class<? extends HttpMessageConverter<?>> selectedConverterType,
             ServerHttpRequest request,
             ServerHttpResponse response) {
+
+        if (body instanceof byte[] || isBinaryContent(selectedContentType)) {
+            return body;
+        }
 
         if (body instanceof ApiResponse<?> apiResponse) {
             fillSuccessMessageDetails(apiResponse, request);
@@ -63,6 +75,13 @@ public class GlobalResponseAdvice implements ResponseBodyAdvice<Object> {
         }
 
         return wrappedBody;
+    }
+
+    private boolean isBinaryContent(MediaType selectedContentType) {
+        return selectedContentType != null
+                && (ZIP_MEDIA_TYPE.isCompatibleWith(selectedContentType)
+                        || EXCEL_MEDIA_TYPE.isCompatibleWith(selectedContentType)
+                        || MediaType.APPLICATION_OCTET_STREAM.isCompatibleWith(selectedContentType));
     }
 
     private void fillSuccessMessageDetails(ApiResponse<?> apiResponse, ServerHttpRequest request) {

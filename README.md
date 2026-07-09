@@ -14,7 +14,8 @@ Market Day 後端 API 專案，使用 Spring Boot 建置，包含帳號註冊、
 - `GET /api/organizer/equipment/search` 新增主辦方設備租借活動列表，支援依活動名稱、狀態與活動日期區間篩選，回傳設備租借、用電租借與車牌登記統計。
 - `GET /api/organizer/equipment/{eventId}` 新增主辦方活動設備詳情，回傳活動資訊、設備提供狀況、基本用電、額外用電、設備租借統計、額外用電統計、車牌統計與管理列表。
 - `GET /api/organizer/equipment/{eventId}` 的 `eventEquipments` 會依 `item_type + equipment_group_key` 合併同一設備品項的免費與付費設定；`dailyRentableQuantity` 為免費庫存加付費庫存總數。
-- `GET /api/organizer/equipment/{eventId}` 的 `extraPowers.dailyRentableQuantity` 改為每攤可提供數量，並新增 `stockQuantity` 回傳額外用電庫存數量。
+- `GET /api/organizer/equipment/{eventId}` 的 `equipmentRentalStatistics` 會依同一設備品項彙整免費與付費租借統計，不再將同品項拆成兩列。
+- `GET /api/organizer/equipment/{eventId}` 的 `extraPowers` 改以 `perStallProvidedQuantity` 表示每攤可提供組數，`availableGroupQuantity` 表示此用電方案可提供組數。
 - 補齊 `OrganizerController` 內設備租借與報名詳情 API 的中文 Swagger 註解。
 
 ### 2026-07-07
@@ -300,8 +301,10 @@ POST /api/organizer/applications/{id}/reject
 | GET    | `/api/organizer/account`                              | Authorization header | 是  | 取得目前登入主辦方資料。                                         |
 | GET    | `/api/organizer/accounts/search`                     | Query params         | 是  | 查詢主辦方帳務活動列表，可依活動名稱、狀態與活動日期篩選。       |
 | GET    | `/api/organizer/accounts/{eventId}`                  | Query params         | 是  | 查詢活動帳務詳情，可依帳務狀態篩選付款明細。                     |
+| GET    | `/api/organizer/accounts/{eventId}/export`           | Query params         | 是  | 匯出活動帳務 Excel 報表，可用 `status` 篩選付款明細。            |
 | GET    | `/api/organizer/equipment/search`                   | Query params         | 是  | 查詢主辦方設備租借活動列表，可依活動名稱、狀態與活動日期篩選。 |
 | GET    | `/api/organizer/equipment/{eventId}`                | Authorization header | 是  | 查詢主辦方活動設備、用電、租借統計與管理列表。                 |
+| GET    | `/api/organizer/equipment/{eventId}/export`          | Authorization header | 是  | 匯出活動設備 Excel 報表。                                       |
 | GET    | `/api/organizer/applications/search`                  | Authorization header | 是  | 查詢目前主辦方 published 活動的全部申請資料，依申請時間倒序。    |
 | GET    | `/api/organizer/applications/{id}`                    | Authorization header | 是  | 查詢主辦方申請明細。                                             |
 | GET    | `/api/organizer/stalls/search`                       | Query params         | 是  | 查詢主辦方攤位管理活動列表。                                     |
@@ -332,8 +335,8 @@ POST /api/organizer/applications/{id}/reject
 | `event` | 活動名稱、狀態、活動時間、地點與地址。 |
 | `eventEquipments` | 一般設備提供狀況；同一 `item_type + equipment_group_key` 的免費與付費設備會合併為一列，`dailyRentableQuantity` 為免費庫存加付費庫存總數。 |
 | `basicPowers` | 免費基本用電資訊，包含電壓與免費瓦數。 |
-| `extraPowers` | 付費額外用電資訊；`dailyRentableQuantity` 為每攤可提供數量，`stockQuantity` 為庫存數量。 |
-| `equipmentRentalStatistics` | 一般設備租借統計與剩餘數量。 |
+| `extraPowers` | 付費額外用電資訊；`perStallProvidedQuantity` 為每攤可提供組數，`availableGroupQuantity` 為此用電方案可提供組數。 |
+| `equipmentRentalStatistics` | 一般設備租借統計與剩餘數量；同一設備品項的免費與付費設定會合併統計。 |
 | `extraPowerApplicationStatistics` | 額外用電申請數量統計。 |
 | `vehicleRegistrationStatistics` | 車牌已登記與未登記統計。 |
 | `equipmentRentalManagement` | 各攤商一般設備租借管理列表。 |
@@ -350,6 +353,64 @@ POST /api/organizer/applications/{id}/reject
 | `payments` | 付款明細；可用 `status` 篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`。 |
 
 `payments` 每列包含 `paymentNo`、`brandName`、`paidAt`、`paymentAmount`、`refundAmount`、`depositStatus`、`accountingStatus`。`refundAmount` 只代表已完成退款金額，退款申請中與退款處理中會回 `0`。
+
+### 主辦方報表匯出 API
+
+報表 API 會直接回傳 Excel 附件，不包 `ApiResponse` JSON。請前端用 blob/arraybuffer 接收，並依 `Content-Disposition` 取得檔名。
+
+| Method | API | Query params | JWT | 成功回應 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/organizer/accounts/{eventId}/export` | `status` 選填，可篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消` | 是 | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+| GET | `/api/organizer/equipment/{eventId}/export` | - | 是 | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+
+成功下載時，後端會回傳：
+
+| Header | 說明 |
+| --- | --- |
+| `Content-Type` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+| `Content-Disposition` | `attachment; filename*=UTF-8''...xlsx`，檔名會依報表類型與活動名稱產生。 |
+| `Content-Length` | Excel byte 長度。 |
+
+檔名規則：
+
+| 報表 | 檔名格式 |
+| --- | --- |
+| 帳務報表 | `account-report-{活動名稱或eventId}.xlsx` |
+| 設備報表 | `equipment-report-{活動名稱或eventId}.xlsx` |
+
+錯誤回應分兩種：JWT 驗證失敗會回 `401 Unauthorized` 與 `ApiResponse` JSON，例如 `Authorization token is required`、`Invalid or expired token`、`Session expired`；通過驗證後若查無活動或參數錯誤，匯出 API 會回 `400 Bad Request` 與純文字錯誤訊息，例如 `Event id is required`、`Event not found`。
+
+帳務報表工作表：
+
+| 工作表 | 內容 |
+| --- | --- |
+| `活動資訊` | 活動 ID、活動名稱、發布狀態、狀態文字、狀態說明、活動日期、地點、地址、總攤位數、已付款攤位數。 |
+| `帳務摘要` | 收款總額、退款總額、已退/未退保證金總額、實收總額、付款/退款/保證金統計。 |
+| `付款明細` | 付款編號、品牌名稱、付款時間、付款金額、退款金額、保證金狀態、帳務狀態。 |
+
+設備報表工作表：
+
+| 工作表 | 內容 |
+| --- | --- |
+| `活動資訊` | 活動 ID、活動名稱、狀態、狀態說明、活動時間、地點、地址。 |
+| `活動設備` | 設備名稱、設備類型、單位、免費提供數量、付費租借上限、每日可租借總數、租金與租借狀態。 |
+| `基本用電` | 用電名稱、電壓、免費瓦數。 |
+| `加購用電` | 用電名稱、用電方案、每攤可提供組數、可提供組數。 |
+| `設備租借統計` | 設備名稱、已租借數量、可租借數量、剩餘數量、租借/總計。 |
+| `設備租借管理` | 攤位編號、品牌名稱與各設備租借數量；設備欄位會依活動實際設備動態產生。 |
+| `加購用電管理` | 攤位編號、品牌名稱、用電方案。 |
+| `車輛管理` | 攤位編號、品牌名稱、聯絡人、車牌號碼。 |
+
+報表產出流程：
+
+1. 前端帶主辦方 JWT 呼叫 `/api/organizer/accounts/{eventId}/export` 或 `/api/organizer/equipment/{eventId}/export`。
+2. `JwtAuthenticationFilter` 先驗證該下載 API 是否有合法 Authorization token。
+3. `OrganizerController` 收到請求後呼叫 `OrganizerService` 的匯出方法。
+4. Service 先取得目前登入主辦方，再用 `eventId` 查詢該主辦方名下活動；若查不到會回 `Event not found`。
+5. 帳務報表會重用帳務詳情查詢邏輯，組出 `event`、`summary`、`statistics`、`payments`；若有帶 `status`，付款明細會先依帳務狀態篩選。
+6. 設備報表會重用設備詳情查詢邏輯，組出活動資訊、設備設定、用電設定、租借統計與各管理列表。
+7. 後端使用 Apache POI `XSSFWorkbook` 建立 `.xlsx`，每個資料區塊寫成獨立工作表，表頭加粗、凍結第一列並自動調整欄寬。
+8. Service 回傳 `ReportExport`，Controller 轉成 Excel 附件回應，前端即可觸發下載。
 
 ## 文件維護規則
 
