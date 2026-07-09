@@ -141,8 +141,10 @@ public class UserController {
 
     @Operation(summary = "重設密碼", description = "使用一次性的 resetToken 與新密碼重設本地端帳號密碼。")
     @PostMapping("/api/auth/resetPassword/reset")
-    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest body) {
-        return userService.resetPassword(body);
+    public ApiResponse<Void> resetPassword(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @Valid @RequestBody ResetPasswordRequest body) {
+        return userService.resetPassword(authorizationHeader, body);
     }
 
     @Operation(summary = "登出", description = "需要 Authorization header 帶入 Bearer JWT；登出後會將目前 token 加入黑名單，並將登入狀態改為未登入。")

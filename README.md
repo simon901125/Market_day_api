@@ -6,6 +6,17 @@ Market Day 後端 API 專案，使用 Spring Boot 建置，包含帳號註冊、
 
 > 更新日誌請依日期與 branch 分區：日期使用 `###`，branch 使用 `####`，避免不同分支的更動混在同一段。
 
+### 2026-07-09
+
+#### simon branch
+
+- `POST /api/auth/resetPassword/reset` 調整密碼重設優先順序：若有帶入有效 `Authorization: Bearer JWT`，會直接以目前登入者更新密碼；未帶登入 token 時才改用 `resetToken` 驗證。
+- `GET /api/organizer/equipment/search` 新增主辦方設備租借活動列表，支援依活動名稱、狀態與活動日期區間篩選，回傳設備租借、用電租借與車牌登記統計。
+- `GET /api/organizer/equipment/{eventId}` 新增主辦方活動設備詳情，回傳活動資訊、設備提供狀況、基本用電、額外用電、設備租借統計、額外用電統計、車牌統計與管理列表。
+- `GET /api/organizer/equipment/{eventId}` 的 `eventEquipments` 會依 `item_type + equipment_group_key` 合併同一設備品項的免費與付費設定；`dailyRentableQuantity` 為免費庫存加付費庫存總數。
+- `GET /api/organizer/equipment/{eventId}` 的 `extraPowers.dailyRentableQuantity` 改為每攤可提供數量，並新增 `stockQuantity` 回傳額外用電庫存數量。
+- 補齊 `OrganizerController` 內設備租借與報名詳情 API 的中文 Swagger 註解。
+
 ### 2026-07-07
 
 #### simon branch
@@ -237,6 +248,8 @@ GET  /api/vendor/stall-map/{applicationNo}
 POST /api/stalls/select
 GET  /api/organizer/account
 GET  /api/organizer/accounts/{eventId}
+GET  /api/organizer/equipment/search
+GET  /api/organizer/equipment/{eventId}
 GET  /api/organizer/stalls/search
 GET  /api/organizer/stall/{eventId}
 GET  /api/organizer/stall/{eventId}/{stallNo}
@@ -266,7 +279,7 @@ POST /api/organizer/applications/{id}/reject
 | POST   | `/api/auth/createAccount/emailVerify` | `EmailVerificationRequest`    | 否  | 註冊 Email 驗證。                                   |
 | POST   | `/api/auth/resetPassword/request`     | `RequestPasswordResetRequest` | 否  | 申請重設密碼驗證碼。                                |
 | POST   | `/api/auth/resetPassword/emailVerify` | `EmailVerificationRequest`    | 否  | 驗證重設密碼 Email 驗證碼，成功後回傳 reset token。 |
-| POST   | `/api/auth/resetPassword/reset`       | `ResetPasswordRequest`        | 否  | 使用 reset token 重設密碼。                         |
+| POST   | `/api/auth/resetPassword/reset`       | `ResetPasswordRequest`        | 否  | 優先使用登入 token 更新密碼；未登入時使用 reset token 重設密碼。 |
 | POST   | `/api/auth/logout`                    | -                               | 是  | 登出。                                              |
 | GET    | `/api/auth/me`                        | -                               | 是  | 取得目前登入使用者資料。                            |
 | POST   | `/api/account/deactivate`             | -                               | 是  | 停用目前登入帳號。                                  |
@@ -287,6 +300,8 @@ POST /api/organizer/applications/{id}/reject
 | GET    | `/api/organizer/account`                              | Authorization header | 是  | 取得目前登入主辦方資料。                                         |
 | GET    | `/api/organizer/accounts/search`                     | Query params         | 是  | 查詢主辦方帳務活動列表，可依活動名稱、狀態與活動日期篩選。       |
 | GET    | `/api/organizer/accounts/{eventId}`                  | Query params         | 是  | 查詢活動帳務詳情，可依帳務狀態篩選付款明細。                     |
+| GET    | `/api/organizer/equipment/search`                   | Query params         | 是  | 查詢主辦方設備租借活動列表，可依活動名稱、狀態與活動日期篩選。 |
+| GET    | `/api/organizer/equipment/{eventId}`                | Authorization header | 是  | 查詢主辦方活動設備、用電、租借統計與管理列表。                 |
 | GET    | `/api/organizer/applications/search`                  | Authorization header | 是  | 查詢目前主辦方 published 活動的全部申請資料，依申請時間倒序。    |
 | GET    | `/api/organizer/applications/{id}`                    | Authorization header | 是  | 查詢主辦方申請明細。                                             |
 | GET    | `/api/organizer/stalls/search`                       | Query params         | 是  | 查詢主辦方攤位管理活動列表。                                     |
@@ -309,6 +324,21 @@ POST /api/organizer/applications/{id}/reject
 | `feedetail`         | 報名費、設備租借費、額外電費、保證金、總計。                                                     |
 | `equipmentRentals`  | `freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower` 四區設備/用電資訊。 |
 | `status`            | 固定狀態流清單與各節點時間。                                                                     |
+
+`GET /api/organizer/equipment/{eventId}` 目前主要回傳區塊：
+
+| 區塊 | 說明 |
+| --- | --- |
+| `event` | 活動名稱、狀態、活動時間、地點與地址。 |
+| `eventEquipments` | 一般設備提供狀況；同一 `item_type + equipment_group_key` 的免費與付費設備會合併為一列，`dailyRentableQuantity` 為免費庫存加付費庫存總數。 |
+| `basicPowers` | 免費基本用電資訊，包含電壓與免費瓦數。 |
+| `extraPowers` | 付費額外用電資訊；`dailyRentableQuantity` 為每攤可提供數量，`stockQuantity` 為庫存數量。 |
+| `equipmentRentalStatistics` | 一般設備租借統計與剩餘數量。 |
+| `extraPowerApplicationStatistics` | 額外用電申請數量統計。 |
+| `vehicleRegistrationStatistics` | 車牌已登記與未登記統計。 |
+| `equipmentRentalManagement` | 各攤商一般設備租借管理列表。 |
+| `extraPowerManagement` | 各攤商額外用電管理列表。 |
+| `vehicleManagement` | 已登記車牌的攤商列表。 |
 
 `GET /api/organizer/accounts/{eventId}` 目前主要回傳區塊：
 
