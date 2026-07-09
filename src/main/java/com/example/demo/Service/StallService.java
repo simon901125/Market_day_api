@@ -404,6 +404,7 @@ public class StallService {
         event.put("eventTitle", eventData.get("eventTitle"));
         event.put("locationName", eventData.get("locationName"));
         event.put("eventStatus", displayOrganizerEventStatus(eventData));
+        event.put("statusNote", displayRegistrationProgress(eventData));
         event.put("totalStallCount", eventData.get("totalStallCount"));
         event.put("startAt", eventData.get("startAt"));
         event.put("endAt", eventData.get("endAt"));
@@ -666,6 +667,20 @@ public class StallService {
 
     private boolean isOrganizerEventFull(Map<String, Object> eventData) {
         return isTrue(eventData.get("isFullySelected"));
+    }
+
+    private String displayRegistrationProgress(Map<String, Object> eventData) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime registrationStartAt = toLocalDateTime(eventData.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(eventData.get("registrationEndAt"));
+
+        if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+            return "\u672a\u958b\u59cb\u5831\u540d";
+        }
+        if (registrationEndAt != null && now.isAfter(registrationEndAt)) {
+            return "\u5831\u540d\u622a\u6b62";
+        }
+        return "\u5831\u540d\u4e2d";
     }
 
     private boolean isSelectedStallApplication(Map<String, Object> applicationData) {

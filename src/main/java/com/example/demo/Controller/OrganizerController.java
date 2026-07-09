@@ -21,6 +21,7 @@ import com.example.demo.dto.response.OrganizerAccountResponse;
 import com.example.demo.dto.response.OrganizerAccountingSearchResponse;
 import com.example.demo.dto.response.OrganizerApplicationDetailResponse;
 import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
+import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -102,7 +103,31 @@ public class OrganizerController {
                 eventEndAt);
     }
 
-    @Operation(summary = "取得主辦方報名詳情", description = "依報名 ID 取得目前登入主辦方活動底下的單筆報名詳細資料。")
+    @Operation(summary = "查詢主辦方設備租借活動", description = "依活動名稱、狀態與活動日期區間查詢目前主辦方活動的設備租借摘要。")
+    @GetMapping("/api/organizer/equipment/search")
+    public ApiResponse<OrganizerEquipmentSearchResponse> searchOrganizerEquipmentEvents(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestParam(value = "eventTitle", required = false) String eventTitle,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "event_start_at", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventStartAt,
+            @RequestParam(value = "event_end_at", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventEndAt) {
+        return organizerService.searchOrganizerEquipmentEvents(
+                authorizationHeader,
+                eventTitle,
+                status,
+                eventStartAt,
+                eventEndAt);
+    }
+
+    @Operation(summary = "取得主辦方活動設備詳情", description = "依活動 ID 取得活動資訊、設備設定、設備租借統計、用電統計與攤商設備管理資料。")
+    @GetMapping("/api/organizer/equipment/{eventId}")
+    public ApiResponse<MapBackedResponse> getOrganizerEquipmentDetail(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId) {
+        return organizerService.getOrganizerEquipmentDetail(authorizationHeader, eventId);
+    }
+
+    @Operation(summary = "取得主辦方報名詳情", description = "依報名 ID 取得目前主辦方活動底下的攤商報名資料、攤位日期、設備租借與審核狀態流程。")
     @GetMapping("/api/organizer/applications/{id}")
     public ApiResponse<OrganizerApplicationDetailResponse> getOrganizerApplicationDetail(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
