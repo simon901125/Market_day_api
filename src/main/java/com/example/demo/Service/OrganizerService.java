@@ -43,6 +43,7 @@ import com.example.demo.dto.response.OrganizerAccountingSummaryResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
+import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.OrganizerStallEventSummaryResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -134,7 +135,9 @@ public class OrganizerService {
             String eventTitle,
             String status,
             LocalDate eventStartAt,
-            LocalDate eventEndAt) {
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -154,17 +157,20 @@ public class OrganizerService {
 
         return ApiResponse.success(
                 "Organizer accounting list retrieved successfully",
-                new OrganizerAccountingSearchResponse(accounts));
+                new OrganizerAccountingSearchResponse(PageResponse.from(accounts, page, pageSize)));
     }
 
     public ApiResponse<MapBackedResponse> getOrganizerAccountDetail(
             String authorizationHeader,
             Long eventId,
-            String status) {
+            String status,
+            Integer paymentPage,
+            Integer paymentPageSize) {
         Map<String, Object> response = buildOrganizerAccountDetail(authorizationHeader, eventId, status);
         if (response.containsKey("message")) {
             return ApiResponse.fail(response.get("message").toString());
         }
+        paginateListField(response, "payments", paymentPage, paymentPageSize);
 
         return ApiResponse.success(
                 "Organizer accounting detail retrieved successfully",
@@ -218,13 +224,50 @@ public class OrganizerService {
                 "payments", payments);
     }
 
+    @SuppressWarnings("unchecked")
+    private void paginateListField(Map<String, Object> response, String fieldName, Integer page, Integer pageSize) {
+        Object value = response.get(fieldName);
+        if (!(value instanceof List<?>)) {
+            return;
+        }
+        response.put(fieldName, toPagedMap((List<Map<String, Object>>) value, page, pageSize));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void paginateItemsField(Map<String, Object> response, String fieldName, Integer page, Integer pageSize) {
+        Object value = response.get(fieldName);
+        if (!(value instanceof Map<?, ?> section)) {
+            return;
+        }
+        Object items = section.get("items");
+        if (!(items instanceof List<?>)) {
+            return;
+        }
+        response.put(fieldName, toPagedMap((List<Map<String, Object>>) items, page, pageSize));
+    }
+
+    private Map<String, Object> toPagedMap(List<Map<String, Object>> items, Integer page, Integer pageSize) {
+        PageResponse<Map<String, Object>> paged = PageResponse.from(items, page, pageSize);
+        return orderedMap(
+                "totalCount", paged.getTotalItems(),
+                "items", paged.getItems(),
+                "page", paged.getPage(),
+                "pageSize", paged.getPageSize(),
+                "totalItems", paged.getTotalItems(),
+                "totalPages", paged.getTotalPages(),
+                "hasPrevious", paged.isHasPrevious(),
+                "hasNext", paged.isHasNext());
+    }
+
     public ApiResponse<OrganizerApplicationSearchResponse> searchOrganizerApplications(
             String authorizationHeader,
             String eventTitle,
             String status,
             String brandName,
             LocalDate registrationStartAt,
-            LocalDate registrationEndAt) {
+            LocalDate registrationEndAt,
+            Integer page,
+            Integer pageSize) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -243,7 +286,7 @@ public class OrganizerService {
                 .toList();
         return ApiResponse.success(
                 "Organizer applications retrieved successfully",
-                new OrganizerApplicationSearchResponse(applications));
+                new OrganizerApplicationSearchResponse(PageResponse.from(applications, page, pageSize)));
     }
 
     public ApiResponse<OrganizerStallEventSearchResponse> searchOrganizerStallEvents(
@@ -251,7 +294,9 @@ public class OrganizerService {
             String eventTitle,
             String status,
             LocalDate eventStartAt,
-            LocalDate eventEndAt) {
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -271,7 +316,7 @@ public class OrganizerService {
 
         return ApiResponse.success(
                 "Organizer stall events retrieved successfully",
-                new OrganizerStallEventSearchResponse(events));
+                new OrganizerStallEventSearchResponse(PageResponse.from(events, page, pageSize)));
     }
 
     public ApiResponse<OrganizerEquipmentSearchResponse> searchOrganizerEquipmentEvents(
@@ -279,7 +324,9 @@ public class OrganizerService {
             String eventTitle,
             String status,
             LocalDate eventStartAt,
-            LocalDate eventEndAt) {
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -299,14 +346,25 @@ public class OrganizerService {
 
         return ApiResponse.success(
                 "Organizer equipment events retrieved successfully",
-                new OrganizerEquipmentSearchResponse(events));
+                new OrganizerEquipmentSearchResponse(PageResponse.from(events, page, pageSize)));
     }
 
-    public ApiResponse<MapBackedResponse> getOrganizerEquipmentDetail(String authorizationHeader, Long eventId) {
+    public ApiResponse<MapBackedResponse> getOrganizerEquipmentDetail(
+            String authorizationHeader,
+            Long eventId,
+            Integer equipmentRentalPage,
+            Integer equipmentRentalPageSize,
+            Integer extraPowerPage,
+            Integer extraPowerPageSize,
+            Integer vehiclePage,
+            Integer vehiclePageSize) {
         Map<String, Object> response = buildOrganizerEquipmentDetail(authorizationHeader, eventId);
         if (response.containsKey("message")) {
             return ApiResponse.fail(response.get("message").toString());
         }
+        paginateItemsField(response, "equipmentRentalManagement", equipmentRentalPage, equipmentRentalPageSize);
+        paginateItemsField(response, "extraPowerManagement", extraPowerPage, extraPowerPageSize);
+        paginateItemsField(response, "vehicleManagement", vehiclePage, vehiclePageSize);
 
         return ApiResponse.success(
                 "Organizer equipment detail retrieved successfully",
