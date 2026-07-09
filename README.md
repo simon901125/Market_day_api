@@ -16,6 +16,8 @@ Market Day 後端 API 專案，使用 Spring Boot 建置，包含帳號註冊、
 - `GET /api/organizer/equipment/{eventId}` 的 `eventEquipments` 會依 `item_type + equipment_group_key` 合併同一設備品項的免費與付費設定；`dailyRentableQuantity` 為免費庫存加付費庫存總數。
 - `GET /api/organizer/equipment/{eventId}` 的 `equipmentRentalStatistics` 會依同一設備品項彙整免費與付費租借統計，不再將同品項拆成兩列。
 - `GET /api/organizer/equipment/{eventId}` 的 `extraPowers` 改以 `perStallProvidedQuantity` 表示每攤可提供組數，`availableGroupQuantity` 表示此用電方案可提供組數。
+- `GET /api/organizer/accounts/search`、`/api/organizer/equipment/search`、`/api/organizer/applications/search`、`/api/organizer/stalls/search` 新增 `page`、`pageSize` 分頁參數，列表欄位改回傳 `PageResponse<T>`；`pageSize` 最大 10 筆。
+- `GET /api/organizer/accounts/{eventId}` 的 `payments` 新增 `paymentPage`、`paymentPageSize` 分頁參數；`GET /api/organizer/equipment/{eventId}` 的 `equipmentRentalManagement`、`extraPowerManagement`、`vehicleManagement` 新增各自獨立分頁參數。
 - 補齊 `OrganizerController` 內設備租借與報名詳情 API 的中文 Swagger 註解。
 
 ### 2026-07-07
@@ -299,15 +301,15 @@ POST /api/organizer/applications/{id}/reject
 | Method | API                                                     | Request              | JWT | 說明                                                             |
 | ------ | ------------------------------------------------------- | -------------------- | --- | ---------------------------------------------------------------- |
 | GET    | `/api/organizer/account`                              | Authorization header | 是  | 取得目前登入主辦方資料。                                         |
-| GET    | `/api/organizer/accounts/search`                     | Query params         | 是  | 查詢主辦方帳務活動列表，可依活動名稱、狀態與活動日期篩選。       |
-| GET    | `/api/organizer/accounts/{eventId}`                  | Query params         | 是  | 查詢活動帳務詳情，可依帳務狀態篩選付款明細。                     |
+| GET    | `/api/organizer/accounts/search`                     | Query params         | 是  | 查詢主辦方帳務活動列表，可依活動名稱、狀態、活動日期與 `page`/`pageSize` 分頁篩選。 |
+| GET    | `/api/organizer/accounts/{eventId}`                  | Query params         | 是  | 查詢活動帳務詳情，可依帳務狀態篩選付款明細，並以 `paymentPage`/`paymentPageSize` 分頁。 |
 | GET    | `/api/organizer/accounts/{eventId}/export`           | Query params         | 是  | 匯出活動帳務 Excel 報表，可用 `status` 篩選付款明細。            |
-| GET    | `/api/organizer/equipment/search`                   | Query params         | 是  | 查詢主辦方設備租借活動列表，可依活動名稱、狀態與活動日期篩選。 |
-| GET    | `/api/organizer/equipment/{eventId}`                | Authorization header | 是  | 查詢主辦方活動設備、用電、租借統計與管理列表。                 |
+| GET    | `/api/organizer/equipment/search`                   | Query params         | 是  | 查詢主辦方設備租借活動列表，可依活動名稱、狀態、活動日期與 `page`/`pageSize` 分頁篩選。 |
+| GET    | `/api/organizer/equipment/{eventId}`                | Query params         | 是  | 查詢主辦方活動設備、用電、租借統計與管理列表；管理列表可各自分頁。 |
 | GET    | `/api/organizer/equipment/{eventId}/export`          | Authorization header | 是  | 匯出活動設備 Excel 報表。                                       |
-| GET    | `/api/organizer/applications/search`                  | Authorization header | 是  | 查詢目前主辦方 published 活動的全部申請資料，依申請時間倒序。    |
+| GET    | `/api/organizer/applications/search`                  | Authorization header | 是  | 查詢目前主辦方 published 活動的申請資料，支援條件與 `page`/`pageSize` 分頁篩選。 |
 | GET    | `/api/organizer/applications/{id}`                    | Authorization header | 是  | 查詢主辦方申請明細。                                             |
-| GET    | `/api/organizer/stalls/search`                       | Query params         | 是  | 查詢主辦方攤位管理活動列表。                                     |
+| GET    | `/api/organizer/stalls/search`                       | Query params         | 是  | 查詢主辦方攤位管理活動列表，可用 `page`/`pageSize` 分頁。 |
 | GET    | `/api/organizer/stall/{eventId}`                     | Query params         | 是  | 查詢主辦方活動指定日期的攤位選位狀況，可依關鍵字與選位狀態篩選。 |
 | GET    | `/api/organizer/stall/{eventId}/{stallNo}`           | Query params         | 是  | 查詢主辦方活動指定日期單一攤位的攤主與申請資訊。                 |
 | POST   | `/api/organizer/applications/{id}/approve`            | Authorization header | 是  | 通過主辦方報名審核。                                             |
@@ -343,6 +345,16 @@ POST /api/organizer/applications/{id}/reject
 | `extraPowerManagement` | 各攤商額外用電管理列表。 |
 | `vehicleManagement` | 已登記車牌的攤商列表。 |
 
+管理列表分頁參數：
+
+| 清單 | Page 參數 | PageSize 參數 | 說明 |
+| --- | --- | --- | --- |
+| `equipmentRentalManagement` | `equipmentRentalPage` | `equipmentRentalPageSize` | 一般設備租借管理列表分頁。 |
+| `extraPowerManagement` | `extraPowerPage` | `extraPowerPageSize` | 加購用電管理列表分頁。 |
+| `vehicleManagement` | `vehiclePage` | `vehiclePageSize` | 車輛管理列表分頁。 |
+
+以上三個區塊會回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`；`pageSize` 最大 10 筆。匯出 Excel 不套用這些分頁參數，仍會輸出完整資料。
+
 `GET /api/organizer/accounts/{eventId}` 目前主要回傳區塊：
 
 | 區塊 | 說明 |
@@ -350,9 +362,11 @@ POST /api/organizer/applications/{id}/reject
 | `event` | 活動圖片、名稱、狀態、日期、地點、攤位總數與已付款攤位數。 |
 | `summary` | 收款總額、退款總額、已退款保證金、未退款保證金與實收總額。 |
 | `statistics` | 付款、退款、保證金統計。 |
-| `payments` | 付款明細；可用 `status` 篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`。 |
+| `payments` | 付款明細；可用 `status` 篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`，並可用 `paymentPage`、`paymentPageSize` 分頁。 |
 
 `payments` 每列包含 `paymentNo`、`brandName`、`paidAt`、`paymentAmount`、`refundAmount`、`depositStatus`、`accountingStatus`。`refundAmount` 只代表已完成退款金額，退款申請中與退款處理中會回 `0`。
+
+`payments` 會回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`；`pageSize` 最大 10 筆。帳務 Excel 匯出不套用 `paymentPage`/`paymentPageSize`，仍會輸出完整付款明細。
 
 ### 主辦方報表匯出 API
 

@@ -1,7 +1,5 @@
 package com.example.demo.dto.response;
 
-import java.util.List;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "主辦方帳務列表查詢結果")
@@ -10,12 +8,12 @@ public class OrganizerAccountingSearchResponse {
     @Schema(description = "帳務列表筆數", example = "12")
     private int totalCount;
 
-    @Schema(description = "帳務列表")
-    private List<OrganizerAccountingSummaryResponse> accounts;
+    @Schema(description = "帳務列表分頁結果")
+    private PageResponse<OrganizerAccountingSummaryResponse> accounts;
 
-    public OrganizerAccountingSearchResponse(List<OrganizerAccountingSummaryResponse> accounts) {
+    public OrganizerAccountingSearchResponse(PageResponse<OrganizerAccountingSummaryResponse> accounts) {
         this.accounts = accounts;
-        this.totalCount = accounts == null ? 0 : accounts.size();
+        this.totalCount = accounts == null ? 0 : (int) accounts.getTotalItems();
     }
 
     public int getTotalCount() {
@@ -26,11 +24,11 @@ public class OrganizerAccountingSearchResponse {
         this.totalCount = totalCount;
     }
 
-    public List<OrganizerAccountingSummaryResponse> getAccounts() {
+    public PageResponse<OrganizerAccountingSummaryResponse> getAccounts() {
         return accounts;
     }
 
-    public void setAccounts(List<OrganizerAccountingSummaryResponse> accounts) {
+    public void setAccounts(PageResponse<OrganizerAccountingSummaryResponse> accounts) {
         this.accounts = accounts;
     }
 }
