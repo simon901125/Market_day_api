@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "管理員: 活動搜尋頁面搜尋請求")
 public record AdminEventSearchDto(
     //活動名稱
-    String name, 
+    String keywordName, 
     //活動主辦方
     String Organizer,
     //活動狀態
