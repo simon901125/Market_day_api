@@ -409,6 +409,7 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
 | --- | --- |
 | `paymentNo` | 付款編號。 |
 | `brandName` | 品牌名稱。 |
+| `contactName` | 攤主名稱。 |
 | `paidAt` | 付款時間。 |
 | `paymentAmount` | 付款金額。 |
 | `refundAmount` | 已完成退款金額；只有 `accountingStatus = 已退款` 時才會顯示實際退款金額，退款申請中與退款處理中回 `0`。 |
@@ -466,6 +467,7 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
         {
           "paymentNo": "PAY-T7-FULL-04",
           "brandName": "T7 滿額攤商 4",
+          "contactName": "T7 攤主 4",
           "paidAt": "2026-07-07 10:40",
           "paymentAmount": 1500,
           "refundAmount": 1500,
@@ -475,6 +477,7 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
         {
           "paymentNo": "PAY-T7-FULL-03",
           "brandName": "T7 滿額攤商 3",
+          "contactName": "T7 攤主 3",
           "paidAt": "2026-07-07 11:00",
           "paymentAmount": 1500,
           "refundAmount": 0,

@@ -321,6 +321,7 @@ public class OrganizerRepository {
                     p.paid_at AS paidAt,
                     p.created_at AS paymentCreatedAt,
                     vendor_up.name AS brandName,
+                    vendor_up.contact_name AS contactName,
                     vp.brand_type AS brandType,
                     COALESCE(refund_data.refundAmount, 0) AS refundAmount,
                     refund_data.refundStatus

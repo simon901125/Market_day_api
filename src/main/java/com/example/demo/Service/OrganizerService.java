@@ -656,6 +656,7 @@ public class OrganizerService {
         return orderedMap(
                 "paymentNo", payment.get("paymentNo"),
                 "brandName", payment.get("brandName"),
+                "contactName", payment.get("contactName"),
                 "paidAt", formatDateTime(firstPresent(payment.get("paidAt"), payment.get("paymentCreatedAt"))),
                 "paymentAmount", payment.get("paymentAmount"),
                 "refundAmount", payment.get("refundAmount"),
@@ -2070,9 +2071,9 @@ public class OrganizerService {
                                 "eventDate", "locationName", "address", "totalStallCount", "paidStallCount"))),
                 new ReportSheet("帳務摘要", List.of("項目", "值"), summaryRows),
                 sheet("付款明細",
-                        List.of("付款編號", "品牌名稱", "付款時間", "付款金額", "退款金額", "保證金狀態", "帳務狀態"),
+                        List.of("付款編號", "品牌名稱", "攤主名稱", "付款時間", "付款金額", "退款金額", "保證金狀態", "帳務狀態"),
                         rows(response.get("payments"),
-                                "paymentNo", "brandName", "paidAt", "paymentAmount", "refundAmount", "depositStatus", "accountingStatus"))));
+                                "paymentNo", "brandName", "contactName", "paidAt", "paymentAmount", "refundAmount", "depositStatus", "accountingStatus"))));
     }
 
     private ReportSheet sheet(String name, List<String> headers, List<List<Object>> rows) {
