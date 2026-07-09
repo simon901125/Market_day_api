@@ -364,7 +364,7 @@ POST /api/organizer/applications/{id}/reject
 | `statistics` | 付款、退款、保證金統計。 |
 | `payments` | 付款明細；可用 `status` 篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`，並可用 `paymentPage`、`paymentPageSize` 分頁。 |
 
-`payments` 每列包含 `paymentNo`、`brandName`、`paidAt`、`paymentAmount`、`refundAmount`、`depositStatus`、`accountingStatus`。`refundAmount` 只代表已完成退款金額，退款申請中與退款處理中會回 `0`。
+`payments` 每列包含 `paymentNo`、`brandName`、`contactName`、`paidAt`、`paymentAmount`、`refundAmount`、`depositStatus`、`accountingStatus`。`refundAmount` 只代表已完成退款金額，退款申請中與退款處理中會回 `0`。
 
 `payments` 會回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`；`pageSize` 最大 10 筆。帳務 Excel 匯出不套用 `paymentPage`/`paymentPageSize`，仍會輸出完整付款明細。
 
@@ -400,7 +400,7 @@ POST /api/organizer/applications/{id}/reject
 | --- | --- |
 | `活動資訊` | 活動 ID、活動名稱、發布狀態、狀態文字、狀態說明、活動日期、地點、地址、總攤位數、已付款攤位數。 |
 | `帳務摘要` | 收款總額、退款總額、已退/未退保證金總額、實收總額、付款/退款/保證金統計。 |
-| `付款明細` | 付款編號、品牌名稱、付款時間、付款金額、退款金額、保證金狀態、帳務狀態。 |
+| `付款明細` | 付款編號、品牌名稱、攤主名稱、付款時間、付款金額、退款金額、保證金狀態、帳務狀態。 |
 
 設備報表工作表：
 
