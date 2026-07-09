@@ -4,15 +4,18 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.UserRepo;
+import com.example.demo.Repository.specification.EventSpecification;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminLogSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
@@ -23,6 +26,7 @@ import com.example.demo.dto.response.admin.AdminLogsDto;
 import com.example.demo.dto.response.admin.AdminOrganizerDetailDto;
 import com.example.demo.dto.response.admin.AdminUserItemDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
+import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.User;
 import com.example.demo.enums.EventStatus;
 import com.example.demo.enums.Role;
@@ -39,15 +43,16 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     @Override
     public AdminDashboardDto setDashboardResponse() {
-        AdminDashboardDto dto = new AdminDashboardDto();
         LocalDateTime now = LocalDateTime.now();
-        dto.setActive(
-                eventRepo.countByWorkflowStatusAndStartAtBeforeAndEndAtAfter(WorkflowStatus.FINAL_REVIEW, now, now));
+
+        //塞資料
+        AdminDashboardDto dto = new AdminDashboardDto();
+        dto.setActive(eventRepo.countByEventStatusIsACTIVE(now));
         dto.setMapBuilding(eventRepo.countByWorkflowStatus(WorkflowStatus.MAP_BUILDING));
         dto.setPendingReview(eventRepo.countByWorkflowStatus(WorkflowStatus.PENDING_REVIEW));
         dto.setPendingUnpublish(eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED));
         dto.setSystemWarning(0);// TODO:補完系統警告計數
-        dto.setTotalActivity(eventRepo.countByWorkflowStatusAndEndAtAfter(WorkflowStatus.PUBLISHED, now));
+        dto.setTotalActivity(eventRepo.countByEventInPlatform(now));
         dto.setTotalOrganizer(userRepo.countByRoleAndStatus(Role.ORGANIZER, User.Status.ACTIVE));
         dto.setTotalVender(userRepo.countByRoleAndStatus(Role.VENDOR, User.Status.ACTIVE));
         return dto;
@@ -59,13 +64,14 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         throw new UnsupportedOperationException("Unimplemented method 'setNotice'");
     }
 
-    // for 管理員後台活動搜尋
+    // 設定管理員後台: 活動搜尋
     @Override
     public List<AdminEventsItemDto> setEventsList(int pageNumber, int pageSize) {
-        List<AdminEventsItemDto> dtoList = new ArrayList<>();
-        Pageable pageable = PageRequest.of(pageNumber, pageSize);
-        Page<AdminEventItemProjection> list = eventRepo.findAllByOrderByCreateAtDesc(pageable);
+        Pageable pageable = PageRequest.of(pageNumber, pageSize); //設定分頁
+        Page<AdminEventItemProjection> list = eventRepo.findAllByOrderByCreateAtDesc(pageable); // 撈資料
 
+        // 塞資料
+        List<AdminEventsItemDto> dtoList = new ArrayList<>();
         for (AdminEventItemProjection item : list) {
             AdminEventsItemDto dtoItem = new AdminEventsItemDto();
             dtoItem.setId(item.getId());
@@ -83,16 +89,39 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         return dtoList;
     }
 
+    // 設定管理員後台: 活動搜尋: 搜尋:?
     @Override
     public List<AdminEventsItemDto> setEventsList(AdminEventSearchDto request, int pageNumber, int pageSize) {
-        // TODO 設定管理員後台: 活動搜尋: 搜尋:?
-        throw new UnsupportedOperationException("Unimplemented method 'setEventsList'");
+        Pageable pageable = PageRequest.of(pageNumber, pageSize); //設定分頁
+        Specification<MarketEvent> spec = EventSpecification.build(request); //設定搜尋條件
+        Page<MarketEvent> list = eventRepo.findAll(spec, pageable); // 撈資料
+
+        // 塞資料
+        List<AdminEventsItemDto> dtoList = new ArrayList<>();
+        for (MarketEvent item : list) {
+            AdminEventsItemDto dtoItem = new AdminEventsItemDto();
+            dtoItem.setId(item.getId());
+            dtoItem.setImgUrl(item.getCoverImageUrl());
+            dtoItem.setName(item.getTitle());
+            dtoItem.setOrganizer(item.getUser().getUserProfile().getName());
+            dtoItem.setStartDate(item.getStartAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+            dtoItem.setEndDate(item.getEndAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+            dtoItem.setCreatedAt(item.getCreateAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+            dtoItem.setStatus(changeToEventStatus(item).toString());
+            dtoList.add(dtoItem);
+        }
+
+        return dtoList;
     }
 
     @Override
     public AdminEventDetailDto setEventDetail(Long eventId) {
+         // 撈資料
+        MarketEvent item = eventRepo.findById(eventId).orElse(null);
+
+        // 塞資料
         AdminEventDetailDto dto = new AdminEventDetailDto();
-        // TODO:設定管理員後台: 活動詳細
+        
         return dto;
     }
 
@@ -149,6 +178,18 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     projection.getEndAt(),
                     projection.getMaxBooth(),
                     projection.getEventApplicationsCount());
+        } else if (data instanceof MarketEvent) {
+            MarketEvent entity = (MarketEvent) data;
+
+            return checkEventStatus(
+                    entity.getWorkflowStatus(),
+                    entity.getRegistrationStartAt(),
+                    entity.getRegistrationEndAt(),
+                    entity.getBrandPublicAt(),
+                    entity.getStartAt(),
+                    entity.getEndAt(),
+                    entity.getMaxBooths(),
+                    entity.getEventApplications().size());
         }
         throw new IllegalArgumentException("data須符合型別類型:AdminEventItemProjection");
     }
