@@ -54,6 +54,9 @@ public class UserService {
     private JwtService jwtService;
 
     @Autowired
+    private UpdateActiveTimeService updateActiveTimeService;
+
+    @Autowired
     private EmailService emailService;
 
     @Value("${google.client-id}")
@@ -446,14 +449,19 @@ public class UserService {
     }
 
     @Transactional
-    public ApiResponse<Void> resetPassword(ResetPasswordRequest body) {
-        if (body.getResetToken() == null || body.getResetToken().isBlank()) {
-            return ApiResponse.fail("Reset token is required");
-        }
+    public ApiResponse<Void> resetPassword(String authorizationHeader, ResetPasswordRequest body) {
         if (body.getPassword() == null || body.getPassword().isBlank()) {
             return ApiResponse.fail("Password is required");
         }
 
+        String loginToken = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (loginToken != null && !loginToken.isBlank()) {
+            return resetPasswordByCurrentLogin(loginToken, body.getPassword());
+        }
+
+        if (body.getResetToken() == null || body.getResetToken().isBlank()) {
+            return ApiResponse.fail("Reset token or Authorization token is required");
+        }
         Optional<Map<String, Object>> tokenData = userRepository.findUserToken(
                 hashResetToken(body.getResetToken()),
                 UserRepository.TOKEN_TYPE_PASSWORD_RESET);
@@ -479,6 +487,24 @@ public class UserService {
         int updatedRows = userRepository.updateLocalPasswordByUserId(
                 userId,
                 authService.hashPassword(body.getPassword()));
+        if (updatedRows == 0) {
+            return ApiResponse.fail("Password reset failed");
+        }
+
+        return ApiResponse.success("Password reset successfully");
+    }
+
+    private ApiResponse<Void> resetPasswordByCurrentLogin(String token, String password) {
+        if (!jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("Invalid or expired token");
+        }
+        if (!updateActiveTimeService.isCurrentLoginSession(token)) {
+            return ApiResponse.fail("Session expired");
+        }
+
+        int updatedRows = userRepository.updateLocalPasswordByEmail(
+                jwtService.getEmail(token),
+                authService.hashPassword(password));
         if (updatedRows == 0) {
             return ApiResponse.fail("Password reset failed");
         }

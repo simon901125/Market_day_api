@@ -116,7 +116,7 @@ Response data:
 | `VendorStallMapResponse` | `/api/vendor/stall-map/{applicationNo}` |
 | `OrganizerAccountResponse` | `/api/organizer/account` |
 | `OrganizerAccountingSearchResponse` | `/api/organizer/accounts/search` |
-| `MapBackedResponse` | `/api/organizer/accounts/{eventId}` |
+| `MapBackedResponse` | `/api/organizer/accounts/{eventId}`、`/api/organizer/equipment/{eventId}` |
 | `OrganizerApplicationSummaryResponse` | `/api/organizer/applications/search` |
 | `OrganizerApplicationDetailResponse` | `/api/organizer/applications/{id}` |
 | `EventStallStatusResponse` | `/api/eventsMap/{eventId}/stallsStatus` |
@@ -379,7 +379,7 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
 
 `GET /api/organizer/accounts/{eventId}`
 
-需要 `Authorization` header。可用 `status` query param 篩選 `payments` 明細，支援 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`，未帶時回傳全部付款明細。
+需要 `Authorization` header。可用 `status` query param 篩選 `payments` 明細，支援 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`，未帶時回傳全部付款明細。`payments` 支援 `paymentPage`、`paymentPageSize` 分頁，`pageSize` 最大 10 筆。
 
 `data` 主要包含：
 
@@ -388,14 +388,28 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
 | `event` | 活動圖片、名稱、活動狀態、活動日期、地點、攤位總數、已付款攤位數。 |
 | `summary` | 收款總額、退款總額、已退款保證金、未退款保證金、實收總額。 |
 | `statistics` | 付款、退款、保證金統計。 |
-| `payments` | 付款明細。 |
+| `payments` | 付款明細分頁物件。 |
 
-`payments` 每列欄位：
+`payments` 分頁欄位：
+
+| 欄位 | 說明 |
+| --- | --- |
+| `totalCount` | 符合條件的付款明細總筆數。 |
+| `items` | 目前頁付款明細。 |
+| `page` | 目前頁碼，從 1 開始。 |
+| `pageSize` | 每頁筆數，最大 10。 |
+| `totalItems` | 符合條件的付款明細總筆數。 |
+| `totalPages` | 總頁數。 |
+| `hasPrevious` | 是否有上一頁。 |
+| `hasNext` | 是否有下一頁。 |
+
+`payments.items` 每列欄位：
 
 | 欄位 | 說明 |
 | --- | --- |
 | `paymentNo` | 付款編號。 |
 | `brandName` | 品牌名稱。 |
+| `contactName` | 攤主名稱。 |
 | `paidAt` | 付款時間。 |
 | `paymentAmount` | 付款金額。 |
 | `refundAmount` | 已完成退款金額；只有 `accountingStatus = 已退款` 時才會顯示實際退款金額，退款申請中與退款處理中回 `0`。 |
@@ -447,29 +461,54 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
         "unreturnedDepositAmount": 1500
       }
     },
-    "payments": [
-      {
-        "paymentNo": "PAY-T7-FULL-04",
-        "brandName": "T7 滿額攤商 4",
-        "paidAt": "2026-07-07 10:40",
-        "paymentAmount": 1500,
-        "refundAmount": 1500,
-        "depositStatus": "未退還",
-        "accountingStatus": "已退款"
-      },
-      {
-        "paymentNo": "PAY-T7-FULL-03",
-        "brandName": "T7 滿額攤商 3",
-        "paidAt": "2026-07-07 11:00",
-        "paymentAmount": 1500,
-        "refundAmount": 0,
-        "depositStatus": "未退還",
-        "accountingStatus": "退款處理中"
-      }
-    ]
+    "payments": {
+      "totalCount": 2,
+      "items": [
+        {
+          "paymentNo": "PAY-T7-FULL-04",
+          "brandName": "T7 滿額攤商 4",
+          "contactName": "T7 攤主 4",
+          "paidAt": "2026-07-07 10:40",
+          "paymentAmount": 1500,
+          "refundAmount": 1500,
+          "depositStatus": "未退還",
+          "accountingStatus": "已退款"
+        },
+        {
+          "paymentNo": "PAY-T7-FULL-03",
+          "brandName": "T7 滿額攤商 3",
+          "contactName": "T7 攤主 3",
+          "paidAt": "2026-07-07 11:00",
+          "paymentAmount": 1500,
+          "refundAmount": 0,
+          "depositStatus": "未退還",
+          "accountingStatus": "退款處理中"
+        }
+      ],
+      "page": 1,
+      "pageSize": 10,
+      "totalItems": 2,
+      "totalPages": 1,
+      "hasPrevious": false,
+      "hasNext": false
+    }
   }
 }
 ```
+
+## Organizer 設備詳情
+
+`GET /api/organizer/equipment/{eventId}`
+
+需要 `Authorization` header。`equipmentRentalManagement`、`extraPowerManagement`、`vehicleManagement` 三個管理列表支援獨立分頁：
+
+| 清單 | Page 參數 | PageSize 參數 |
+| --- | --- | --- |
+| `equipmentRentalManagement` | `equipmentRentalPage` | `equipmentRentalPageSize` |
+| `extraPowerManagement` | `extraPowerPage` | `extraPowerPageSize` |
+| `vehicleManagement` | `vehiclePage` | `vehiclePageSize` |
+
+三個管理列表皆回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`；`pageSize` 最大 10 筆。Excel 匯出 API 不套用這些分頁參數，仍輸出完整資料。
 
 ## 錯誤訊息
 

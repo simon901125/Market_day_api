@@ -7,7 +7,6 @@ import jakarta.validation.constraints.Pattern;
 @Schema(description = "重設密碼請求")
 public class ResetPasswordRequest {
 
-    @NotBlank(message = "Reset token is required")
     @Schema(description = "信箱驗證成功後回傳的一次性 resetToken")
     private String resetToken;
 

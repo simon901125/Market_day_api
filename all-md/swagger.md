@@ -180,7 +180,11 @@ Bearer <JWT_TOKEN>
 | POST | `/api/stalls/select` |
 | GET | `/api/organizer/account` |
 | GET | `/api/organizer/accounts/{eventId}` |
+| GET | `/api/organizer/accounts/{eventId}/export` |
 | GET | `/api/organizer/stalls/search` |
+| GET | `/api/organizer/equipment/search` |
+| GET | `/api/organizer/equipment/{eventId}` |
+| GET | `/api/organizer/equipment/{eventId}/export` |
 | GET | `/api/organizer/stall/{eventId}` |
 | GET | `/api/organizer/stall/{eventId}/{stallNo}` |
 | GET | `/api/organizer/applications/search` |
@@ -262,11 +266,13 @@ Bearer <JWT_TOKEN>
 | Method | API | Request | JWT | 說明 |
 | --- | --- | --- | --- | --- |
 | GET | `/api/organizer/account` | Authorization header | 是 | 取得目前登入主辦方資料。 |
-| GET | `/api/organizer/accounts/search` | Query params | 是 | 查詢主辦方帳務活動列表，可依活動名稱、狀態與活動日期篩選。 |
-| GET | `/api/organizer/accounts/{eventId}` | Query params | 是 | 查詢活動帳務詳情，可依帳務狀態篩選付款明細。 |
-| GET | `/api/organizer/applications/search` | Authorization header | 是 | 查詢目前主辦方 published 活動的全部申請資料，依申請時間倒序。 |
+| GET | `/api/organizer/accounts/search` | Query params | 是 | 查詢主辦方帳務活動列表，可依活動名稱、狀態、活動日期與 `page`/`pageSize` 分頁篩選。 |
+| GET | `/api/organizer/accounts/{eventId}` | Query params | 是 | 查詢活動帳務詳情，可依帳務狀態篩選付款明細，並以 `paymentPage`/`paymentPageSize` 分頁。 |
+| GET | `/api/organizer/equipment/search` | Query params | 是 | 查詢主辦方設備租借活動列表，可依活動名稱、狀態、活動日期與 `page`/`pageSize` 分頁篩選。 |
+| GET | `/api/organizer/equipment/{eventId}` | Query params | 是 | 查詢主辦方活動設備、用電、租借統計與管理列表；管理列表可各自分頁。 |
+| GET | `/api/organizer/applications/search` | Query params | 是 | 查詢目前主辦方 published 活動的申請資料，支援條件與 `page`/`pageSize` 分頁篩選。 |
 | GET | `/api/organizer/applications/{id}` | Authorization header | 是 | 查詢主辦方申請明細。 |
-| GET | `/api/organizer/stalls/search` | Query params | 是 | 查詢主辦方攤位管理活動列表。 |
+| GET | `/api/organizer/stalls/search` | Query params | 是 | 查詢主辦方攤位管理活動列表，可用 `page`/`pageSize` 分頁。 |
 | GET | `/api/organizer/stall/{eventId}` | Query params | 是 | 查詢主辦方活動指定日期攤位狀況，可依關鍵字與選位狀態篩選。 |
 | GET | `/api/organizer/stall/{eventId}/{stallNo}` | Query params | 是 | 查詢主辦方活動指定日期單一攤位的攤主與申請資訊。 |
 
@@ -277,9 +283,24 @@ Bearer <JWT_TOKEN>
 - 需要 `Authorization` header。
 - `eventId` 放在 path params。
 - `status` query param 可篩選付款明細，支援 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`。
+- `paymentPage`、`paymentPageSize` 可控制 `payments` 分頁；`pageSize` 最大 10 筆。
 - 回傳 `event`、`summary`、`statistics`、`payments` 四個主要區塊。
+- `payments` 回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`。
 - `payments` 不回傳 `stallNo`。
 - `payments.refundAmount` 只代表已完成退款金額；退款申請中與退款處理中的明細會回 `0`，且不納入帳務摘要退款總額。
+
+## Organizer 設備詳情
+
+`GET /api/organizer/equipment/{eventId}`
+
+- 需要 `Authorization` header。
+- `eventId` 放在 path params。
+- 回傳活動資訊、設備提供狀況、基本用電、加購用電、設備租借統計、用電統計、車牌統計與管理列表。
+- `equipmentRentalManagement` 可用 `equipmentRentalPage`、`equipmentRentalPageSize` 分頁。
+- `extraPowerManagement` 可用 `extraPowerPage`、`extraPowerPageSize` 分頁。
+- `vehicleManagement` 可用 `vehiclePage`、`vehiclePageSize` 分頁。
+- 三個管理列表皆回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`；`pageSize` 最大 10 筆。
+- Excel 匯出 API 不套用上述 detail 分頁參數，仍輸出完整資料。
 
 ## Organizer 申請列表
 

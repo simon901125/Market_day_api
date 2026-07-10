@@ -6,6 +6,36 @@ Market Day 後端 API 專案，使用 Spring Boot 建置，包含帳號註冊、
 
 > 更新日誌請依日期與 branch 分區：日期使用 `###`，branch 使用 `####`，避免不同分支的更動混在同一段。
 
+### 2026-07-10
+
+#### yushuan branch
+
+- 新增藍新金流付款流程 API，提供攤主於報名審核通過後建立付款、前往藍新付款頁、接收藍新付款通知、查詢本地付款狀態與補查藍新交易狀態等功能。
+- `POST /api/vendor/payments/newebpay` 新增攤主建立藍新付款 API。前端點擊付款按鈕後呼叫此 API，後端會檢查 JWT token、攤主身分、申請單是否存在、申請單是否屬於目前攤主、審核狀態是否通過、付款狀態是否可付款，以及付款金額是否有效；檢查通過後建立本地付款資料並回傳藍新付款表單所需欄位。
+- `POST /api/newebpay/notify` 新增藍新背景付款通知 API。藍新付款完成後會呼叫此 API，後端負責驗證 TradeSha、解密 TradeInfo、比對付款金額，並於付款成功時更新本地付款狀態為 `PAID`，同步更新申請單付款狀態。
+- `POST /api/newebpay/return` 新增藍新付款完成返回 API。使用者完成藍新付款後會被導回此 API，後端接收付款返回資料後導回前端付款結果頁；付款成功狀態仍以 `POST /api/newebpay/notify` 為主要依據。
+- `GET /api/newebpay/return` 新增付款返回備用/測試入口，供瀏覽器直接開啟 ReturnURL 時導回前端付款結果頁。
+- `GET /api/vendor/payments/{applicationNo}/status` 新增攤主查詢本地付款狀態 API。前端可依申請單號查詢目前本地付款狀態，用於付款頁面刷新、付款結果頁確認或付款按鈕狀態判斷。
+- `POST /api/vendor/payments/{applicationNo}/newebpay-query` 新增藍新交易狀態補查 API。此 API 用於向藍新查詢指定申請單對應交易狀態，通常用於除錯、付款通知未收到或需要補正本地付款狀態時使用。
+- 新增 `NewebPayProperties` 讀取藍新金流設定，包含商店代號、HashKey、HashIV、版本、付款網址、NotifyURL、ReturnURL 與查詢網址等設定。
+- 新增 `NewebPayService` 處理藍新金流流程，包含建立付款資料、TradeInfo 加密、TradeSha 產生、Notify/Return 解密驗章、付款狀態更新與交易狀態補查。
+- 新增 `PaymentRepository` 操作金流相關資料，包含查詢申請單付款資料、建立付款紀錄、更新付款狀態與查詢付款狀態。
+- 新增金流相關 DTO：`VendorPaymentRequest`、`NewebPayPaymentResponse`、`NewebPayQueryResponse`、`PaymentStatusResponse`。
+
+### 2026-07-09
+
+#### simon branch
+
+- `POST /api/auth/resetPassword/reset` 調整密碼重設優先順序：若有帶入有效 `Authorization: Bearer JWT`，會直接以目前登入者更新密碼；未帶登入 token 時才改用 `resetToken` 驗證。
+- `GET /api/organizer/equipment/search` 新增主辦方設備租借活動列表，支援依活動名稱、狀態與活動日期區間篩選，回傳設備租借、用電租借與車牌登記統計。
+- `GET /api/organizer/equipment/{eventId}` 新增主辦方活動設備詳情，回傳活動資訊、設備提供狀況、基本用電、額外用電、設備租借統計、額外用電統計、車牌統計與管理列表。
+- `GET /api/organizer/equipment/{eventId}` 的 `eventEquipments` 會依 `item_type + equipment_group_key` 合併同一設備品項的免費與付費設定；`dailyRentableQuantity` 為免費庫存加付費庫存總數。
+- `GET /api/organizer/equipment/{eventId}` 的 `equipmentRentalStatistics` 會依同一設備品項彙整免費與付費租借統計，不再將同品項拆成兩列。
+- `GET /api/organizer/equipment/{eventId}` 的 `extraPowers` 改以 `perStallProvidedQuantity` 表示每攤可提供組數，`availableGroupQuantity` 表示此用電方案可提供組數。
+- `GET /api/organizer/accounts/search`、`/api/organizer/equipment/search`、`/api/organizer/applications/search`、`/api/organizer/stalls/search` 新增 `page`、`pageSize` 分頁參數，列表欄位改回傳 `PageResponse<T>`；`pageSize` 最大 10 筆。
+- `GET /api/organizer/accounts/{eventId}` 的 `payments` 新增 `paymentPage`、`paymentPageSize` 分頁參數；`GET /api/organizer/equipment/{eventId}` 的 `equipmentRentalManagement`、`extraPowerManagement`、`vehicleManagement` 新增各自獨立分頁參數。
+- 補齊 `OrganizerController` 內設備租借與報名詳情 API 的中文 Swagger 註解。
+
 ### 2026-07-07
 
 #### simon branch
@@ -237,6 +267,8 @@ GET  /api/vendor/stall-map/{applicationNo}
 POST /api/stalls/select
 GET  /api/organizer/account
 GET  /api/organizer/accounts/{eventId}
+GET  /api/organizer/equipment/search
+GET  /api/organizer/equipment/{eventId}
 GET  /api/organizer/stalls/search
 GET  /api/organizer/stall/{eventId}
 GET  /api/organizer/stall/{eventId}/{stallNo}
@@ -266,7 +298,7 @@ POST /api/organizer/applications/{id}/reject
 | POST   | `/api/auth/createAccount/emailVerify` | `EmailVerificationRequest`    | 否  | 註冊 Email 驗證。                                   |
 | POST   | `/api/auth/resetPassword/request`     | `RequestPasswordResetRequest` | 否  | 申請重設密碼驗證碼。                                |
 | POST   | `/api/auth/resetPassword/emailVerify` | `EmailVerificationRequest`    | 否  | 驗證重設密碼 Email 驗證碼，成功後回傳 reset token。 |
-| POST   | `/api/auth/resetPassword/reset`       | `ResetPasswordRequest`        | 否  | 使用 reset token 重設密碼。                         |
+| POST   | `/api/auth/resetPassword/reset`       | `ResetPasswordRequest`        | 否  | 優先使用登入 token 更新密碼；未登入時使用 reset token 重設密碼。 |
 | POST   | `/api/auth/logout`                    | -                               | 是  | 登出。                                              |
 | GET    | `/api/auth/me`                        | -                               | 是  | 取得目前登入使用者資料。                            |
 | POST   | `/api/account/deactivate`             | -                               | 是  | 停用目前登入帳號。                                  |
@@ -280,16 +312,60 @@ POST /api/organizer/applications/{id}/reject
 | GET    | `/api/vendor/account`                   | -                         | 是  | 取得目前登入攤主資料。                                                               |
 | GET    | `/api/vendor/stall-map/{applicationNo}` | -                         | 是  | 查詢攤主自己的申請單選位地圖，可用`applyDate` 切換目前查看日期，並回傳報名日期數。 |
 
+### 攤主金流 API
+
+| Method | API | Request DTO | JWT | 說明 |
+| ------ | --- | ----------- | --- | ---- |
+| POST | `/api/vendor/payments/newebpay` | `VendorPaymentRequest` | 是 | 攤主建立藍新付款資料，後端檢查申請單狀態並回傳藍新付款表單欄位。 |
+| GET | `/api/vendor/payments/{applicationNo}/status` | - | 是 | 查詢指定申請單的本地付款狀態。 |
+| POST | `/api/vendor/payments/{applicationNo}/newebpay-query` | - | 是 | 向藍新補查交易狀態，用於除錯或 Notify 未收到時補正狀態。 |
+
+### 藍新金流回呼 API
+
+| Method | API | Request | JWT | 說明 |
+| ------ | --- | ------- | --- | ---- |
+| POST | `/api/newebpay/notify` | 藍新回傳表單資料 | 否 | 藍新背景通知付款結果，後端驗章、解密、比對金額並更新付款狀態。 |
+| POST | `/api/newebpay/return` | 藍新回傳表單資料 | 否 | 使用者付款完成後由藍新導回，後端處理後導回前端付款結果頁。 |
+| GET | `/api/newebpay/return` | Query params | 否 | ReturnURL 備用/測試入口，供瀏覽器直接開啟時導回前端。 |
+
+### 藍新付款流程
+
+```text
+前端點付款按鈕
+  ↓
+POST /api/vendor/payments/newebpay
+  ↓
+後端檢查 token、攤主身分、申請單、歸屬、審核狀態、付款狀態與金額
+  ↓
+後端建立本地付款紀錄並回傳藍新付款表單資料
+  ↓
+前端 form POST 到藍新付款頁
+  ↓
+藍新付款完成
+  ↓
+POST /api/newebpay/notify
+  ↓
+後端驗章、解密、比對金額，更新本地付款狀態為 PAID
+  ↓
+POST /api/newebpay/return
+  ↓
+藍新導使用者回系統，後端再導回前端付款結果頁
+```
+
 ### 主辦方 API
 
 | Method | API                                                     | Request              | JWT | 說明                                                             |
 | ------ | ------------------------------------------------------- | -------------------- | --- | ---------------------------------------------------------------- |
 | GET    | `/api/organizer/account`                              | Authorization header | 是  | 取得目前登入主辦方資料。                                         |
-| GET    | `/api/organizer/accounts/search`                     | Query params         | 是  | 查詢主辦方帳務活動列表，可依活動名稱、狀態與活動日期篩選。       |
-| GET    | `/api/organizer/accounts/{eventId}`                  | Query params         | 是  | 查詢活動帳務詳情，可依帳務狀態篩選付款明細。                     |
-| GET    | `/api/organizer/applications/search`                  | Authorization header | 是  | 查詢目前主辦方 published 活動的全部申請資料，依申請時間倒序。    |
+| GET    | `/api/organizer/accounts/search`                     | Query params         | 是  | 查詢主辦方帳務活動列表，可依活動名稱、狀態、活動日期與 `page`/`pageSize` 分頁篩選。 |
+| GET    | `/api/organizer/accounts/{eventId}`                  | Query params         | 是  | 查詢活動帳務詳情，可依帳務狀態篩選付款明細，並以 `paymentPage`/`paymentPageSize` 分頁。 |
+| GET    | `/api/organizer/accounts/{eventId}/export`           | Query params         | 是  | 匯出活動帳務 Excel 報表，可用 `status` 篩選付款明細。            |
+| GET    | `/api/organizer/equipment/search`                   | Query params         | 是  | 查詢主辦方設備租借活動列表，可依活動名稱、狀態、活動日期與 `page`/`pageSize` 分頁篩選。 |
+| GET    | `/api/organizer/equipment/{eventId}`                | Query params         | 是  | 查詢主辦方活動設備、用電、租借統計與管理列表；管理列表可各自分頁。 |
+| GET    | `/api/organizer/equipment/{eventId}/export`          | Authorization header | 是  | 匯出活動設備 Excel 報表。                                       |
+| GET    | `/api/organizer/applications/search`                  | Authorization header | 是  | 查詢目前主辦方 published 活動的申請資料，支援條件與 `page`/`pageSize` 分頁篩選。 |
 | GET    | `/api/organizer/applications/{id}`                    | Authorization header | 是  | 查詢主辦方申請明細。                                             |
-| GET    | `/api/organizer/stalls/search`                       | Query params         | 是  | 查詢主辦方攤位管理活動列表。                                     |
+| GET    | `/api/organizer/stalls/search`                       | Query params         | 是  | 查詢主辦方攤位管理活動列表，可用 `page`/`pageSize` 分頁。 |
 | GET    | `/api/organizer/stall/{eventId}`                     | Query params         | 是  | 查詢主辦方活動指定日期的攤位選位狀況，可依關鍵字與選位狀態篩選。 |
 | GET    | `/api/organizer/stall/{eventId}/{stallNo}`           | Query params         | 是  | 查詢主辦方活動指定日期單一攤位的攤主與申請資訊。                 |
 | POST   | `/api/organizer/applications/{id}/approve`            | Authorization header | 是  | 通過主辦方報名審核。                                             |
@@ -310,6 +386,31 @@ POST /api/organizer/applications/{id}/reject
 | `equipmentRentals`  | `freeEquipments`、`freeBasicPower`、`rentalEquipments`、`extraPower` 四區設備/用電資訊。 |
 | `status`            | 固定狀態流清單與各節點時間。                                                                     |
 
+`GET /api/organizer/equipment/{eventId}` 目前主要回傳區塊：
+
+| 區塊 | 說明 |
+| --- | --- |
+| `event` | 活動名稱、狀態、活動時間、地點與地址。 |
+| `eventEquipments` | 一般設備提供狀況；同一 `item_type + equipment_group_key` 的免費與付費設備會合併為一列，`dailyRentableQuantity` 為免費庫存加付費庫存總數。 |
+| `basicPowers` | 免費基本用電資訊，包含電壓與免費瓦數。 |
+| `extraPowers` | 付費額外用電資訊；`perStallProvidedQuantity` 為每攤可提供組數，`availableGroupQuantity` 為此用電方案可提供組數。 |
+| `equipmentRentalStatistics` | 一般設備租借統計與剩餘數量；同一設備品項的免費與付費設定會合併統計。 |
+| `extraPowerApplicationStatistics` | 額外用電申請數量統計。 |
+| `vehicleRegistrationStatistics` | 車牌已登記與未登記統計。 |
+| `equipmentRentalManagement` | 各攤商一般設備租借管理列表。 |
+| `extraPowerManagement` | 各攤商額外用電管理列表。 |
+| `vehicleManagement` | 已登記車牌的攤商列表。 |
+
+管理列表分頁參數：
+
+| 清單 | Page 參數 | PageSize 參數 | 說明 |
+| --- | --- | --- | --- |
+| `equipmentRentalManagement` | `equipmentRentalPage` | `equipmentRentalPageSize` | 一般設備租借管理列表分頁。 |
+| `extraPowerManagement` | `extraPowerPage` | `extraPowerPageSize` | 加購用電管理列表分頁。 |
+| `vehicleManagement` | `vehiclePage` | `vehiclePageSize` | 車輛管理列表分頁。 |
+
+以上三個區塊會回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`；`pageSize` 最大 10 筆。匯出 Excel 不套用這些分頁參數，仍會輸出完整資料。
+
 `GET /api/organizer/accounts/{eventId}` 目前主要回傳區塊：
 
 | 區塊 | 說明 |
@@ -317,9 +418,69 @@ POST /api/organizer/applications/{id}/reject
 | `event` | 活動圖片、名稱、狀態、日期、地點、攤位總數與已付款攤位數。 |
 | `summary` | 收款總額、退款總額、已退款保證金、未退款保證金與實收總額。 |
 | `statistics` | 付款、退款、保證金統計。 |
-| `payments` | 付款明細；可用 `status` 篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`。 |
+| `payments` | 付款明細；可用 `status` 篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消`，並可用 `paymentPage`、`paymentPageSize` 分頁。 |
 
-`payments` 每列包含 `paymentNo`、`brandName`、`paidAt`、`paymentAmount`、`refundAmount`、`depositStatus`、`accountingStatus`。`refundAmount` 只代表已完成退款金額，退款申請中與退款處理中會回 `0`。
+`payments` 每列包含 `paymentNo`、`brandName`、`contactName`、`paidAt`、`paymentAmount`、`refundAmount`、`depositStatus`、`accountingStatus`。`refundAmount` 只代表已完成退款金額，退款申請中與退款處理中會回 `0`。
+
+`payments` 會回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`；`pageSize` 最大 10 筆。帳務 Excel 匯出不套用 `paymentPage`/`paymentPageSize`，仍會輸出完整付款明細。
+
+### 主辦方報表匯出 API
+
+報表 API 會直接回傳 Excel 附件，不包 `ApiResponse` JSON。請前端用 blob/arraybuffer 接收，並依 `Content-Disposition` 取得檔名。
+
+| Method | API | Query params | JWT | 成功回應 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/organizer/accounts/{eventId}/export` | `status` 選填，可篩選 `付款成功`、`退款處理中`、`退款申請中`、`已退款`、`已取消` | 是 | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+| GET | `/api/organizer/equipment/{eventId}/export` | - | 是 | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+
+成功下載時，後端會回傳：
+
+| Header | 說明 |
+| --- | --- |
+| `Content-Type` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+| `Content-Disposition` | `attachment; filename*=UTF-8''...xlsx`，檔名會依報表類型與活動名稱產生。 |
+| `Content-Length` | Excel byte 長度。 |
+
+檔名規則：
+
+| 報表 | 檔名格式 |
+| --- | --- |
+| 帳務報表 | `account-report-{活動名稱或eventId}.xlsx` |
+| 設備報表 | `equipment-report-{活動名稱或eventId}.xlsx` |
+
+錯誤回應分兩種：JWT 驗證失敗會回 `401 Unauthorized` 與 `ApiResponse` JSON，例如 `Authorization token is required`、`Invalid or expired token`、`Session expired`；通過驗證後若查無活動或參數錯誤，匯出 API 會回 `400 Bad Request` 與純文字錯誤訊息，例如 `Event id is required`、`Event not found`。
+
+帳務報表工作表：
+
+| 工作表 | 內容 |
+| --- | --- |
+| `活動資訊` | 活動 ID、活動名稱、發布狀態、狀態文字、狀態說明、活動日期、地點、地址、總攤位數、已付款攤位數。 |
+| `帳務摘要` | 收款總額、退款總額、已退/未退保證金總額、實收總額、付款/退款/保證金統計。 |
+| `付款明細` | 付款編號、品牌名稱、攤主名稱、付款時間、付款金額、退款金額、保證金狀態、帳務狀態。 |
+
+設備報表工作表：
+
+| 工作表 | 內容 |
+| --- | --- |
+| `活動資訊` | 活動 ID、活動名稱、狀態、狀態說明、活動時間、地點、地址。 |
+| `活動設備` | 設備名稱、設備類型、單位、免費提供數量、付費租借上限、每日可租借總數、租金與租借狀態。 |
+| `基本用電` | 用電名稱、電壓、免費瓦數。 |
+| `加購用電` | 用電名稱、用電方案、每攤可提供組數、可提供組數。 |
+| `設備租借統計` | 設備名稱、已租借數量、可租借數量、剩餘數量、租借/總計。 |
+| `設備租借管理` | 攤位編號、品牌名稱與各設備租借數量；設備欄位會依活動實際設備動態產生。 |
+| `加購用電管理` | 攤位編號、品牌名稱、用電方案。 |
+| `車輛管理` | 攤位編號、品牌名稱、聯絡人、車牌號碼。 |
+
+報表產出流程：
+
+1. 前端帶主辦方 JWT 呼叫 `/api/organizer/accounts/{eventId}/export` 或 `/api/organizer/equipment/{eventId}/export`。
+2. `JwtAuthenticationFilter` 先驗證該下載 API 是否有合法 Authorization token。
+3. `OrganizerController` 收到請求後呼叫 `OrganizerService` 的匯出方法。
+4. Service 先取得目前登入主辦方，再用 `eventId` 查詢該主辦方名下活動；若查不到會回 `Event not found`。
+5. 帳務報表會重用帳務詳情查詢邏輯，組出 `event`、`summary`、`statistics`、`payments`；若有帶 `status`，付款明細會先依帳務狀態篩選。
+6. 設備報表會重用設備詳情查詢邏輯，組出活動資訊、設備設定、用電設定、租借統計與各管理列表。
+7. 後端使用 Apache POI `XSSFWorkbook` 建立 `.xlsx`，每個資料區塊寫成獨立工作表，表頭加粗、凍結第一列並自動調整欄寬。
+8. Service 回傳 `ReportExport`，Controller 轉成 Excel 附件回應，前端即可觸發下載。
 
 ## 文件維護規則
 

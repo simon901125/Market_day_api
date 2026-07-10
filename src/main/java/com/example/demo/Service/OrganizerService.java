@@ -1,5 +1,8 @@
 package com.example.demo.Service;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -9,9 +12,21 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +40,10 @@ import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
 import com.example.demo.dto.response.OrganizerApplicationSummaryResponse;
 import com.example.demo.dto.response.OrganizerAccountingSearchResponse;
 import com.example.demo.dto.response.OrganizerAccountingSummaryResponse;
+import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
+import com.example.demo.dto.response.OrganizerEquipmentSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
+import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.OrganizerStallEventSummaryResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -34,10 +52,32 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class OrganizerService {
 
+    public record ReportExport(
+            boolean success,
+            byte[] content,
+            String filename,
+            String contentType,
+            String errorMessage) {
+
+        public static ReportExport excel(String filename, byte[] content) {
+            return new ReportExport(
+                    true,
+                    content,
+                    filename,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    null);
+        }
+
+        public static ReportExport fail(String message) {
+            return new ReportExport(false, null, null, "text/plain; charset=UTF-8", message);
+        }
+    }
+
     private static final DateTimeFormatter SERVICE_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter SPACE_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter DISPLAY_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DISPLAY_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final Pattern VOLTAGE_PATTERN = Pattern.compile("(\\d{2,4})\\s*[vV]");
     private static final TypeReference<Map<String, Object>> STRING_OBJECT_MAP = new TypeReference<>() {
     };
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -95,7 +135,9 @@ public class OrganizerService {
             String eventTitle,
             String status,
             LocalDate eventStartAt,
-            LocalDate eventEndAt) {
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -115,19 +157,49 @@ public class OrganizerService {
 
         return ApiResponse.success(
                 "Organizer accounting list retrieved successfully",
-                new OrganizerAccountingSearchResponse(accounts));
+                new OrganizerAccountingSearchResponse(PageResponse.from(accounts, page, pageSize)));
     }
 
     public ApiResponse<MapBackedResponse> getOrganizerAccountDetail(
             String authorizationHeader,
             Long eventId,
+            String status,
+            Integer paymentPage,
+            Integer paymentPageSize) {
+        Map<String, Object> response = buildOrganizerAccountDetail(authorizationHeader, eventId, status);
+        if (response.containsKey("message")) {
+            return ApiResponse.fail(response.get("message").toString());
+        }
+        paginateListField(response, "payments", paymentPage, paymentPageSize);
+
+        return ApiResponse.success(
+                "Organizer accounting detail retrieved successfully",
+                new MapBackedResponse(response));
+    }
+
+    public ReportExport exportOrganizerAccountReport(
+            String authorizationHeader,
+            Long eventId,
+            String status) {
+        Map<String, Object> response = buildOrganizerAccountDetail(authorizationHeader, eventId, status);
+        if (response.containsKey("message")) {
+            return ReportExport.fail(response.get("message").toString());
+        }
+        return ReportExport.excel(
+                reportFilename("account-report", response.get("event"), eventId),
+                buildAccountReportWorkbook(response));
+    }
+
+    private Map<String, Object> buildOrganizerAccountDetail(
+            String authorizationHeader,
+            Long eventId,
             String status) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
-            return ApiResponse.fail(organizer.get("message").toString());
+            return organizer;
         }
         if (eventId == null) {
-            return ApiResponse.fail("Event id is required");
+            return message("Event id is required");
         }
 
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
@@ -135,7 +207,7 @@ public class OrganizerService {
                 .findOrganizerAccountingEventDetail(organizerUserId, eventId)
                 .orElse(null);
         if (account == null) {
-            return ApiResponse.fail("Event not found");
+            return message("Event not found");
         }
 
         List<Map<String, Object>> payments = organizerRepository
@@ -145,13 +217,46 @@ public class OrganizerService {
                 .filter(payment -> matchesAccountingStatus(payment, status))
                 .toList();
 
-        return ApiResponse.success(
-                "Organizer accounting detail retrieved successfully",
-                new MapBackedResponse(orderedMap(
-                        "event", toAccountingEventResponse(withDisplayPublishStatus(account)),
-                        "summary", toAccountingFinancialSummary(account),
-                        "statistics", toAccountingStatistics(account),
-                        "payments", payments)));
+        return orderedMap(
+                "event", toAccountingEventResponse(withDisplayPublishStatus(account)),
+                "summary", toAccountingFinancialSummary(account),
+                "statistics", toAccountingStatistics(account),
+                "payments", payments);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void paginateListField(Map<String, Object> response, String fieldName, Integer page, Integer pageSize) {
+        Object value = response.get(fieldName);
+        if (!(value instanceof List<?>)) {
+            return;
+        }
+        response.put(fieldName, toPagedMap((List<Map<String, Object>>) value, page, pageSize));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void paginateItemsField(Map<String, Object> response, String fieldName, Integer page, Integer pageSize) {
+        Object value = response.get(fieldName);
+        if (!(value instanceof Map<?, ?> section)) {
+            return;
+        }
+        Object items = section.get("items");
+        if (!(items instanceof List<?>)) {
+            return;
+        }
+        response.put(fieldName, toPagedMap((List<Map<String, Object>>) items, page, pageSize));
+    }
+
+    private Map<String, Object> toPagedMap(List<Map<String, Object>> items, Integer page, Integer pageSize) {
+        PageResponse<Map<String, Object>> paged = PageResponse.from(items, page, pageSize);
+        return orderedMap(
+                "totalCount", paged.getTotalItems(),
+                "items", paged.getItems(),
+                "page", paged.getPage(),
+                "pageSize", paged.getPageSize(),
+                "totalItems", paged.getTotalItems(),
+                "totalPages", paged.getTotalPages(),
+                "hasPrevious", paged.isHasPrevious(),
+                "hasNext", paged.isHasNext());
     }
 
     public ApiResponse<OrganizerApplicationSearchResponse> searchOrganizerApplications(
@@ -160,7 +265,9 @@ public class OrganizerService {
             String status,
             String brandName,
             LocalDate registrationStartAt,
-            LocalDate registrationEndAt) {
+            LocalDate registrationEndAt,
+            Integer page,
+            Integer pageSize) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -179,7 +286,7 @@ public class OrganizerService {
                 .toList();
         return ApiResponse.success(
                 "Organizer applications retrieved successfully",
-                new OrganizerApplicationSearchResponse(applications));
+                new OrganizerApplicationSearchResponse(PageResponse.from(applications, page, pageSize)));
     }
 
     public ApiResponse<OrganizerStallEventSearchResponse> searchOrganizerStallEvents(
@@ -187,7 +294,9 @@ public class OrganizerService {
             String eventTitle,
             String status,
             LocalDate eventStartAt,
-            LocalDate eventEndAt) {
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -207,7 +316,105 @@ public class OrganizerService {
 
         return ApiResponse.success(
                 "Organizer stall events retrieved successfully",
-                new OrganizerStallEventSearchResponse(events));
+                new OrganizerStallEventSearchResponse(PageResponse.from(events, page, pageSize)));
+    }
+
+    public ApiResponse<OrganizerEquipmentSearchResponse> searchOrganizerEquipmentEvents(
+            String authorizationHeader,
+            String eventTitle,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        LocalDateTime startAt = eventStartAt == null ? null : eventStartAt.atStartOfDay();
+        LocalDateTime endExclusive = eventEndAt == null ? null : eventEndAt.plusDays(1).atStartOfDay();
+        List<OrganizerEquipmentSummaryResponse> events = organizerRepository
+                .findOrganizerEquipmentEvents(organizerUserId, eventTitle, startAt, endExclusive)
+                .stream()
+                .map(this::withDisplayEquipmentEventStatus)
+                .filter(event -> matchesEquipmentEventStatus(event, status))
+                .map(this::toEquipmentSummaryResponse)
+                .map(OrganizerEquipmentSummaryResponse::new)
+                .toList();
+
+        return ApiResponse.success(
+                "Organizer equipment events retrieved successfully",
+                new OrganizerEquipmentSearchResponse(PageResponse.from(events, page, pageSize)));
+    }
+
+    public ApiResponse<MapBackedResponse> getOrganizerEquipmentDetail(
+            String authorizationHeader,
+            Long eventId,
+            Integer equipmentRentalPage,
+            Integer equipmentRentalPageSize,
+            Integer extraPowerPage,
+            Integer extraPowerPageSize,
+            Integer vehiclePage,
+            Integer vehiclePageSize) {
+        Map<String, Object> response = buildOrganizerEquipmentDetail(authorizationHeader, eventId);
+        if (response.containsKey("message")) {
+            return ApiResponse.fail(response.get("message").toString());
+        }
+        paginateItemsField(response, "equipmentRentalManagement", equipmentRentalPage, equipmentRentalPageSize);
+        paginateItemsField(response, "extraPowerManagement", extraPowerPage, extraPowerPageSize);
+        paginateItemsField(response, "vehicleManagement", vehiclePage, vehiclePageSize);
+
+        return ApiResponse.success(
+                "Organizer equipment detail retrieved successfully",
+                new MapBackedResponse(response));
+    }
+
+    public ReportExport exportOrganizerEquipmentReport(String authorizationHeader, Long eventId) {
+        Map<String, Object> response = buildOrganizerEquipmentDetail(authorizationHeader, eventId);
+        if (response.containsKey("message")) {
+            return ReportExport.fail(response.get("message").toString());
+        }
+        return ReportExport.excel(
+                reportFilename("equipment-report", response.get("event"), eventId),
+                buildEquipmentReportWorkbook(response));
+    }
+
+    private Map<String, Object> buildOrganizerEquipmentDetail(String authorizationHeader, Long eventId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return organizer;
+        }
+        if (eventId == null) {
+            return message("Event id is required");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> event = organizerRepository
+                .findOrganizerEquipmentEventDetail(organizerUserId, eventId)
+                .orElse(null);
+        if (event == null) {
+            return message("Event not found");
+        }
+
+        List<Map<String, Object>> equipments = organizerRepository.findEventEquipments(eventId);
+        List<Map<String, Object>> rentalStats = organizerRepository.findOrganizerEquipmentRentalStats(eventId);
+        List<Map<String, Object>> equipmentManagementRows = organizerRepository.findOrganizerEquipmentManagementRows(eventId);
+        List<Map<String, Object>> powerManagementRows = organizerRepository.findOrganizerPowerManagementRows(eventId);
+        List<Map<String, Object>> vehicleManagementRows = organizerRepository.findOrganizerVehicleManagementRows(eventId);
+
+        return orderedMap(
+                "event", toEquipmentDetailEventResponse(withDisplayEquipmentEventStatus(event)),
+                "eventEquipments", toEventEquipmentRows(equipments),
+                "basicPowers", toBasicPowerRows(equipments),
+                "extraPowers", toExtraPowerRows(equipments),
+                "equipmentRentalStatistics", toEquipmentRentalStatistics(rentalStats),
+                "extraPowerApplicationStatistics", toExtraPowerApplicationStatistics(rentalStats),
+                "vehicleRegistrationStatistics", toVehicleRegistrationStatistics(vehicleManagementRows),
+                "equipmentRentalManagement", toEquipmentRentalManagement(vehicleManagementRows, equipmentManagementRows, equipments),
+                "extraPowerManagement", toExtraPowerManagement(vehicleManagementRows, powerManagementRows),
+                "vehicleManagement", toVehicleManagement(vehicleManagementRows));
     }
 
     public ApiResponse<OrganizerApplicationDetailResponse> getOrganizerApplicationDetail(String authorizationHeader, Long applicationId) {
@@ -329,6 +536,7 @@ public class OrganizerService {
     private Map<String, Object> withDisplayPublishStatus(Map<String, Object> account) {
         Map<String, Object> response = new LinkedHashMap<>(account);
         response.put("publishStatusText", displayPublishStatus(account.get("publishStatus")));
+        response.put("statusNote", displayRegistrationProgress(account));
         return response;
     }
 
@@ -354,6 +562,7 @@ public class OrganizerService {
     private Map<String, Object> withDisplayStallEventStatus(Map<String, Object> event) {
         Map<String, Object> response = new LinkedHashMap<>(event);
         response.put("status", displayStallEventStatus(event));
+        response.put("statusNote", displayRegistrationProgress(event));
         return response;
     }
 
@@ -368,6 +577,17 @@ public class OrganizerService {
                 || normalizedStatus.equals(normalizeText(event.get("status")));
     }
 
+    private Map<String, Object> withDisplayEquipmentEventStatus(Map<String, Object> event) {
+        Map<String, Object> response = new LinkedHashMap<>(event);
+        response.put("status", displayStallEventStatus(event));
+        response.put("statusNote", displayRegistrationProgress(event));
+        return response;
+    }
+
+    private boolean matchesEquipmentEventStatus(Map<String, Object> event, String status) {
+        return matchesStallEventStatus(event, status);
+    }
+
     private Map<String, Object> toAccountingSummaryResponse(Map<String, Object> account) {
         Object paidStallCount = account.get("paidStallCount");
         Object totalStallCount = account.get("totalStallCount");
@@ -376,6 +596,7 @@ public class OrganizerService {
                 "eventTitle", account.get("eventTitle"),
                 "publishStatus", account.get("publishStatus"),
                 "publishStatusText", account.get("publishStatusText"),
+                "statusNote", account.get("statusNote"),
                 "eventDate", formatEventDate(account),
                 "paidStallCount", paidStallCount,
                 "totalStallCount", totalStallCount,
@@ -394,6 +615,7 @@ public class OrganizerService {
                 "eventTitle", account.get("eventTitle"),
                 "publishStatus", account.get("publishStatus"),
                 "publishStatusText", account.get("publishStatusText"),
+                "statusNote", account.get("statusNote"),
                 "eventDate", formatEventDate(account),
                 "locationName", account.get("locationName"),
                 "address", joinAddress(
@@ -434,6 +656,7 @@ public class OrganizerService {
         return orderedMap(
                 "paymentNo", payment.get("paymentNo"),
                 "brandName", payment.get("brandName"),
+                "contactName", payment.get("contactName"),
                 "paidAt", formatDateTime(firstPresent(payment.get("paidAt"), payment.get("paymentCreatedAt"))),
                 "paymentAmount", payment.get("paymentAmount"),
                 "refundAmount", payment.get("refundAmount"),
@@ -500,7 +723,327 @@ public class OrganizerService {
                         event.get("district"),
                         event.get("locationName")),
                 "totalStallCount", event.get("totalStallCount"),
-                "status", event.get("status"));
+                "status", event.get("status"),
+                "statusNote", event.get("statusNote"));
+    }
+
+    private Map<String, Object> toEquipmentSummaryResponse(Map<String, Object> event) {
+        return orderedMap(
+                "eventId", event.get("eventId"),
+                "eventTitle", event.get("eventTitle"),
+                "coverImageUrl", event.get("coverImageUrl"),
+                "eventDate", formatEventDate(event),
+                "status", event.get("status"),
+                "statusNote", event.get("statusNote"),
+                "registeredStallCount", event.get("registeredStallCount"),
+                "freeEquipmentRentalCount", event.get("freeEquipmentRentalCount"),
+                "paidEquipmentRentalCount", event.get("paidEquipmentRentalCount"),
+                "freePowerRentalCount", event.get("freePowerRentalCount"),
+                "paidExtraPowerRentalCount", event.get("paidExtraPowerRentalCount"),
+                "vehicleRegistrationCount", event.get("vehicleRegistrationCount"));
+    }
+
+    private Map<String, Object> toEquipmentDetailEventResponse(Map<String, Object> event) {
+        return orderedMap(
+                "eventId", event.get("eventId"),
+                "eventTitle", event.get("eventTitle"),
+                "status", event.get("status"),
+                "statusNote", event.get("statusNote"),
+                "eventTime", formatEventDateTimeRange(event.get("eventStartAt"), event.get("eventEndAt")),
+                "locationName", event.get("locationName"),
+                "address", joinAddress(
+                        event.get("city"),
+                        event.get("district"),
+                        event.get("address")));
+    }
+
+    private List<Map<String, Object>> toEquipmentColumns(List<Map<String, Object>> equipments) {
+        return equipments.stream()
+                .filter(this::isActiveEquipment)
+                .map(row -> orderedMap(
+                        "eventEquipmentId", row.get("eventEquipmentId"),
+                        "equipmentName", row.get("equipmentName")))
+                .toList();
+    }
+
+    private List<Map<String, Object>> toEventEquipmentRows(List<Map<String, Object>> equipments) {
+        Map<String, Map<String, Object>> rowsByGroup = new LinkedHashMap<>();
+        for (Map<String, Object> row : equipments) {
+            if (!"EQUIPMENT".equals(statusText(row.get("itemType")))) {
+                continue;
+            }
+
+            Map<String, Object> groupedRow = rowsByGroup.computeIfAbsent(
+                    eventEquipmentGroupKey(row),
+                    key -> orderedMap(
+                            "eventEquipmentId", null,
+                            "equipmentGroupKey", row.get("equipmentGroupKey"),
+                            "itemType", row.get("itemType"),
+                            "equipmentName", row.get("equipmentName"),
+                            "description", row.get("equipmentDescription"),
+                            "unit", row.get("unit"),
+                            "freeEventEquipmentId", null,
+                            "paidEventEquipmentId", null,
+                            "freeProvided", null,
+                            "paidRentalFee", null,
+                            "pricingUnit", null,
+                            "rentalStatus", null,
+                            "perStallRentalLimit", null,
+                            "dailyRentableQuantity", null));
+
+            if (groupedRow.get("eventEquipmentId") == null) {
+                groupedRow.put("eventEquipmentId", row.get("eventEquipmentId"));
+            }
+            if (groupedRow.get("description") == null && row.get("equipmentDescription") != null) {
+                groupedRow.put("description", row.get("equipmentDescription"));
+            }
+
+            String chargeType = statusText(row.get("chargeType"));
+            if ("FREE".equals(chargeType)) {
+                groupedRow.put("freeEventEquipmentId", row.get("eventEquipmentId"));
+                groupedRow.put("freeProvided", row.get("perStallRentalLimit"));
+                groupedRow.put("dailyRentableQuantity", sumNullableInts(
+                        groupedRow.get("dailyRentableQuantity"),
+                        row.get("stockQuantity")));
+                if (groupedRow.get("rentalStatus") == null) {
+                    groupedRow.put("rentalStatus", row.get("rentalStatus"));
+                }
+                continue;
+            }
+
+            if ("PAID".equals(chargeType)) {
+                groupedRow.put("eventEquipmentId", row.get("eventEquipmentId"));
+                groupedRow.put("paidEventEquipmentId", row.get("eventEquipmentId"));
+                groupedRow.put("paidRentalFee", row.get("rentalFee"));
+                groupedRow.put("pricingUnit", row.get("pricingUnit"));
+                groupedRow.put("rentalStatus", row.get("rentalStatus"));
+                groupedRow.put("perStallRentalLimit", row.get("perStallRentalLimit"));
+                groupedRow.put("dailyRentableQuantity", sumNullableInts(
+                        groupedRow.get("dailyRentableQuantity"),
+                        row.get("stockQuantity")));
+            }
+        }
+
+        return List.copyOf(rowsByGroup.values());
+    }
+
+    private String eventEquipmentGroupKey(Map<String, Object> row) {
+        String itemType = statusText(row.get("itemType"));
+        String groupKey = normalizeText(row.get("equipmentGroupKey"));
+        if (groupKey != null) {
+            return itemType + "|" + groupKey;
+        }
+        return itemType + "|"
+                + normalizeText(row.get("equipmentName")) + "|"
+                + normalizeText(row.get("unit"));
+    }
+
+    private List<Map<String, Object>> toBasicPowerRows(List<Map<String, Object>> equipments) {
+        return equipments.stream()
+                .filter(row -> "POWER".equals(statusText(row.get("itemType"))))
+                .filter(row -> "FREE".equals(statusText(row.get("chargeType"))))
+                .map(row -> orderedMap(
+                        "eventEquipmentId", row.get("eventEquipmentId"),
+                        "equipmentName", row.get("equipmentName"),
+                        "voltageType", voltageType(row),
+                        "freeWattage", wattageWithUnit(row.get("wattageLimit"))))
+                .toList();
+    }
+
+    private List<Map<String, Object>> toExtraPowerRows(List<Map<String, Object>> equipments) {
+        return equipments.stream()
+                .filter(row -> "POWER".equals(statusText(row.get("itemType"))))
+                .filter(row -> "PAID".equals(statusText(row.get("chargeType"))))
+                .map(row -> orderedMap(
+                        "eventEquipmentId", row.get("eventEquipmentId"),
+                        "equipmentName", row.get("equipmentName"),
+                        "powerPlan", powerPlan(row),
+                        "perStallProvidedQuantity", row.get("perStallRentalLimit"),
+                        "availableGroupQuantity", row.get("stockQuantity")))
+                .toList();
+    }
+
+    private List<Map<String, Object>> toEquipmentRentalStatistics(List<Map<String, Object>> stats) {
+        Map<String, Map<String, Object>> rowsByGroup = new LinkedHashMap<>();
+        Map<String, Integer> rentedByGroup = new LinkedHashMap<>();
+        Map<String, Integer> stockByGroup = new LinkedHashMap<>();
+        Set<String> groupsWithStock = new LinkedHashSet<>();
+
+        for (Map<String, Object> row : stats) {
+            if (!"EQUIPMENT".equals(statusText(row.get("itemType")))) {
+                continue;
+            }
+
+            String groupKey = eventEquipmentGroupKey(row);
+            rowsByGroup.computeIfAbsent(
+                    groupKey,
+                    key -> orderedMap(
+                            "eventEquipmentId", row.get("eventEquipmentId"),
+                            "equipmentGroupKey", row.get("equipmentGroupKey"),
+                            "equipmentName", row.get("equipmentName")));
+
+            rentedByGroup.merge(groupKey, intValue(row.get("rentedQuantity")), Integer::sum);
+            Integer stock = nullableInt(row.get("stockQuantity"));
+            if (stock != null) {
+                stockByGroup.merge(groupKey, stock, Integer::sum);
+                groupsWithStock.add(groupKey);
+            }
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int totalRented = 0;
+        int totalStock = 0;
+        boolean hasTotalStock = false;
+
+        for (Map.Entry<String, Map<String, Object>> entry : rowsByGroup.entrySet()) {
+            String groupKey = entry.getKey();
+            Map<String, Object> row = entry.getValue();
+            int rented = rentedByGroup.getOrDefault(groupKey, 0);
+            Integer stock = groupsWithStock.contains(groupKey) ? stockByGroup.getOrDefault(groupKey, 0) : null;
+            Integer remaining = stock == null ? null : Math.max(stock - rented, 0);
+            rows.add(orderedMap(
+                    "eventEquipmentId", row.get("eventEquipmentId"),
+                    "equipmentGroupKey", row.get("equipmentGroupKey"),
+                    "equipmentName", row.get("equipmentName"),
+                    "rentedQuantity", rented,
+                    "rentableQuantity", stock,
+                    "rentedText", stock == null ? String.valueOf(rented) : rented + " / " + stock,
+                    "remainingQuantity", remaining));
+            totalRented += rented;
+            if (stock != null) {
+                totalStock += stock;
+                hasTotalStock = true;
+            }
+        }
+        rows.add(orderedMap(
+                "eventEquipmentId", null,
+                "equipmentGroupKey", null,
+                "equipmentName", "\u7e3d\u8a08",
+                "rentedQuantity", totalRented,
+                "rentableQuantity", hasTotalStock ? totalStock : null,
+                "rentedText", hasTotalStock ? totalRented + " / " + totalStock : String.valueOf(totalRented),
+                "remainingQuantity", hasTotalStock ? Math.max(totalStock - totalRented, 0) : null,
+                "isTotal", true));
+        return rows;
+    }
+
+    private List<Map<String, Object>> toExtraPowerApplicationStatistics(List<Map<String, Object>> stats) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int totalQuantity = 0;
+        for (Map<String, Object> row : stats) {
+            if (!"POWER".equals(statusText(row.get("itemType")))
+                    || !"PAID".equals(statusText(row.get("chargeType")))) {
+                continue;
+            }
+            int quantity = intValue(row.get("rentedQuantity"));
+            rows.add(orderedMap(
+                    "eventEquipmentId", row.get("eventEquipmentId"),
+                    "equipmentName", row.get("equipmentName"),
+                    "powerPlan", powerPlan(row),
+                    "applicationQuantity", quantity));
+            totalQuantity += quantity;
+        }
+        rows.add(orderedMap(
+                "eventEquipmentId", null,
+                "equipmentName", "\u7e3d\u8a08",
+                "powerPlan", "\u7e3d\u8a08",
+                "applicationQuantity", totalQuantity,
+                "isTotal", true));
+        return rows;
+    }
+
+    private Map<String, Object> toVehicleRegistrationStatistics(List<Map<String, Object>> rows) {
+        long registered = rows.stream()
+                .filter(row -> normalizeText(row.get("vehicleNo")) != null)
+                .count();
+        long unregistered = rows.size() - registered;
+        return orderedMap(
+                "stallCount", rows.size(),
+                "registeredCount", registered,
+                "unregisteredCount", unregistered);
+    }
+
+    private Map<String, Object> toEquipmentRentalManagement(
+            List<Map<String, Object>> applicationRows,
+            List<Map<String, Object>> rentalRows,
+            List<Map<String, Object>> equipments) {
+        Map<String, Map<String, Object>> rowsByApplication = baseManagementRows(applicationRows);
+        Map<String, Object> zeroQuantities = new LinkedHashMap<>();
+        Map<String, String> equipmentNamesById = new LinkedHashMap<>();
+        for (Map<String, Object> equipment : equipments) {
+            if (isActiveEquipment(equipment)) {
+                String equipmentId = String.valueOf(equipment.get("eventEquipmentId"));
+                String equipmentName = normalizeText(equipment.get("equipmentName"));
+                equipmentNamesById.put(equipmentId, equipmentName);
+                zeroQuantities.put(equipmentName, 0);
+            }
+        }
+        rowsByApplication.values().forEach(row -> row.put("equipmentQuantities", new LinkedHashMap<>(zeroQuantities)));
+
+        for (Map<String, Object> rental : rentalRows) {
+            String applicationId = String.valueOf(rental.get("applicationId"));
+            Map<String, Object> row = rowsByApplication.get(applicationId);
+            if (row == null) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> quantities = (Map<String, Object>) row.get("equipmentQuantities");
+            String equipmentId = String.valueOf(rental.get("eventEquipmentId"));
+            String equipmentName = equipmentNamesById.get(equipmentId);
+            if (equipmentName != null) {
+                quantities.put(equipmentName, intValue(quantities.get(equipmentName)) + intValue(rental.get("quantity")));
+            }
+        }
+        List<Map<String, Object>> items = List.copyOf(rowsByApplication.values());
+        return orderedMap(
+                "totalCount", items.size(),
+                "items", items);
+    }
+
+    private Map<String, Object> toExtraPowerManagement(
+            List<Map<String, Object>> applicationRows,
+            List<Map<String, Object>> powerRows) {
+        Map<String, Map<String, Object>> rowsByApplication = baseManagementRows(applicationRows);
+        Map<String, List<String>> plansByApplication = new LinkedHashMap<>();
+        for (Map<String, Object> row : powerRows) {
+            String applicationId = String.valueOf(row.get("applicationId"));
+            String plan = powerPlan(row);
+            int quantity = intValue(row.get("quantity"));
+            plansByApplication.computeIfAbsent(applicationId, key -> new ArrayList<>())
+                    .add(quantity > 1 ? plan + " x" + quantity : plan);
+        }
+        rowsByApplication.forEach((applicationId, row) ->
+                row.put("powerPlan", String.join("\u3001", plansByApplication.getOrDefault(applicationId, List.of()))));
+        List<Map<String, Object>> items = List.copyOf(rowsByApplication.values());
+        return orderedMap(
+                "totalCount", items.size(),
+                "items", items);
+    }
+
+    private Map<String, Object> toVehicleManagement(List<Map<String, Object>> rows) {
+        List<Map<String, Object>> items = rows.stream()
+                .filter(row -> normalizeText(row.get("vehicleNo")) != null)
+                .map(row -> orderedMap(
+                        "applicationId", row.get("applicationId"),
+                        "stallNo", row.get("stallNo"),
+                        "brandName", row.get("brandName"),
+                        "contactName", row.get("contactName"),
+                        "vehicleNo", row.get("vehicleNo")))
+                .toList();
+        return orderedMap(
+                "totalCount", items.size(),
+                "items", items);
+    }
+
+    private Map<String, Map<String, Object>> baseManagementRows(List<Map<String, Object>> rows) {
+        Map<String, Map<String, Object>> rowsByApplication = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            rowsByApplication.put(String.valueOf(row.get("applicationId")), orderedMap(
+                    "applicationId", row.get("applicationId"),
+                    "stallNo", row.get("stallNo"),
+                    "brandName", row.get("brandName")));
+        }
+        return rowsByApplication;
     }
 
     private Map<String, Object> toApplicationSummaryResponse(Map<String, Object> application) {
@@ -529,6 +1072,7 @@ public class OrganizerService {
         response.put("event", orderedMap(
                 "eventTitle", application.get("eventTitle"),
                 "eventStatus", displayEventStatus(application),
+                "statusNote", displayRegistrationProgress(application),
                 "eventTime", formatEventDate(application),
                 "address", joinAddress(
                         application.get("eventCity"),
@@ -675,6 +1219,20 @@ public class OrganizerService {
             return "品牌已公開";
         }
         return "品牌已公開";
+    }
+
+    private String displayRegistrationProgress(Map<String, Object> event) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+
+        if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+            return "\u672a\u958b\u59cb\u5831\u540d";
+        }
+        if (registrationEndAt != null && now.isAfter(registrationEndAt)) {
+            return "\u5831\u540d\u622a\u6b62";
+        }
+        return "\u5831\u540d\u4e2d";
     }
 
     private boolean isStallEventFull(Map<String, Object> event) {
@@ -1262,6 +1820,21 @@ public class OrganizerService {
         return startDate.equals(endDate) ? startDate : startDate + " - " + endDate;
     }
 
+    private String formatEventDateTimeRange(Object startValue, Object endValue) {
+        LocalDateTime startAt = toLocalDateTime(startValue);
+        LocalDateTime endAt = toLocalDateTime(endValue);
+        if (startAt == null && endAt == null) {
+            return null;
+        }
+        if (startAt == null) {
+            return DISPLAY_DATE_TIME_FORMATTER.format(endAt);
+        }
+        if (endAt == null) {
+            return DISPLAY_DATE_TIME_FORMATTER.format(startAt);
+        }
+        return DISPLAY_DATE_TIME_FORMATTER.format(startAt) + " - " + DISPLAY_DATE_TIME_FORMATTER.format(endAt);
+    }
+
     private String formatAppliedAt(Map<String, Object> application) {
         LocalDateTime appliedAt = appliedAtForSort(application);
         return appliedAt == null ? null : appliedAt.format(DISPLAY_DATE_TIME_FORMATTER);
@@ -1366,6 +1939,324 @@ public class OrganizerService {
             return null;
         }
         return prefix + count + unit;
+    }
+
+    private boolean isActiveEquipment(Map<String, Object> row) {
+        return "EQUIPMENT".equals(statusText(row.get("itemType")))
+                && "ACTIVE".equals(statusText(row.get("rentalStatus")));
+    }
+
+    private String voltageType(Map<String, Object> row) {
+        if ("POWER".equals(statusText(row.get("itemType")))) {
+            return voltageWithUnit(row.get("equipmentName"));
+        }
+        String combined = normalizeText(row.get("equipmentName"));
+        String description = normalizeText(row.get("equipmentDescription"));
+        if (description != null) {
+            combined = combined == null ? description : combined + " " + description;
+        }
+        if (combined == null) {
+            return null;
+        }
+        Matcher matcher = VOLTAGE_PATTERN.matcher(combined);
+        if (!matcher.find()) {
+            return null;
+        }
+        return voltageWithUnit(matcher.group(1));
+    }
+
+    private String powerPlan(Map<String, Object> row) {
+        String voltage = voltageType(row);
+        String wattage = wattageWithUnit(row.get("wattageLimit"));
+        if (voltage != null && wattage != null) {
+            return voltage + "/" + wattage;
+        }
+        if (wattage != null) {
+            String name = normalizeText(row.get("equipmentName"));
+            return name == null ? wattage : voltageWithUnit(name) + "/" + wattage;
+        }
+        return normalizeText(row.get("equipmentName"));
+    }
+
+    private String voltageWithUnit(Object value) {
+        String voltage = normalizeText(value);
+        if (voltage == null) {
+            return null;
+        }
+        return voltage.toLowerCase().endsWith("v") ? voltage : voltage + "v";
+    }
+
+    private String wattageWithUnit(Object value) {
+        Integer wattage = nullableInt(value);
+        return wattage == null ? null : wattage + "w";
+    }
+
+    private int intValue(Object value) {
+        Integer number = nullableInt(value);
+        return number == null ? 0 : number;
+    }
+
+    private Integer sumNullableInts(Object firstValue, Object secondValue) {
+        Integer first = nullableInt(firstValue);
+        Integer second = nullableInt(secondValue);
+        if (first == null && second == null) {
+            return null;
+        }
+        return intValue(first) + intValue(second);
+    }
+
+    private byte[] buildEquipmentReportWorkbook(Map<String, Object> response) {
+        Map<String, Object> equipmentRentalManagement = mapValue(response.get("equipmentRentalManagement"));
+        List<Map<String, Object>> equipmentRentalItems = listValue(equipmentRentalManagement.get("items"));
+        List<String> equipmentColumns = dynamicQuantityColumns(equipmentRentalItems);
+
+        return workbookBytes(List.of(
+                sheet("活動資訊",
+                        List.of("活動ID", "活動名稱", "狀態", "狀態說明", "活動時間", "地點", "地址"),
+                        List.of(row(response.get("event"),
+                                "eventId", "eventTitle", "status", "statusNote", "eventTime", "locationName", "address"))),
+                sheet("活動設備",
+                        List.of("設備名稱", "設備類型", "單位", "免費提供數量", "付費租借上限", "每日可租借總數", "付費租金", "計費單位", "租借狀態", "說明"),
+                        rows(response.get("eventEquipments"),
+                                "equipmentName", "itemType", "unit", "freeProvided", "perStallRentalLimit",
+                                "dailyRentableQuantity", "paidRentalFee", "pricingUnit", "rentalStatus", "description")),
+                sheet("基本用電",
+                        List.of("用電名稱", "電壓", "免費瓦數"),
+                        rows(response.get("basicPowers"), "equipmentName", "voltageType", "freeWattage")),
+                sheet("加購用電",
+                        List.of("用電名稱", "用電方案", "每攤可提供組數", "可提供組數"),
+                        rows(response.get("extraPowers"), "equipmentName", "powerPlan", "perStallProvidedQuantity", "availableGroupQuantity")),
+                sheet("設備租借統計",
+                        List.of("設備名稱", "已租借數量", "可租借數量", "剩餘數量", "租借/總計"),
+                        rows(response.get("equipmentRentalStatistics"),
+                                "equipmentName", "rentedQuantity", "rentableQuantity", "remainingQuantity", "rentedText")),
+                sheet("設備租借管理",
+                        equipmentManagementHeaders(equipmentColumns),
+                        equipmentManagementRows(equipmentRentalItems, equipmentColumns)),
+                sheet("加購用電管理",
+                        List.of("攤位編號", "品牌名稱", "用電方案"),
+                        rows(mapValue(response.get("extraPowerManagement")).get("items"), "stallNo", "brandName", "powerPlan")),
+                sheet("車輛管理",
+                        List.of("攤位編號", "品牌名稱", "聯絡人", "車牌號碼"),
+                        rows(mapValue(response.get("vehicleManagement")).get("items"), "stallNo", "brandName", "contactName", "vehicleNo"))));
+    }
+
+    private byte[] buildAccountReportWorkbook(Map<String, Object> response) {
+        Map<String, Object> summary = mapValue(response.get("summary"));
+        Map<String, Object> statistics = mapValue(response.get("statistics"));
+        Map<String, Object> payment = mapValue(statistics.get("payment"));
+        Map<String, Object> refund = mapValue(statistics.get("refund"));
+        Map<String, Object> deposit = mapValue(statistics.get("deposit"));
+
+        List<List<Object>> summaryRows = List.of(
+                reportRow("收款總額", value(summary, "grossRevenue")),
+                reportRow("退款總額", value(summary, "refundAmount")),
+                reportRow("已退保證金總額", value(summary, "returnedDepositAmount")),
+                reportRow("未退保證金總額", value(summary, "unreturnedDepositAmount")),
+                reportRow("實收總額", value(summary, "netRevenue")),
+                reportRow("總攤位數", value(payment, "totalStallCount")),
+                reportRow("已付款攤位數", value(payment, "paidStallCount")),
+                reportRow("待付款攤位數", value(payment, "pendingPaymentStallCount")),
+                reportRow("退款筆數", value(refund, "refundCount")),
+                reportRow("已退款筆數", value(refund, "refundedCount")),
+                reportRow("退款中筆數", value(refund, "refundingCount")),
+                reportRow("已退保證金筆數", value(deposit, "returnedDepositCount")),
+                reportRow("未退保證金筆數", value(deposit, "unreturnedDepositCount")));
+
+        return workbookBytes(List.of(
+                sheet("活動資訊",
+                        List.of("活動ID", "活動名稱", "發布狀態", "狀態文字", "狀態說明", "活動日期", "地點", "地址", "總攤位數", "已付款攤位數"),
+                        List.of(row(response.get("event"),
+                                "eventId", "eventTitle", "publishStatus", "publishStatusText", "statusNote",
+                                "eventDate", "locationName", "address", "totalStallCount", "paidStallCount"))),
+                new ReportSheet("帳務摘要", List.of("項目", "值"), summaryRows),
+                sheet("付款明細",
+                        List.of("付款編號", "品牌名稱", "攤主名稱", "付款時間", "付款金額", "退款金額", "保證金狀態", "帳務狀態"),
+                        rows(response.get("payments"),
+                                "paymentNo", "brandName", "contactName", "paidAt", "paymentAmount", "refundAmount", "depositStatus", "accountingStatus"))));
+    }
+
+    private ReportSheet sheet(String name, List<String> headers, List<List<Object>> rows) {
+        return new ReportSheet(name, headers, rows);
+    }
+
+    private List<Object> reportRow(Object... values) {
+        List<Object> row = new ArrayList<>();
+        for (Object value : values) {
+            row.add(value);
+        }
+        return row;
+    }
+
+    private byte[] workbookBytes(List<ReportSheet> reportSheets) {
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+
+            for (ReportSheet reportSheet : reportSheets) {
+                Sheet sheet = workbook.createSheet(safeSheetName(reportSheet.name()));
+                writeSheet(sheet, reportSheet, headerStyle);
+            }
+            workbook.write(bytes);
+            return bytes.toByteArray();
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    private void writeSheet(Sheet sheet, ReportSheet reportSheet, CellStyle headerStyle) {
+        Row headerRow = sheet.createRow(0);
+        for (int columnIndex = 0; columnIndex < reportSheet.headers().size(); columnIndex++) {
+            Cell cell = headerRow.createCell(columnIndex);
+            cell.setCellValue(reportSheet.headers().get(columnIndex));
+            cell.setCellStyle(headerStyle);
+        }
+
+        for (int rowIndex = 0; rowIndex < reportSheet.rows().size(); rowIndex++) {
+            Row excelRow = sheet.createRow(rowIndex + 1);
+            List<Object> rowValues = reportSheet.rows().get(rowIndex);
+            for (int columnIndex = 0; columnIndex < rowValues.size(); columnIndex++) {
+                writeCell(excelRow.createCell(columnIndex), rowValues.get(columnIndex));
+            }
+        }
+
+        sheet.createFreezePane(0, 1);
+        for (int columnIndex = 0; columnIndex < reportSheet.headers().size(); columnIndex++) {
+            sheet.autoSizeColumn(columnIndex);
+            int width = sheet.getColumnWidth(columnIndex);
+            sheet.setColumnWidth(columnIndex, Math.min(Math.max(width + 512, 2800), 12000));
+        }
+    }
+
+    private void writeCell(Cell cell, Object value) {
+        if (value == null) {
+            cell.setBlank();
+            return;
+        }
+        if (value instanceof BigDecimal decimal) {
+            cell.setCellValue(decimal.doubleValue());
+            return;
+        }
+        if (value instanceof Number number) {
+            cell.setCellValue(number.doubleValue());
+            return;
+        }
+        if (value instanceof Boolean bool) {
+            cell.setCellValue(bool);
+            return;
+        }
+        cell.setCellValue(String.valueOf(value));
+    }
+
+    private String safeSheetName(String name) {
+        String safeName = normalizeText(name);
+        if (safeName == null) {
+            return "Sheet";
+        }
+        safeName = safeName.replaceAll("[\\\\/?*\\[\\]:]", "_");
+        return safeName.length() > 31 ? safeName.substring(0, 31) : safeName;
+    }
+
+    private List<List<Object>> rows(Object value, String... keys) {
+        return listValue(value).stream()
+                .map(row -> row(row, keys))
+                .toList();
+    }
+
+    private List<Object> row(Object value, String... keys) {
+        Map<String, Object> map = mapValue(value);
+        List<Object> row = new ArrayList<>();
+        for (String key : keys) {
+            row.add(map.get(key));
+        }
+        return row;
+    }
+
+    private Object value(Map<String, Object> map, String key) {
+        return map == null ? null : map.get(key);
+    }
+
+    private List<String> dynamicQuantityColumns(List<Map<String, Object>> items) {
+        Set<String> columns = new LinkedHashSet<>();
+        for (Map<String, Object> item : items) {
+            mapValue(item.get("equipmentQuantities")).keySet().stream()
+                    .map(this::normalizeText)
+                    .filter(Objects::nonNull)
+                    .forEach(columns::add);
+        }
+        return List.copyOf(columns);
+    }
+
+    private List<String> equipmentManagementHeaders(List<String> equipmentColumns) {
+        List<String> headers = new ArrayList<>(List.of("攤位編號", "品牌名稱"));
+        headers.addAll(equipmentColumns);
+        return headers;
+    }
+
+    private List<List<Object>> equipmentManagementRows(
+            List<Map<String, Object>> items,
+            List<String> equipmentColumns) {
+        List<List<Object>> rows = new ArrayList<>();
+        for (Map<String, Object> item : items) {
+            Map<String, Object> quantities = mapValue(item.get("equipmentQuantities"));
+            List<Object> row = new ArrayList<>();
+            row.add(item.get("stallNo"));
+            row.add(item.get("brandName"));
+            equipmentColumns.forEach(column -> row.add(quantities.get(column)));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private String reportFilename(String prefix, Object eventValue, Long eventId) {
+        String eventTitle = normalizeText(mapValue(eventValue).get("eventTitle"));
+        String suffix = eventTitle == null ? String.valueOf(eventId) : eventTitle;
+        return prefix + "-" + safeFilename(suffix) + ".xlsx";
+    }
+
+    private String safeFilename(String text) {
+        return text.replaceAll("[\\\\/:*?\"<>|]+", "_").replaceAll("\\s+", "-");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> mapValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> listValue(Object value) {
+        if (value instanceof List<?> list) {
+            return (List<Map<String, Object>>) list;
+        }
+        return List.of();
+    }
+
+    private Map<String, Object> message(String message) {
+        return Map.of("message", message);
+    }
+
+    private record ReportSheet(String name, List<String> headers, List<List<Object>> rows) {
+    }
+
+    private Integer nullableInt(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        String text = normalizeText(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            return new BigDecimal(text).intValue();
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private String statusText(Object value) {
