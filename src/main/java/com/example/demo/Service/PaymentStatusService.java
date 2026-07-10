@@ -19,11 +19,11 @@ public class PaymentStatusService {
             return "退款處理中";
         }
         if ("REFUND_REQUESTED".equals(refundStatus)) {
-            return "退款申請中";
+            return "已申請退款";
         }
 
         return switch (stringValue(application.get("paymentStatus"))) {
-            case "PAID" -> "付款成功";
+            case "PAID" -> "已付款";
             case "FAILED" -> "付款失敗";
             case "EXPIRED" -> "已逾期";
             case "PENDING" -> "待付款";
