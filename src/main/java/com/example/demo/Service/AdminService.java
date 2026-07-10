@@ -37,6 +37,15 @@ import com.example.demo.enums.Role;
 import com.example.demo.enums.WorkflowStatus;
 import com.example.demo.projection.admin.AdminEventItemProjection;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Tuple;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+
 @Service
 public class AdminService implements AdminServiceInterface, EventStatusServiceInterface<Object> {
     @Autowired
@@ -45,13 +54,16 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     @Autowired
     UserRepo userRepo;
 
+    @PersistenceContext
+    EntityManager entityManager;
+
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
     //設定管理員後台: 首頁資料統計部分
     @Override
-    public AdminDashboardDto setDashboardResponse() {
+    public AdminDashboardDto getDashboardResponse() {
         LocalDateTime now = LocalDateTime.now();
 
         // 塞資料
@@ -68,14 +80,14 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     }
 
     @Override
-    public Object setNotice(String bookMark, int pageNumber, int pageSize) {
+    public Object getNotice(String bookMark, int pageNumber, int pageSize) {
         // TODO:for 管理員後台通知中心
         throw new UnsupportedOperationException("Unimplemented method 'setNotice'");
     }
 
     // 設定管理員後台: 活動搜尋
     @Override
-    public List<AdminEventsItemDto> setEventsList(int pageNumber, int pageSize) {
+    public List<AdminEventsItemDto> getEventsList(int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(pageNumber, pageSize); // 設定分頁
         Page<AdminEventItemProjection> list = eventRepo.findAllByOrderByCreateAtDesc(pageable); // 撈資料
 
@@ -100,23 +112,65 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // 設定管理員後台: 活動搜尋: 搜尋:?
     @Override
-    public List<AdminEventsItemDto> setEventsList(AdminEventSearchDto request, int pageNumber, int pageSize) {
-        Pageable pageable = PageRequest.of(pageNumber, pageSize); // 設定分頁
+    public List<AdminEventsItemDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize) {
         Specification<MarketEvent> spec = EventSpecification.build(request); // 設定搜尋條件
-        Page<MarketEvent> list = eventRepo.findAll(spec, pageable); // 撈資料
+
+        // 只select頁面需要用到的欄位,避免撈出MarketEvent整張表
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<MarketEvent> root = cq.from(MarketEvent.class);
+        Join<MarketEvent, User> user = root.join("user");
+        Join<User, UserProfile> userProfile = user.join("userProfile");
+
+        Predicate predicate = spec.toPredicate(root, cq, cb); // 沿用EventSpecification組出的搜尋條件
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+
+        cq.multiselect(
+                root.get("id"),
+                root.get("coverImageUrl"),
+                root.get("title"),
+                userProfile.get("name"),
+                root.get("startAt"),
+                root.get("endAt"),
+                root.get("createAt"),
+                root.get("workflowStatus"),
+                root.get("registrationStartAt"),
+                root.get("registrationEndAt"),
+                root.get("brandPublicAt"),
+                root.get("maxBooths"),
+                EventSpecification.registeredBoothCountSubquery(root, cq, cb));
+        cq.orderBy(cb.desc(root.get("createAt")));
+
+        List<Tuple> rows = entityManager.createQuery(cq)
+                .setFirstResult(pageNumber * pageSize)
+                .setMaxResults(pageSize)
+                .getResultList();
 
         // 塞資料
         List<AdminEventsItemDto> dtoList = new ArrayList<>();
-        for (MarketEvent item : list) {
+        for (Tuple row : rows) {
+            LocalDateTime startAt = row.get(4, LocalDateTime.class);
+            LocalDateTime endAt = row.get(5, LocalDateTime.class);
+
             AdminEventsItemDto dtoItem = new AdminEventsItemDto();
-            dtoItem.setId(item.getId());
-            dtoItem.setImgUrl(item.getCoverImageUrl());
-            dtoItem.setName(item.getTitle());
-            dtoItem.setOrganizer(item.getUser().getUserProfile().getName());
-            dtoItem.setStartDate(item.getStartAt().format(dateFormatter));
-            dtoItem.setEndDate(item.getEndAt().format(dateFormatter));
-            dtoItem.setCreatedAt(item.getCreateAt().format(dateTimeFormatter));
-            dtoItem.setStatus(changeToEventStatus(item).toString());
+            dtoItem.setId(row.get(0, Long.class));
+            dtoItem.setImgUrl(row.get(1, String.class));
+            dtoItem.setName(row.get(2, String.class));
+            dtoItem.setOrganizer(row.get(3, String.class));
+            dtoItem.setStartDate(startAt.format(dateFormatter));
+            dtoItem.setEndDate(endAt.format(dateFormatter));
+            dtoItem.setCreatedAt(row.get(6, LocalDateTime.class).format(dateTimeFormatter));
+            dtoItem.setStatus(checkEventStatus(
+                    row.get(7, WorkflowStatus.class),
+                    row.get(8, LocalDateTime.class),
+                    row.get(9, LocalDateTime.class),
+                    row.get(10, LocalDateTime.class),
+                    startAt,
+                    endAt,
+                    row.get(11, Integer.class),
+                    row.get(12, Long.class).intValue()).toString());
             dtoList.add(dtoItem);
         }
 
@@ -125,7 +179,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // 設定管理員後台: 活動詳細
     @Override
-    public AdminEventDetailDto setEventDetail(@NonNull Long eventId) {
+    public AdminEventDetailDto getEventDetail(@NonNull Long eventId) {
 
         // 撈資料
         MarketEvent event = eventRepo.findById(eventId)
@@ -199,39 +253,39 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // for 管理員後台使用者搜尋
     @Override
-    public List<AdminUserItemDto> setUserList(int pageNumber, int pageSize) {
+    public List<AdminUserItemDto> getUserList(int pageNumber, int pageSize) {
         // TODO: 設定管理員後台: 使用者搜尋
         throw new UnsupportedOperationException("Unimplemented method 'setUserList'");
     }
 
     @Override
-    public List<AdminUserItemDto> setUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
+    public List<AdminUserItemDto> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
         // TODO: 設定管理員後台: 使用者搜尋: 搜尋:?
         throw new UnsupportedOperationException("Unimplemented method 'setUserList'");
     }
 
     // for 管理員後台使用者詳細
     @Override
-    public AdminVenderDetailDto setVenderDetail(Long userId) {
+    public AdminVenderDetailDto getVenderDetail(Long userId) {
         // TODO: 設定管理員後台: 攤主詳細
         throw new UnsupportedOperationException("Unimplemented method 'setVenderDetail'");
     }
 
     @Override
-    public AdminOrganizerDetailDto setOrganizerDetail(Long userId) {
+    public AdminOrganizerDetailDto getOrganizerDetail(Long userId) {
         // TODO: 設定管理員後台: 主辦方詳細
         throw new UnsupportedOperationException("Unimplemented method 'setOrganizerDetail'");
     }
 
     // for 管理員後台Logs
     @Override
-    public AdminLogsDto setLogs(int pageNumber, int pageSize) {
+    public AdminLogsDto getLogs(int pageNumber, int pageSize) {
         // TODO: 設定管理員後台: 操作紀錄
         throw new UnsupportedOperationException("Unimplemented method 'setLogs'");
     }
 
     @Override
-    public AdminLogsDto setLogs(AdminLogSearchDto request, int pageNumber, int pageSize) {
+    public AdminLogsDto getLogs(AdminLogSearchDto request, int pageNumber, int pageSize) {
         // TODO: 設定管理員後台: 操作紀錄 搜尋:?
         throw new UnsupportedOperationException("Unimplemented method 'setLogs'");
     }

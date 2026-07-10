@@ -85,7 +85,6 @@ public class EventSpecification {
             LocalDateTime now = LocalDateTime.now();
             Expression<Long> registeredBoothCount = registeredBoothCountSubquery(root, query, cb);
 
-            //TODO:AI寫的，檢查!!!
             return switch (status) {
                 case DRAFT -> cb.equal(root.get("workflowStatus"), WorkflowStatus.DRAFT);
                 case PENDING_REVIEW -> cb.equal(root.get("workflowStatus"), WorkflowStatus.PENDING_REVIEW);
@@ -130,9 +129,8 @@ public class EventSpecification {
         };
     }
 
-    //TODO:AI寫的，檢查!!!
     /** 計算活動目前報名攤位數(不計入被拒絕的攤位)，作法對應{@link com.example.demo.Repository.EventRepo#countRegBoothsByEventId} */
-    private static Expression<Long> registeredBoothCountSubquery(
+    public static Expression<Long> registeredBoothCountSubquery(
             Root<MarketEvent> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
         Subquery<Long> subquery = query.subquery(Long.class);
         Root<EventApplication> application = subquery.from(EventApplication.class);
