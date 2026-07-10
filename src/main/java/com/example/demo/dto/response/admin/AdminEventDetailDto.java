@@ -41,7 +41,7 @@ public class AdminEventDetailDto {
     private String address;
     /**主辦方統一編號 */
     private String taxId;
-    /**主辦方營業時間 */
+    /**主辦方營業時間 周一 ~ 周五 HH:mm - HH:mm */
     private String serviceHours;
     /**活動交通方式-捷運 */
     private String mrt;
@@ -55,10 +55,11 @@ public class AdminEventDetailDto {
     private String boothCount;
     /**攤位價格 */
     private String boothPrice;
-    /**攤位分區 */
-    private String[] boothZones;
+    /**攤位分區清單 */
+    private List<BoothZone> boothZones;
     /**攤位地圖底圖url */
     private String boothLayoutImage;
     /**活動狀態logs */
     private List<StatusLog> logs;
+
 }
