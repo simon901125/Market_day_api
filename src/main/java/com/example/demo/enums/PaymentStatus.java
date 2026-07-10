@@ -1,12 +1,17 @@
 package com.example.demo.enums;
 
+import com.example.demo.entity.EventApplication;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**用來對應{@link com.example.demo.entity.EventApplication}中的付款狀態 */
+/**
+ * 攤主報名活動的付款狀態，包含待付款、付款成功、付款失敗、已逾期
+ * 
+ * @see EventApplication#paymentStatus
+ */
 @Getter
 @RequiredArgsConstructor
 public enum PaymentStatus {

@@ -1,12 +1,17 @@
 package com.example.demo.enums;
 
+import com.example.demo.entity.EventApplication;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**用來對應{@link com.example.demo.entity.EventApplication}中的保證金狀態 */
+/**
+ * 攤主報名活動的保證金狀態，包含保證金未退還、保證金已退還
+ * 
+ * @see EventApplication#depositStatus
+ */
 @Getter
 @RequiredArgsConstructor
 public enum DepositStatus {

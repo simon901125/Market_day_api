@@ -22,8 +22,13 @@ import com.example.demo.enums.PaymentStatus;
 import com.example.demo.enums.ReviewStatus;
 
 /**
- * EventApplication
- * 攤位報名的Entity
+ * 攤位報名的Entity。<br>
+ * 包含報名單編號、車牌號碼、申請人備註、建立時間、是否已取消<br>
+ * <b>金流相關</b>: 總金額、付款狀態{@link PaymentStatus}、保證金金額、保證金狀態{@link DepositStatus}、付款截止時間<br>
+ * <b>審核相關</b>: 審核狀態{@link }、審核備註<br>
+ * <b>FK</b>: 市集活動{@link MarketEvent#eventApplications}、使用者{@link User#eventApplications}、攤主資料(尚未實作)
+ * 
+ * 
  */
 @Entity
 @Data
@@ -38,10 +43,6 @@ public class EventApplication {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**報名單編號 */
-    @Column(name = "application_no", length = 30, nullable = false)
-    private String applicationNo;
-
     /**報名的活動 */
     @ManyToOne
     @JoinColumn(name = "event_id", nullable = false, foreignKey = @ForeignKey(name = "FK_event_applications_market_events"))
@@ -51,11 +52,15 @@ public class EventApplication {
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "FK_event_applications_users"))
     private User user;
-
+    
     //TODO:建立攤主資料Entity後要連上去
     /**報名的攤主資料id */
     @Column(name = "vendor_profile_id", nullable = false)
     private Long vendorProfileId;
+    
+    /**報名單編號 */
+    @Column(name = "application_no", length = 30, nullable = false)
+    private String applicationNo;
 
     /**車牌號碼 */
     @Column(name = "vehicle_no", length = 30)
