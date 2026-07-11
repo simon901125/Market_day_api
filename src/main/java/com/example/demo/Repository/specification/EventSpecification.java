@@ -24,19 +24,21 @@ public class EventSpecification {
     public static Specification<MarketEvent> build(AdminEventSearchDto request) {
         return Specification.allOf(
                 withKeywordName(request.keywordName()),
-                withOrganizer(request.Organizer()),
+                withOrganizer(request.organizer()),
                 withStartAt(request.startAt()),
                 withEndAt(request.endAt()),
                 withStatus(request.status()));
     }
 
-    /** 活動名稱模糊搜尋 */
+    /** 活動名稱/主辦方名稱模糊搜尋 */
     private static Specification<MarketEvent> withKeywordName(String keywordName) {
         return (root, query, cb) -> {
             if (keywordName == null || keywordName.isBlank()) {
                 return null;
             }
-            return cb.like(cb.lower(root.get("title")), "%" + keywordName.toLowerCase() + "%");
+            return cb.or(
+                cb.like(cb.lower(root.get("title")), "%" + keywordName.toLowerCase() + "%"), 
+                cb.like(cb.lower(root.get("user").get("userProfile").get("name")), "%" + keywordName.toLowerCase() + "%"));
         };
     }
 
@@ -46,9 +48,8 @@ public class EventSpecification {
             if (organizer == null || organizer.isBlank()) {
                 return null;
             }
-            return cb.like(
-                    cb.lower(root.get("user").get("userProfile").get("name")),
-                    "%" + organizer.toLowerCase() + "%");
+            return cb.equal(
+                    cb.lower(root.get("user").get("userProfile").get("name")), organizer.toLowerCase());
         };
     }
 
@@ -68,7 +69,7 @@ public class EventSpecification {
             if (endAt == null) {
                 return null;
             }
-            return cb.lessThanOrEqualTo(root.<LocalDateTime>get("endAt"), endAt);
+            return cb.lessThan(root.<LocalDateTime>get("endAt"), endAt.plusDays(1));
         };
     }
 
@@ -129,7 +130,9 @@ public class EventSpecification {
         };
     }
 
-    /** 計算活動目前報名攤位數(不計入被拒絕的攤位)，作法對應{@link com.example.demo.Repository.EventRepo#countRegBoothsByEventId} */
+    /**
+     * 計算活動目前報名攤位數(不計入被拒絕的攤位)，作法對應{@link com.example.demo.Repository.EventRepo#countRegBoothsByEventId}
+     */
     public static Expression<Long> registeredBoothCountSubquery(
             Root<MarketEvent> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
         Subquery<Long> subquery = query.subquery(Long.class);

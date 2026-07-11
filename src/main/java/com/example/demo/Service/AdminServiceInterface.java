@@ -1,47 +1,43 @@
 package com.example.demo.Service;
 
-import java.util.List;
-
 import org.springframework.lang.NonNull;
 
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminLogSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
+import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.dto.response.admin.AdminEventDetailDto;
-import com.example.demo.dto.response.admin.AdminEventsItemDto;
-import com.example.demo.dto.response.admin.AdminLogsDto;
 import com.example.demo.dto.response.admin.AdminOrganizerDetailDto;
-import com.example.demo.dto.response.admin.AdminUserItemDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
 
 import jakarta.annotation.Nonnull;
 
 public interface AdminServiceInterface {
     /**設定管理員後台: 首頁資料統計部分 */
-    AdminDashboardDto setDashboardResponse();
+    AdminDashboardDto getDashboardResponse();
     /**設定管理員後台: 通知中心 */
-    Object setNotice(String bookMark, int pageNumber, int pageSize);
-    /**設定管理員後台: 活動搜尋 */
-    List<AdminEventsItemDto> setEventsList(int pageNumber, int pageSize);
-    /**設定管理員後台: 活動搜尋: 搜尋:? */
-    List<AdminEventsItemDto> setEventsList(AdminEventSearchDto request, int pageNumber, int pageSize);
+    Object getNotice(String bookMark, int pageNumber, int pageSize);
+    /**
+     * 設定管理員後台: 活動搜尋
+     * @param request 搜尋條件: {@link AdminEventSearchDto}
+     * @param pageNumber 頁碼，base-1: int 
+     * @param pageSize 每頁筆數: int
+     * @return PageResponse<T> {@link PageResponse} 頁碼設定: base-1
+     */
+    PageResponse<?> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize);
     /**設定管理員後台: 活動詳細 */
-    AdminEventDetailDto setEventDetail(@NonNull Long eventId);
+    AdminEventDetailDto getEventDetail(@NonNull Long eventId);
     /**設定管理員後台: 使用者搜尋 */
-    List<AdminUserItemDto> setUserList(int pageNumber, int pageSize);
-    /**設定管理員後台: 使用者搜尋: 搜尋:? */
-    List<AdminUserItemDto> setUserList(AdminUserSearchDto request, int pageNumber, int pageSize);
+    PageResponse<?> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize);
     /**設定管理員後台: 攤主詳細 */
-    AdminVenderDetailDto setVenderDetail(@NonNull Long userId);
-    //TODO:感覺還要加 攤主詳細:活動和Logs的setter
+    AdminVenderDetailDto getVenderDetail(@NonNull Long userId);
+    //TODO:感覺還要加 攤主詳細:活動和Logs的getter
 
     /**設定管理員後台: 主辦方詳細 */
-    AdminOrganizerDetailDto setOrganizerDetail(@Nonnull Long userId);
-    //TODO:感覺還要加 主辦方詳細:活動和Logs的setter
+    AdminOrganizerDetailDto getOrganizerDetail(@Nonnull Long userId);
+    //TODO:感覺還要加 主辦方詳細:活動和Logs的getter
 
     /**設定管理員後台: 操作紀錄 */
-    AdminLogsDto setLogs(int pageNumber, int pageSize);
-    /**設定管理員後台: 操作紀錄 搜尋:? */
-    AdminLogsDto setLogs(AdminLogSearchDto request, int pageNumber, int pageSize);
+    PageResponse<?> getLogs(AdminLogSearchDto request, int pageNumber, int pageSize);
 }

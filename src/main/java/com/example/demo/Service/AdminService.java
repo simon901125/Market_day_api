@@ -6,9 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
@@ -19,12 +16,11 @@ import com.example.demo.Repository.specification.EventSpecification;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminLogSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
+import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.dto.response.admin.AdminEventDetailDto;
 import com.example.demo.dto.response.admin.AdminEventsItemDto;
-import com.example.demo.dto.response.admin.AdminLogsDto;
 import com.example.demo.dto.response.admin.AdminOrganizerDetailDto;
-import com.example.demo.dto.response.admin.AdminUserItemDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
 import com.example.demo.dto.response.admin.BoothZone;
 import com.example.demo.entity.EventStallZone;
@@ -61,7 +57,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
-    //設定管理員後台: 首頁資料統計部分
+    // 設定管理員後台: 首頁資料統計部分
     @Override
     public AdminDashboardDto getDashboardResponse() {
         LocalDateTime now = LocalDateTime.now();
@@ -87,46 +83,23 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // 設定管理員後台: 活動搜尋
     @Override
-    public List<AdminEventsItemDto> getEventsList(int pageNumber, int pageSize) {
-        Pageable pageable = PageRequest.of(pageNumber, pageSize); // 設定分頁
-        Page<AdminEventItemProjection> list = eventRepo.findAllByOrderByCreateAtDesc(pageable); // 撈資料
-
-        // 塞資料
-        List<AdminEventsItemDto> dtoList = new ArrayList<>();
-        for (AdminEventItemProjection item : list) {
-            AdminEventsItemDto dtoItem = new AdminEventsItemDto();
-            dtoItem.setId(item.getId());
-            dtoItem.setImgUrl(item.getImgUrl());
-            dtoItem.setName(item.getName());
-            dtoItem.setOrganizer(item.getOrganizer());
-            dtoItem.setStartDate(item.getStartAt().format(dateFormatter));
-            dtoItem.setEndDate(item.getEndAt().format(dateFormatter));
-            dtoItem.setCreatedAt(item.getCreateAt().format(dateTimeFormatter));
-            dtoItem.setStatus(changeToEventStatus(item).toString());
-
-            dtoList.add(dtoItem);
-        }
-
-        return dtoList;
-    }
-
-    // 設定管理員後台: 活動搜尋: 搜尋:?
-    @Override
-    public List<AdminEventsItemDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize) {
-        Specification<MarketEvent> spec = EventSpecification.build(request); // 設定搜尋條件
-
-        // 只select頁面需要用到的欄位,避免撈出MarketEvent整張表
+    public PageResponse<AdminEventsItemDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize) {
+        //----------只撈頁面需要用到的欄位，避免撈出整張表----------
+        // 設定要join的表
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<MarketEvent> root = cq.from(MarketEvent.class);
         Join<MarketEvent, User> user = root.join("user");
         Join<User, UserProfile> userProfile = user.join("userProfile");
-
-        Predicate predicate = spec.toPredicate(root, cq, cb); // 沿用EventSpecification組出的搜尋條件
+        
+        // 設定搜尋條件
+        Specification<MarketEvent> spec = EventSpecification.build(request); 
+        Predicate predicate = spec.toPredicate(root, cq, cb);
         if (predicate != null) {
             cq.where(predicate);
         }
 
+        //組裝select欄位
         cq.multiselect(
                 root.get("id"),
                 root.get("coverImageUrl"),
@@ -141,14 +114,18 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 root.get("brandPublicAt"),
                 root.get("maxBooths"),
                 EventSpecification.registeredBoothCountSubquery(root, cq, cb));
+        //設定orderBy: 活動創建時間:由新到舊(desc)
         cq.orderBy(cb.desc(root.get("createAt")));
-
+        //查詢結果(有設定limit)
         List<Tuple> rows = entityManager.createQuery(cq)
-                .setFirstResult(pageNumber * pageSize)
+                .setFirstResult((pageNumber - 1) * pageSize)
                 .setMaxResults(pageSize)
                 .getResultList();
 
-        // 塞資料
+        // 另外查詢符合條件的總筆數
+        long total = eventRepo.count(spec);
+
+        //----------設定回傳資料----------
         List<AdminEventsItemDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
             LocalDateTime startAt = row.get(4, LocalDateTime.class);
@@ -174,26 +151,28 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             dtoList.add(dtoItem);
         }
 
-        return dtoList;
+        PageResponse<AdminEventsItemDto> response = new PageResponse<>(dtoList, pageNumber, pageSize, total);
+        return response;
     }
 
     // 設定管理員後台: 活動詳細
     @Override
     public AdminEventDetailDto getEventDetail(@NonNull Long eventId) {
+        //----------撈資料----------
 
-        // 撈資料
+        //TODO:定義projection
         MarketEvent event = eventRepo.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
         UserProfile profile = event.getUser().getUserProfile();
         OrganizerProfile organizerProfile = profile.getOrganizerProfile();
-
-        // 塞資料
+        //----------塞資料----------
         AdminEventDetailDto dto = new AdminEventDetailDto();
+        //活動基本資料:活動名稱、活動類型
         dto.setEventName(event.getTitle());
         dto.setEventType(changeToEventStatus(event).getDescription());
 
         String eventTime = String.format(
-                "%s ~ %s %s~%s", 
+                "%s ~ %s %s~%s",
                 event.getStartAt().format(dateFormatter),
                 event.getEndAt().format(dateFormatter),
                 event.getStartAt().format(timeFormatter),
@@ -217,26 +196,26 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         dto.setTaxId(organizerProfile.getTaxId());
 
         String serviceHours = String.format(
-            "%s %s~$s", 
-            organizerProfile.getServiceDays(),
-            organizerProfile.getServiceStartTime().format(timeFormatter),
-            organizerProfile.getServiceEndTime().format(timeFormatter)
-        );
+                "%s %s~$s",
+                organizerProfile.getServiceDays(),
+                organizerProfile.getServiceStartTime().format(timeFormatter),
+                organizerProfile.getServiceEndTime().format(timeFormatter));
         dto.setServiceHours(serviceHours);
 
-        //TODO:詢問交通方式欄位
+        // TODO:詢問交通方式欄位
         dto.setMrt(event.getTrafficInfo());
         dto.setBus(null);
         dto.setDrivingDirections(null);
 
-        String boothSpec = String.format("%d * %d", event.getEventStalls().getFirst().getWidth(), event.getEventStalls().getFirst().getLength());
+        String boothSpec = String.format("%d * %d", event.getEventStalls().getFirst().getWidth(),
+                event.getEventStalls().getFirst().getLength());
         dto.setBoothSpec(boothSpec);
 
         dto.setBoothCount(event.getMaxBooths().toString());
         dto.setBoothPrice(event.getBaseFee().toString());
 
         List<EventStallZone> stallZones = event.getEventStallZones();
-        List<BoothZone> dtoBoothZones= new ArrayList<>();
+        List<BoothZone> dtoBoothZones = new ArrayList<>();
         for (EventStallZone stallZone : stallZones) {
             BoothZone boothZone = new BoothZone();
             boothZone.setName(stallZone.getZoneName());
@@ -246,21 +225,14 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         dto.setBoothZones(dtoBoothZones);
 
         dto.setBoothLayoutImage(event.getMapImageUrl());
-        dto.setLogs(null); //TODO:等問清楚系統LOG記錄再做
+        dto.setLogs(null); // TODO:等問清楚系統LOG記錄再做
 
         return dto;
     }
 
-    // for 管理員後台使用者搜尋
     @Override
-    public List<AdminUserItemDto> getUserList(int pageNumber, int pageSize) {
+    public PageResponse<?> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
         // TODO: 設定管理員後台: 使用者搜尋
-        throw new UnsupportedOperationException("Unimplemented method 'setUserList'");
-    }
-
-    @Override
-    public List<AdminUserItemDto> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
-        // TODO: 設定管理員後台: 使用者搜尋: 搜尋:?
         throw new UnsupportedOperationException("Unimplemented method 'setUserList'");
     }
 
@@ -277,16 +249,9 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         throw new UnsupportedOperationException("Unimplemented method 'setOrganizerDetail'");
     }
 
-    // for 管理員後台Logs
     @Override
-    public AdminLogsDto getLogs(int pageNumber, int pageSize) {
+    public PageResponse<?> getLogs(AdminLogSearchDto request, int pageNumber, int pageSize) {
         // TODO: 設定管理員後台: 操作紀錄
-        throw new UnsupportedOperationException("Unimplemented method 'setLogs'");
-    }
-
-    @Override
-    public AdminLogsDto getLogs(AdminLogSearchDto request, int pageNumber, int pageSize) {
-        // TODO: 設定管理員後台: 操作紀錄 搜尋:?
         throw new UnsupportedOperationException("Unimplemented method 'setLogs'");
     }
 

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
+import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.admin.AdminEventsItemDto;
 import com.example.demo.entity.Category;
 import com.example.demo.entity.EventApplication;
@@ -69,10 +69,12 @@ class AdminServiceEventSearchTest {
         entityManager.clear();
 
         AdminEventSearchDto request = new AdminEventSearchDto("花市", null, null, null, null);
-        List<AdminEventsItemDto> result = adminService.getEventsList(request, 0, 10);
+        // pageNumber 從1開始計算
+        PageResponse<AdminEventsItemDto> result = adminService.getEventsList(request, 1, 10);
 
-        assertThat(result).hasSize(1);
-        AdminEventsItemDto dto = result.get(0);
+        assertThat(result.getTotalItems()).isEqualTo(1);
+        assertThat(result.getItems()).hasSize(1);
+        AdminEventsItemDto dto = result.getItems().get(0);
         assertThat(dto.getId()).isEqualTo(matchingEvent.getId());
         assertThat(dto.getName()).isEqualTo("假日花市開幕");
         assertThat(dto.getOrganizer()).isEqualTo("測試主辦方");

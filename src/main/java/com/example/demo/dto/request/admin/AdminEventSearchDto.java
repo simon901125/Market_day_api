@@ -6,17 +6,19 @@ import com.example.demo.enums.EventStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/**管理員: 活動搜尋頁面搜尋請求 */
-@Schema(description = "管理員: 活動搜尋頁面搜尋請求")
+/**
+ * 管理員: 活動搜尋頁面搜尋條件
+ * @param keywordName 活動/主辦方名稱(模糊搜尋) :String
+ * @param organizer 活動主辦方 :String
+ * @param status 活動狀態{@link EventStatus}
+ * @param startAt 活動開始時間 :LocalDateTime
+ * @param endAt 活動結束時間 :LocalDateTime
+ */
+@Schema(description = "管理員: 活動搜尋頁面搜尋條件")
 public record AdminEventSearchDto(
-    //活動名稱
     String keywordName, 
-    //活動主辦方
-    String Organizer,
-    //活動狀態
+    String organizer,
     EventStatus status,
-    //活動開始時間
     LocalDateTime startAt,
-    //活動結束時間
     LocalDateTime endAt
 ) {}
