@@ -87,10 +87,6 @@ public class EventApplication {
     @Column(name = "review_status", length = 30, nullable = false)
     private ReviewStatus reviewStatus = ReviewStatus.PENDING;
 
-    /**審核備註 */
-    @Column(name = "review_note", columnDefinition = "nvarchar(max)")
-    private String reviewNote;
-
     /**付款狀態 */
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", length = 30, nullable = false)

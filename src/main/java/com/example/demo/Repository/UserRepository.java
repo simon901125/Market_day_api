@@ -108,24 +108,22 @@ public class UserRepository {
     public void createUserProfile(Long userId, String profileType, String name, String email) {
         String sql = """
                 INSERT INTO user_profiles (
-                    user_id, profile_type, name
+                    user_id, profile_type
                 )
                 VALUES (
-                    :userId, :profileType, :name
+                    :userId, :profileType
                 )
                 """;
         Map<String, Object> map = new HashMap<>();
-        String profileName = name == null || name.isBlank() ? email : name;
         map.put("userId", userId);
         map.put("profileType", profileType);
-        map.put("name", profileName);
         namedParameterJdbcTemplate.update(sql, map);
     }
 
     public Optional<Map<String, Object>> findLocalUserByEmail(String email) {
         String sql = """
                 SELECT u.id, u.role, u.email, u.password_hash, u.provider, u.status, u.isLogin,
-                       up.name AS name,
+                       COALESCE(vp.brand_name, op.organizer_name) AS name,
                        up.contact_phone AS phone,
                        u.google_sub AS googleSub,
                        u.email_verified_at AS emailVerifiedAt,
@@ -134,6 +132,8 @@ public class UserRepository {
                        u.updated_at AS updatedAt
                 FROM users u
                     LEFT JOIN user_profiles up ON up.user_id = u.id AND up.profile_type = u.role
+                    LEFT JOIN vendor_profiles vp ON vp.user_profile_id = up.id
+                    LEFT JOIN organizer_profiles op ON op.user_profile_id = up.id
                 WHERE u.email = :email
                   AND u.provider IN ('LOCAL', 'BOTH')
                 """;
@@ -146,7 +146,7 @@ public class UserRepository {
     public Optional<Map<String, Object>> findProfileByEmail(String email) {
         String sql = """
                 SELECT u.id, u.role, u.email, u.provider,
-                       up.name AS name,
+                       COALESCE(vp.brand_name, op.organizer_name) AS name,
                        up.contact_phone AS phone,
                        u.google_sub AS googleSub,
                        u.status, u.isLogin,
@@ -156,6 +156,8 @@ public class UserRepository {
                        u.updated_at AS updatedAt
                 FROM users u
                     LEFT JOIN user_profiles up ON up.user_id = u.id AND up.profile_type = u.role
+                    LEFT JOIN vendor_profiles vp ON vp.user_profile_id = up.id
+                    LEFT JOIN organizer_profiles op ON op.user_profile_id = up.id
                 WHERE u.email = :email
                 """;
         Map<String, Object> map = new HashMap<>();
@@ -167,7 +169,7 @@ public class UserRepository {
     public Optional<Map<String, Object>> findGoogleUserBySub(String googleSub) {
         String sql = """
                 SELECT u.id, u.role, u.email, u.provider,
-                       up.name AS name,
+                       COALESCE(vp.brand_name, op.organizer_name) AS name,
                        up.contact_phone AS phone,
                        u.google_sub AS googleSub,
                        u.status, u.isLogin,
@@ -177,6 +179,8 @@ public class UserRepository {
                        u.updated_at AS updatedAt
                 FROM users u
                     LEFT JOIN user_profiles up ON up.user_id = u.id AND up.profile_type = u.role
+                    LEFT JOIN vendor_profiles vp ON vp.user_profile_id = up.id
+                    LEFT JOIN organizer_profiles op ON op.user_profile_id = up.id
                 WHERE u.google_sub = :googleSub
                   AND u.provider IN ('GOOGLE', 'BOTH')
                 """;

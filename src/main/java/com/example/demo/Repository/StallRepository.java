@@ -144,7 +144,7 @@ public class StallRepository {
                     u.provider,
                     up.id AS userProfileId,
                     vp.id AS vendorProfileId,
-                    up.name,
+                    vp.brand_name AS name,
                     up.contact_name AS contactName,
                     up.contact_phone AS contactPhone,
                     up.contact_email AS contactEmail,
@@ -157,14 +157,30 @@ public class StallRepository {
                     vp.instagram_url AS instagramUrl,
                     vp.facebook_url AS facebookUrl,
                     vp.website_url AS websiteUrl,
+                    avatar.image_url AS avatarImageUrl,
+                    cover.image_url AS coverImageUrl,
                     vp.brand_description AS brandDescription,
-                    vp.brand_type AS brandType,
-                    vp.product_summary AS productSummary
+                    c.name AS brandType,
+                    vp.brand_summary AS brandSummary
                 FROM dbo.users u
                 INNER JOIN dbo.user_profiles up ON up.user_id = u.id
                     AND up.profile_type = N'VENDOR'
                 INNER JOIN dbo.vendor_profiles vp ON vp.user_profile_id = up.id
                 INNER JOIN dbo.categories c ON c.id = vp.category_id
+                OUTER APPLY (
+                    SELECT TOP 1 vi.image_url
+                    FROM dbo.vendor_images vi
+                    WHERE vi.vendor_profile_id = vp.id
+                      AND vi.image_type = N'AVATAR'
+                    ORDER BY vi.id DESC
+                ) avatar
+                OUTER APPLY (
+                    SELECT TOP 1 vi.image_url
+                    FROM dbo.vendor_images vi
+                    WHERE vi.vendor_profile_id = vp.id
+                      AND vi.image_type = N'COVER'
+                    ORDER BY vi.id DESC
+                ) cover
                 WHERE u.email = :email
                 """;
 
@@ -172,6 +188,191 @@ public class StallRepository {
         map.put("email", email);
 
         return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    public List<Map<String, Object>> findVendorProducts(Long vendorProfileId) {
+        String sql = """
+                SELECT
+                    id,
+                    vendor_profile_id AS vendorProfileId,
+                    name AS productName,
+                    price AS productPrice,
+                    short_description AS productSummary,
+                    image_url AS productImageUrl,
+                    status
+                FROM dbo.vendor_products
+                WHERE vendor_profile_id = :vendorProfileId
+                  AND status = N'ACTIVE'
+                ORDER BY id ASC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("vendorProfileId", vendorProfileId);
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
+    public Optional<Map<String, Object>> findVendorProduct(Long vendorProfileId, Long productId) {
+        String sql = """
+                SELECT
+                    id,
+                    vendor_profile_id AS vendorProfileId,
+                    name AS productName,
+                    price AS productPrice,
+                    short_description AS productSummary,
+                    image_url AS productImageUrl,
+                    status
+                FROM dbo.vendor_products
+                WHERE id = :productId
+                  AND vendor_profile_id = :vendorProfileId
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("vendorProfileId", vendorProfileId);
+        map.put("productId", productId);
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    public Optional<Long> findActiveCategoryIdByName(String categoryName) {
+        String sql = """
+                SELECT TOP 1 id
+                FROM dbo.categories
+                WHERE name = :categoryName
+                  AND is_active = 1
+                ORDER BY id ASC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("categoryName", categoryName);
+        return namedParameterJdbcTemplate.queryForList(sql, map, Long.class).stream().findFirst();
+    }
+
+    public int updateVendorProfile(Long userId, Long vendorProfileId, Map<String, Object> profile) {
+        String sql = """
+                UPDATE up
+                SET contact_name = :contactName,
+                    contact_phone = :contactPhone,
+                    contact_email = :contactEmail,
+                    city = :city,
+                    district = :district,
+                    address = :address
+                FROM dbo.user_profiles up
+                INNER JOIN dbo.vendor_profiles vp ON vp.user_profile_id = up.id
+                WHERE up.user_id = :userId
+                  AND up.profile_type = N'VENDOR'
+                  AND vp.id = :vendorProfileId;
+
+                UPDATE dbo.vendor_profiles
+                SET category_id = :categoryId,
+                    brand_name = :brandName,
+                    instagram_url = :instagramUrl,
+                    facebook_url = :facebookUrl,
+                    website_url = :websiteUrl,
+                    brand_summary = :brandSummary,
+                    brand_description = :brandDescription
+                WHERE id = :vendorProfileId;
+                """;
+
+        Map<String, Object> map = new HashMap<>(profile);
+        map.put("userId", userId);
+        map.put("vendorProfileId", vendorProfileId);
+        return namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public void saveVendorImage(Long vendorProfileId, String imageType, String imageUrl) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("vendorProfileId", vendorProfileId);
+        map.put("imageType", imageType);
+        map.put("imageUrl", imageUrl);
+
+        if (imageUrl == null || imageUrl.isBlank()) {
+            String deleteSql = """
+                    DELETE FROM dbo.vendor_images
+                    WHERE vendor_profile_id = :vendorProfileId
+                      AND image_type = :imageType
+                    """;
+            namedParameterJdbcTemplate.update(deleteSql, map);
+            return;
+        }
+
+        String sql = """
+                UPDATE dbo.vendor_images
+                SET image_url = :imageUrl
+                WHERE vendor_profile_id = :vendorProfileId
+                  AND image_type = :imageType;
+
+                INSERT INTO dbo.vendor_images (vendor_profile_id, image_type, image_url)
+                SELECT :vendorProfileId, :imageType, :imageUrl
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM dbo.vendor_images
+                    WHERE vendor_profile_id = :vendorProfileId
+                      AND image_type = :imageType
+                );
+                """;
+        namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public Long createVendorProduct(Long vendorProfileId, Map<String, Object> product) {
+        String sql = """
+                INSERT INTO dbo.vendor_products (
+                    vendor_profile_id,
+                    name,
+                    short_description,
+                    description,
+                    price,
+                    image_url,
+                    is_featured,
+                    status
+                )
+                OUTPUT INSERTED.id
+                VALUES (
+                    :vendorProfileId,
+                    :productName,
+                    :productSummary,
+                    NULL,
+                    :productPrice,
+                    :productImageUrl,
+                    0,
+                    N'ACTIVE'
+                )
+                """;
+
+        Map<String, Object> map = new HashMap<>(product);
+        map.put("vendorProfileId", vendorProfileId);
+        return namedParameterJdbcTemplate.queryForObject(sql, map, Long.class);
+    }
+
+    public int updateVendorProduct(Long vendorProfileId, Long productId, Map<String, Object> product) {
+        String sql = """
+                UPDATE dbo.vendor_products
+                SET name = :productName,
+                    short_description = :productSummary,
+                    price = :productPrice,
+                    image_url = :productImageUrl,
+                    status = N'ACTIVE'
+                WHERE id = :productId
+                  AND vendor_profile_id = :vendorProfileId
+                """;
+
+        Map<String, Object> map = new HashMap<>(product);
+        map.put("vendorProfileId", vendorProfileId);
+        map.put("productId", productId);
+        return namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public int hideVendorProduct(Long vendorProfileId, Long productId) {
+        String sql = """
+                UPDATE dbo.vendor_products
+                SET status = N'HIDDEN'
+                WHERE id = :productId
+                  AND vendor_profile_id = :vendorProfileId
+                  AND status = N'ACTIVE'
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("vendorProfileId", vendorProfileId);
+        map.put("productId", productId);
+        return namedParameterJdbcTemplate.update(sql, map);
     }
 
     public int bindApplicationDateSelectedStall(Long applicationId, LocalDate applyDate, Long stallId) {
@@ -257,7 +458,7 @@ public class StallRepository {
                     date_counts.applicationDateCount,
                     date_counts.selectedStallCount,
                     application_dates.applyDates,
-                    up.name AS vendorName,
+                    vp.brand_name AS vendorName,
                     e.id AS eventId,
                     e.title AS eventTitle,
                     e.city,
@@ -327,8 +528,8 @@ public class StallRepository {
                         ELSE N'AVAILABLE'
                     END AS status,
                     selected_application.id AS selectedApplicationId,
-                    selected_vendor.name AS vendorName,
-                    selected_vp.brand_type AS brandType,
+                    selected_vp.brand_name AS vendorName,
+                    selected_category.name AS brandType,
                     selected_vendor.contact_name AS vendorOwnerName,
                     selected_at.selectedAt
                 FROM dbo.event_stalls s
@@ -338,6 +539,7 @@ public class StallRepository {
                 LEFT JOIN dbo.event_applications selected_application ON selected_application.id = selected_date.application_id
                     AND selected_application.is_cancelled = 0
                 LEFT JOIN dbo.vendor_profiles selected_vp ON selected_vp.id = selected_application.vendor_profile_id
+                LEFT JOIN dbo.categories selected_category ON selected_category.id = selected_vp.category_id
                 LEFT JOIN dbo.user_profiles selected_vendor ON selected_vendor.id = selected_vp.user_profile_id
                 OUTER APPLY (
                     SELECT TOP 1 rl.created_at AS selectedAt
@@ -467,7 +669,7 @@ public class StallRepository {
                     a.total_amount AS totalAmount,
                     a.created_at AS appliedAt,
                     selected_at.selectedAt,
-                    up.name AS brandName,
+                    vp.brand_name AS brandName,
                     up.contact_name AS vendorOwnerName,
                     up.contact_phone AS vendorPhone,
                     up.contact_email AS vendorEmail,
@@ -539,7 +741,7 @@ public class StallRepository {
                         WHEN a.id IS NOT NULL THEN N'SELECTED'
                         ELSE N'AVAILABLE'
                     END AS status,
-                    up.name AS vendorName
+                    vp.brand_name AS vendorName
                 FROM dbo.event_stalls s
                 INNER JOIN dbo.event_stall_zones z ON z.id = s.zone_id
                 LEFT JOIN dbo.application_dates ad ON ad.selected_stall_id = s.id
