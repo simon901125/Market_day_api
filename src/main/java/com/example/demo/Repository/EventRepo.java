@@ -1,8 +1,5 @@
 package com.example.demo.Repository;
 
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -10,7 +7,6 @@ import org.springframework.data.repository.query.Param;
 
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.enums.WorkflowStatus;
-import com.example.demo.projection.admin.AdminEventItemProjection;
 
 import java.time.LocalDateTime;
 
@@ -24,8 +20,6 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
     /** 計算(活動狀態=已經在平台發布並且沒有下架也沒有結束)的數量 */
     @Query("select count(e.id) from MarketEvent e where (e.workflowStatus = 'PUBLISHED' or e.workflowStatus = 'FINAL_REVIEW') and e.publicInfoAt <= :now and e.endAt >= :now")
     int countByEventInPlatform(LocalDateTime now);
-
-    Page<AdminEventItemProjection> findAllByOrderByCreateAtDesc(Pageable pageable);
 
     /** 計算活動目前報名攤位(不計入被拒絕的攤位) */
     @Query("select count(a.id) from EventApplication a where a.event.id = :eventId and a.reviewStatus != 'REJECTED'")
