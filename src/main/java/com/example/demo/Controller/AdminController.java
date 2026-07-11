@@ -11,6 +11,8 @@ import com.example.demo.Service.AdminService;
 import com.example.demo.Service.AdminServiceInterface;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminEventSearchRequest;
+import com.example.demo.dto.request.admin.AdminUserSearchDto;
+import com.example.demo.dto.request.admin.AdminUserSearchRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 
@@ -51,7 +53,7 @@ public class AdminController {
     /**
      * 用來獲取管理員後台: 活動搜尋頁面所需資料<br>
      * <b>API路徑</b>: /api/admin/events/search<br>
-     * @param data 搜尋條件與分頁參數，pageNumber從1開始計算
+     * @param request 搜尋條件與分頁參數，pageNumber從1開始計算
      * @return ApiResponse<T>
      */
     @Schema(description = "獲取管理員後台: 活動搜尋頁面所需資料")
@@ -98,10 +100,22 @@ public class AdminController {
         return ApiResponse.success("ok");
     }
 
+    /**
+     * 用來獲取管理員後台: 使用者搜尋頁面所需資料<br>
+     * <b>API路徑</b>: /api/admin/users/search<br>
+     * @param request 搜尋條件與分頁參數，pageNumber從1開始計算
+     * @return ApiResponse<T>
+     */
+    @Schema(description = "獲取管理員後台: 使用者搜尋頁面所需資料")
     @PostMapping("/users/search")
-    public ApiResponse<?> getUserList(@RequestBody Map<String, Object> data) {
-        // TODO:取得使用者列表
-        return ApiResponse.success("ok");
+    public ApiResponse<?> getUserList(@RequestBody AdminUserSearchRequest request) {
+        AdminUserSearchDto data = new AdminUserSearchDto(
+            request.keyWord(),
+            request.role(),
+            request.status()
+        );
+        
+        return ApiResponse.success("ok", service.getUserList(data, request.pageNumber(), request.pageSize()));
     }
 
     @GetMapping("/users/{id}")
