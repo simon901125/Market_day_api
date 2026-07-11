@@ -2,64 +2,83 @@ package com.example.demo.dto.response.admin;
 
 import java.util.List;
 
+import com.example.demo.dto.response.PageResponse;
+
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Data;
 
 /**管理員：活動詳細 */
-@Data
+/**
+ * 
+ * AdminEventDetailDto
+ * @param eventName 活動名稱
+ * @param coverImg 活動封面圖片url
+ * @param eventType 活動類型
+ * @param eventTime 活動時間 yyyy-MM-dd ~ yyyy-MM-dd  HH:mm~HH:mm
+ * @param locationName 活動地點名稱
+ * @param addr 活動地址
+ * @param eventNo 活動編號
+ * @param eventStatus 活動前端顯示狀態
+ * @param description 活動介紹
+ * @param registrationStartTime 報名開始時間 yyyy-MM-dd HH:mm
+ * @param registrationEndTime 報名結束時間 yyyy-MM-dd HH:mm
+ * @param finalListConfirmation 最終名單確認時間 yyyy-MM-dd HH:mm
+ * @param organizerName 主辦方公司名稱
+ * @param contactPerson 主辦方聯絡人
+ * @param contactPhone 主辦方聯絡電話
+ * @param email 主辦方聯絡email
+ * @param address 主辦方營業地址
+ * @param taxId 主辦方統一編號
+ * @param serviceHours 主辦方營業時間 周一 ~ 周五 HH:mm~HH:mm
+ * @param mrt 活動交通方式-捷運
+ * @param bus 活動交通方式-公車
+ * @param driving 活動交通方式-開車
+ * @param boothSpec 攤位規格 長 * 寬
+ * @param boothCount 攤位數量
+ * @param boothPrice 攤位價格
+ * @param boothZones 攤位分區清單
+ * @param boothLayoutImage 攤位地圖底圖url
+ * @param logs 活動狀態logs
+ */
 @Schema(description = "管理員活動詳細頁面")
-public class AdminEventDetailDto {
-    /**活動名稱 */
-    private String eventName;
-    /**活動類型 */
-    private String eventType;
-    /**活動時間 yyyy-MM-dd - yyyy-MM-dd  HH:mm - HH:mm*/
-    private String eventTime;
-    /**活動地點名稱 */
-    private String locationName;
-    /**活動地址 */
-    private String addr;
-    /**活動描述 */
-    private String description;
-    /**報名開始時間 yyyy-MM-dd HH:mm*/
-    private String registrationStartTime;
-    /**報名結束時間 yyyy-MM-dd HH:mm*/
-    private String registrationEndTime;
-    /**最終名單確認時間 yyyy-MM-dd HH:mm*/
-    private String finalListConfirmation;
-    /**活動時間 yyyy-MM-dd - yyyy-MM-dd  HH:mm - HH:mm*/
-    private String activityTime;
-    /**主辦方名稱 */
-    private String organizerName;
-    /**主辦方聯絡人 */
-    private String contactPerson;
-    /**主辦方聯絡電話 */
-    private String contactPhone;
-    /**主辦方聯絡email */
-    private String email;
-    /**主辦方營業地址 */
-    private String address;
-    /**主辦方統一編號 */
-    private String taxId;
-    /**主辦方營業時間 周一 ~ 周五 HH:mm - HH:mm */
-    private String serviceHours;
-    /**活動交通方式-捷運 */
-    private String mrt;
-    /**活動交通方式-公車 */
-    private String bus;
-    /**活動交通方式-開車 */
-    private String drivingDirections;
-    /**攤位規格 長 * 寬 */
-    private String boothSpec;
-    /**攤位數量 */
-    private String boothCount;
-    /**攤位價格 */
-    private String boothPrice;
-    /**攤位分區清單 */
-    private List<BoothZone> boothZones;
-    /**攤位地圖底圖url */
-    private String boothLayoutImage;
-    /**活動狀態logs */
-    private List<StatusLog> logs;
+public record AdminEventDetailDto(
+    //----------活動基礎狀態----------
+    String eventName,
+    String coverImg,
+    String eventType,
+    String eventTime,
+    String locationName,
+    String addr,
+    Long eventNo,
+    String eventStatus,
+    String description,
 
-}
+    //----------活動時間流程----------
+    String registrationStartTime,
+    String registrationEndTime,
+    String finalListConfirmation,
+
+    //----------活動主辦方資料----------
+    String organizerName,
+    String contactPerson,
+    String contactPhone,
+    String email,
+    String address,
+    String taxId,
+    String serviceHours,
+
+    //----------活動交通方式----------
+    String mrt,
+    String bus,
+    String driving,
+
+    //----------活動攤位資訊----------
+    String boothSpec,
+    String boothCount,
+    String boothPrice,
+    List<BoothZone> boothZones,
+    String boothLayoutImage,
+    
+    //----------活動狀態Logs----------
+    PageResponse<?> logs
+) {}
+
