@@ -21,6 +21,7 @@ import com.example.demo.Service.OrganizerService;
 import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
+import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.OrganizerAccountResponse;
@@ -34,7 +35,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
-@Tag(name = "主辦方 API", description = "提供主辦方帳號與主辦資料相關功能")
+@Tag(name = "主辦方 API", description = "主辦方帳務、報名、設備、攤位與個人資料 API")
 public class OrganizerController {
 
     @Autowired
@@ -43,7 +44,7 @@ public class OrganizerController {
     @Autowired
     private StallService stallService;
 
-    @Operation(summary = "查詢主辦方帳務列表", description = "未輸入條件時回傳目前主辦方發起的所有活動帳務，有條件時依活動名稱、發布狀態與活動日期篩選。")
+    @Operation(summary = "查詢主辦方帳務活動列表", description = "依活動名稱、狀態、活動日期與分頁查詢主辦方帳務活動。")
     @GetMapping("/api/organizer/accounts/search")
     public ApiResponse<OrganizerAccountingSearchResponse> searchOrganizerAccounts(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -63,7 +64,7 @@ public class OrganizerController {
                 pageSize);
     }
 
-    @Operation(summary = "取得主辦方活動帳務詳情", description = "依活動 ID 取得活動帳務摘要、統計與付款明細。")
+    @Operation(summary = "查詢主辦方活動帳務詳情", description = "依活動 ID 查詢帳務摘要、統計與付款明細。")
     @GetMapping("/api/organizer/accounts/{eventId}")
     public ApiResponse<MapBackedResponse> getOrganizerAccountDetail(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -79,7 +80,7 @@ public class OrganizerController {
                 paymentPageSize);
     }
 
-    @Operation(summary = "匯出主辦方活動帳務報表", description = "依活動 ID 產出帳務 Excel 報表，內含活動資訊、帳務摘要與付款明細工作表。")
+    @Operation(summary = "匯出主辦方活動帳務報表", description = "依活動 ID 匯出帳務 Excel 報表。")
     @GetMapping("/api/organizer/accounts/{eventId}/export")
     public ResponseEntity<byte[]> exportOrganizerAccountReport(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -88,14 +89,22 @@ public class OrganizerController {
         return reportResponse(organizerService.exportOrganizerAccountReport(authorizationHeader, eventId, status));
     }
 
-    @Operation(summary = "取得主辦方帳號資訊", description = "回傳目前登入主辦方的主辦方名稱、聯絡資訊、公司資訊、地址與服務時間。")
-    @GetMapping("/api/organizer/account")
-    public ApiResponse<OrganizerAccountResponse> getOrganizerAccount(
+    @Operation(summary = "載入主辦方資料", description = "取得目前登入主辦方的基本資料與服務時間。")
+    @GetMapping("/api/organizer/profile/load")
+    public ApiResponse<OrganizerAccountResponse> loadOrganizerProfile(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
-        return organizerService.getOrganizerAccount(authorizationHeader);
+        return organizerService.loadOrganizerProfile(authorizationHeader);
     }
 
-    @Operation(summary = "查詢主辦方報名列表", description = "依 Authorization 取得目前登入主辦方，並依活動名稱、狀態、品牌名稱、報名時間區間篩選報名資料。")
+    @Operation(summary = "儲存主辦方資料", description = "更新目前登入主辦方的基本資料與服務時間。")
+    @PostMapping("/api/organizer/profile/save")
+    public ApiResponse<OrganizerAccountResponse> saveOrganizerProfile(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody(required = false) OrganizerProfileSaveRequest body) {
+        return organizerService.saveOrganizerProfile(authorizationHeader, body);
+    }
+
+    @Operation(summary = "查詢主辦方報名列表", description = "依活動、狀態、品牌與報名日期查詢報名列表。")
     @GetMapping("/api/organizer/applications/search")
     public ApiResponse<OrganizerApplicationSearchResponse> searchOrganizerApplications(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -117,7 +126,7 @@ public class OrganizerController {
                 pageSize);
     }
 
-    @Operation(summary = "搜尋主辦方攤位管理活動", description = "依活動名稱、狀態與活動日期區間查詢可進入攤位管理的活動列表。")
+    @Operation(summary = "查詢主辦方攤位活動列表", description = "查詢主辦方攤位管理活動列表。")
     @GetMapping("/api/organizer/stalls/search")
     public ApiResponse<OrganizerStallEventSearchResponse> searchOrganizerStallEvents(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -137,7 +146,7 @@ public class OrganizerController {
                 pageSize);
     }
 
-    @Operation(summary = "查詢主辦方設備租借活動", description = "依活動名稱、狀態與活動日期區間查詢目前主辦方活動的設備租借摘要。")
+    @Operation(summary = "查詢主辦方設備活動列表", description = "查詢主辦方設備租借活動列表。")
     @GetMapping("/api/organizer/equipment/search")
     public ApiResponse<OrganizerEquipmentSearchResponse> searchOrganizerEquipmentEvents(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -157,7 +166,7 @@ public class OrganizerController {
                 pageSize);
     }
 
-    @Operation(summary = "取得主辦方活動設備詳情", description = "依活動 ID 取得活動資訊、設備設定、設備租借統計、用電統計與攤商設備管理資料。")
+    @Operation(summary = "查詢主辦方活動設備詳情", description = "查詢活動設備、用電、租借統計與管理列表。")
     @GetMapping("/api/organizer/equipment/{eventId}")
     public ApiResponse<MapBackedResponse> getOrganizerEquipmentDetail(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -179,7 +188,7 @@ public class OrganizerController {
                 vehiclePageSize);
     }
 
-    @Operation(summary = "匯出主辦方活動設備報表", description = "依活動 ID 產出設備 Excel 報表，內含設備、用電、統計與管理列表工作表。")
+    @Operation(summary = "匯出主辦方活動設備報表", description = "依活動 ID 匯出設備 Excel 報表。")
     @GetMapping("/api/organizer/equipment/{eventId}/export")
     public ResponseEntity<byte[]> exportOrganizerEquipmentReport(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -187,7 +196,7 @@ public class OrganizerController {
         return reportResponse(organizerService.exportOrganizerEquipmentReport(authorizationHeader, eventId));
     }
 
-    @Operation(summary = "取得主辦方報名詳情", description = "依報名 ID 取得目前主辦方活動底下的攤商報名資料、攤位日期、設備租借與審核狀態流程。")
+    @Operation(summary = "查詢主辦方報名詳情", description = "依報名 ID 查詢報名詳細資料。")
     @GetMapping("/api/organizer/applications/{id}")
     public ApiResponse<OrganizerApplicationDetailResponse> getOrganizerApplicationDetail(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -195,7 +204,7 @@ public class OrganizerController {
         return organizerService.getOrganizerApplicationDetail(authorizationHeader, id);
     }
 
-    @Operation(summary = "通過主辦活動報名", description = "主辦方針對指定報名申請審核通過。")
+    @Operation(summary = "審核通過主辦方報名", description = "主辦方審核通過指定報名。")
     @PostMapping("/api/organizer/applications/{id}/approve")
     public ApiResponse<MapBackedResponse> approveOrganizerApplication(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -203,7 +212,7 @@ public class OrganizerController {
         return organizerService.approveOrganizerApplication(authorizationHeader, id);
     }
 
-    @Operation(summary = "退回主辦活動報名", description = "主辦方針對指定報名申請審核不通過，可附上不通過原因。")
+    @Operation(summary = "退回主辦方報名", description = "主辦方退回指定報名並可填寫審核原因。")
     @PostMapping("/api/organizer/applications/{id}/reject")
     public ApiResponse<MapBackedResponse> rejectOrganizerApplication(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -212,7 +221,7 @@ public class OrganizerController {
         return organizerService.rejectOrganizerApplication(authorizationHeader, id, body);
     }
 
-    @Operation(summary = "取得主辦方活動攤位詳情", description = "依 eventId 取得主辦方活動資訊與全部攤位狀態。")
+    @Operation(summary = "查詢主辦方攤位地圖", description = "依活動 ID 與日期查詢活動資訊與攤位地圖。")
     @GetMapping("/api/organizer/stall/{eventId}")
     public ApiResponse<MapBackedResponse> getOrganizerStallMap(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -223,7 +232,7 @@ public class OrganizerController {
         return stallService.getOrganizerStallMap(authorizationHeader, eventId, applyDate, keyword, status);
     }
 
-    @Operation(summary = "取得活動各攤位登記資料", description = "依 eventId 與 stallNo 取得攤位資訊；若已被登記，會回傳攤商與申請資料。")
+    @Operation(summary = "查詢主辦方單一攤位詳情", description = "依活動 ID、攤位編號與日期查詢攤位與已選攤主資料。")
     @GetMapping("/api/organizer/stall/{eventId}/{stallNo}")
     public ApiResponse<MapBackedResponse> getOrganizerStallMapDetail(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
