@@ -7,8 +7,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Role
- * 使用者角色
+ * 使用者角色，包含管理員、主辦方、攤主
  */
 @Getter
 @RequiredArgsConstructor

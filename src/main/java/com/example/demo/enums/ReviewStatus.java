@@ -34,6 +34,6 @@ public enum ReviewStatus {
                 return s;
             }
         }
-        throw new IllegalArgumentException("未知的狀態: " + status);
+        return null;
     }
 }

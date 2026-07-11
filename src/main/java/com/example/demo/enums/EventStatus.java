@@ -6,7 +6,10 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**用來對應前端設定的狀態 */
+
+/**
+ * 對應資前端顯示的市集活動狀態，包含草稿、待審核、補件中、地圖建置中、待發布、報名中、已額滿、品牌已公開、進行中、已結束、下架申請中、已下架
+ */
 @Getter
 @RequiredArgsConstructor
 public enum EventStatus {
@@ -48,6 +51,6 @@ public enum EventStatus {
                 return s;
             }
         }
-        throw new IllegalArgumentException("未知的狀態: " + status);
+        return null;
     }
 }

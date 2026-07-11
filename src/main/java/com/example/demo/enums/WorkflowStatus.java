@@ -6,7 +6,10 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**用來對應{@link com.example.demo.entity.MarketEvent}中的市集活動狀態 */
+/**
+ * 對應資料庫中市集的活動狀態，包含草稿、待審核、補件中、地圖建置中、待發布、活動參與品牌確認完畢、下架申請中、已下架、已取消
+ * @see com.example.demo.entity.MarketEvent
+ */
 @Getter
 @RequiredArgsConstructor
 public enum WorkflowStatus {
@@ -24,13 +27,13 @@ public enum WorkflowStatus {
     /**活動公開 並且處於報名狀態*/
     PUBLISHED("published", ""),
     /**活動報名流程結束，準備公布參與品牌 */
-    FINAL_REVIEW("finalReview", ""),
+    FINAL_REVIEW("finalReview", "活動參與品牌確認完畢"),
     /**主辦方提出活動下架申請 */
     UNPUBLISH_REQUESTED("pendingUnpublish", "下架申請中"),
     /**活動下架 */
     UNPUBLISHED("unpublished", "已下架"),
     /**活動取消 */
-    CANCELLED("cancelled", "");
+    CANCELLED("cancelled", "已取消");
 
     @JsonValue
     private final String status;
@@ -43,6 +46,6 @@ public enum WorkflowStatus {
                 return s;
             }
         }
-        throw new IllegalArgumentException("未知的狀態: " + status);
+        return null;
     }
 }
