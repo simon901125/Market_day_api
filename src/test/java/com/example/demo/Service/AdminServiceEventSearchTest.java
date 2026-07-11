@@ -22,6 +22,7 @@ import com.example.demo.enums.DepositStatus;
 import com.example.demo.enums.PaymentStatus;
 import com.example.demo.enums.ReviewStatus;
 import com.example.demo.enums.Role;
+import com.example.demo.enums.UserStatus;
 import com.example.demo.enums.WorkflowStatus;
 
 import jakarta.persistence.EntityManager;
@@ -99,7 +100,7 @@ class AdminServiceEventSearchTest {
         user.setRole(Role.ORGANIZER);
         user.setEmail(email);
         user.setProvider(User.Provider.LOCAL);
-        user.setStatus(User.Status.ACTIVE);
+        user.setStatus(UserStatus.ACTIVE);
         user.setIsLogin(false);
         user.setExpiredTime(now.plusDays(1));
         user.setCreatedAt(now);
