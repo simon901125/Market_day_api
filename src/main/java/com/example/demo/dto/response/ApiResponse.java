@@ -146,6 +146,9 @@ public class ApiResponse<T> {
             case "Brands retrieved successfully" -> "\u54c1\u724c\u5217\u8868\u53d6\u5f97\u6210\u529f";
             case "Brand detail retrieved successfully" -> "\u54c1\u724c\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
             case "Brand scroll options retrieved successfully" -> "\u54c1\u724c\u641c\u5c0b\u9078\u9805\u53d6\u5f97\u6210\u529f";
+            case "NewebPay payment created successfully" -> "\u85cd\u65b0\u91d1\u6d41\u4ed8\u6b3e\u8cc7\u6599\u5efa\u7acb\u6210\u529f";
+            case "Payment status retrieved successfully" -> "\u4ed8\u6b3e\u72c0\u614b\u53d6\u5f97\u6210\u529f";
+            case "NewebPay trade queried successfully" -> "\u85cd\u65b0\u4ea4\u6613\u67e5\u8a62\u6210\u529f";
             default -> isLikelyEnglish(message) ? "\u64cd\u4f5c\u6210\u529f" : message;
         };
     }
@@ -245,6 +248,11 @@ public class ApiResponse<T> {
             case "Application has already been reviewed" -> "\u6b64\u7533\u8acb\u5df2\u5be9\u6838";
             case "Application has been cancelled" -> "\u6b64\u7533\u8acb\u5df2\u53d6\u6d88";
             case "Application review failed" -> "\u7533\u8acb\u5be9\u6838\u5931\u6557";
+            case "Application payment already paid" -> "\u6b64\u7533\u8acb\u5df2\u5b8c\u6210\u4ed8\u6b3e";
+            case "NewebPay config is incomplete" -> "\u85cd\u65b0\u91d1\u6d41\u8a2d\u5b9a\u5c1a\u672a\u5b8c\u6574";
+            case "Payment amount is invalid" -> "\u4ed8\u6b3e\u91d1\u984d\u4e0d\u6b63\u78ba";
+            case "Payment record not found" -> "\u627e\u4e0d\u5230\u4ed8\u6b3e\u7d00\u9304";
+            case "NewebPay query failed" -> "\u85cd\u65b0\u4ea4\u6613\u67e5\u8a62\u5931\u6557";
             case "Stall selections are required" -> "\u8acb\u63d0\u4f9b\u9078\u4f4d\u8cc7\u6599";
             case "Duplicate apply date in stall selections" -> "\u9078\u4f4d\u8cc7\u6599\u4e2d\u6709\u91cd\u8907\u7684\u7533\u8acb\u65e5\u671f";
             case "Stall selections must match all application dates" -> "\u9078\u4f4d\u8cc7\u6599\u5fc5\u9808\u5b8c\u6574\u5c0d\u61c9\u6240\u6709\u5831\u540d\u65e5\u671f";

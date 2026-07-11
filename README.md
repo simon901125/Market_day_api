@@ -25,6 +25,22 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 移除 `GET /api/organizer/account`，主辦個人資料改由 profile API 讀取與儲存。
 - 同步更新 Swagger 與 API response 文件。
 
+### 2026-07-10
+
+#### yushuan branch
+
+- 新增藍新金流付款流程 API，提供攤主於報名審核通過後建立付款、前往藍新付款頁、接收藍新付款通知、查詢本地付款狀態與補查藍新交易狀態等功能。
+- `POST /api/vendor/payments/newebpay` 新增攤主建立藍新付款 API。前端點擊付款按鈕後呼叫此 API，後端會檢查 JWT token、攤主身分、申請單是否存在、申請單是否屬於目前攤主、審核狀態是否通過、付款狀態是否可付款，以及付款金額是否有效；檢查通過後建立本地付款資料並回傳藍新付款表單所需欄位。
+- `POST /api/newebpay/notify` 新增藍新背景付款通知 API。藍新付款完成後會呼叫此 API，後端負責驗證 TradeSha、解密 TradeInfo、比對付款金額，並於付款成功時更新本地付款狀態為 `PAID`，同步更新申請單付款狀態。
+- `POST /api/newebpay/return` 新增藍新付款完成返回 API。使用者完成藍新付款後會被導回此 API，後端接收付款返回資料後導回前端付款結果頁；付款成功狀態仍以 `POST /api/newebpay/notify` 為主要依據。
+- `GET /api/newebpay/return` 新增付款返回備用/測試入口，供瀏覽器直接開啟 ReturnURL 時導回前端付款結果頁。
+- `GET /api/vendor/payments/{applicationNo}/status` 新增攤主查詢本地付款狀態 API。前端可依申請單號查詢目前本地付款狀態，用於付款頁面刷新、付款結果頁確認或付款按鈕狀態判斷。
+- `POST /api/vendor/payments/{applicationNo}/newebpay-query` 新增藍新交易狀態補查 API。此 API 用於向藍新查詢指定申請單對應交易狀態，通常用於除錯、付款通知未收到或需要補正本地付款狀態時使用。
+- 新增 `NewebPayProperties` 讀取藍新金流設定，包含商店代號、HashKey、HashIV、版本、付款網址、NotifyURL、ReturnURL 與查詢網址等設定。
+- 新增 `NewebPayService` 處理藍新金流流程，包含建立付款資料、TradeInfo 加密、TradeSha 產生、Notify/Return 解密驗章、付款狀態更新與交易狀態補查。
+- 新增 `PaymentRepository` 操作金流相關資料，包含查詢申請單付款資料、建立付款紀錄、更新付款狀態與查詢付款狀態。
+- 新增金流相關 DTO：`VendorPaymentRequest`、`NewebPayPaymentResponse`、`NewebPayQueryResponse`、`PaymentStatusResponse`。
+
 ### 2026-07-09
 
 #### simon branch
@@ -239,6 +255,46 @@ Authorization: Bearer {token}
 | POST | `/api/auth/logout` | 登出 |
 | GET | `/api/auth/me` | 目前登入使用者 |
 | POST | `/api/account/deactivate` | 停用目前帳號 |
+
+## 攤主金流 API
+
+| Method | API | Request DTO | JWT | 說明 |
+| ------ | --- | ----------- | --- | ---- |
+| POST | `/api/vendor/payments/newebpay` | `VendorPaymentRequest` | 是 | 攤主建立藍新付款資料，後端檢查申請單狀態並回傳藍新付款表單欄位。 |
+| GET | `/api/vendor/payments/{applicationNo}/status` | - | 是 | 查詢指定申請單的本地付款狀態。 |
+| POST | `/api/vendor/payments/{applicationNo}/newebpay-query` | - | 是 | 向藍新補查交易狀態，用於除錯或 Notify 未收到時補正狀態。 |
+
+## 藍新金流回呼 API
+
+| Method | API | Request | JWT | 說明 |
+| ------ | --- | ------- | --- | ---- |
+| POST | `/api/newebpay/notify` | 藍新回傳表單資料 | 否 | 藍新背景通知付款結果，後端驗章、解密、比對金額並更新付款狀態。 |
+| POST | `/api/newebpay/return` | 藍新回傳表單資料 | 否 | 使用者付款完成後由藍新導回，後端處理後導回前端付款結果頁。 |
+| GET | `/api/newebpay/return` | Query params | 否 | ReturnURL 備用/測試入口，供瀏覽器直接開啟時導回前端。 |
+
+## 藍新付款流程
+
+```text
+前端點付款按鈕
+  ↓
+POST /api/vendor/payments/newebpay
+  ↓
+後端檢查 token、攤主身分、申請單、歸屬、審核狀態、付款狀態與金額
+  ↓
+後端建立本地付款紀錄並回傳藍新付款表單資料
+  ↓
+前端 form POST 到藍新付款頁
+  ↓
+藍新付款完成
+  ↓
+POST /api/newebpay/notify
+  ↓
+後端驗章、解密、比對金額，更新本地付款狀態為 PAID
+  ↓
+POST /api/newebpay/return
+  ↓
+藍新導使用者回系統，後端再導回前端付款結果頁
+```
 
 ## 攤主 API
 
