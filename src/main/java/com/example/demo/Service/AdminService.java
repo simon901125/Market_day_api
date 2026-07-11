@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.specification.EventSpecification;
+import com.example.demo.Repository.specification.UserSpecification;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminLogSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
@@ -21,6 +22,7 @@ import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.dto.response.admin.AdminEventDetailDto;
 import com.example.demo.dto.response.admin.AdminEventsItemDto;
 import com.example.demo.dto.response.admin.AdminOrganizerDetailDto;
+import com.example.demo.dto.response.admin.AdminUserItemDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
 import com.example.demo.dto.response.admin.BoothZone;
 import com.example.demo.entity.EventStallZone;
@@ -30,6 +32,7 @@ import com.example.demo.entity.User;
 import com.example.demo.entity.UserProfile;
 import com.example.demo.enums.EventStatus;
 import com.example.demo.enums.Role;
+import com.example.demo.enums.UserStatus;
 import com.example.demo.enums.WorkflowStatus;
 import com.example.demo.projection.admin.AdminEventItemProjection;
 
@@ -73,8 +76,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         dto.setPendingUnpublish(eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED));
         dto.setSystemWarning(0);// TODO:補完系統警告計數
         dto.setTotalActivity(eventRepo.countByEventInPlatform(now));
-        dto.setTotalOrganizer(userRepo.countByRoleAndStatus(Role.ORGANIZER, User.Status.ACTIVE));
-        dto.setTotalVender(userRepo.countByRoleAndStatus(Role.VENDOR, User.Status.ACTIVE));
+        dto.setTotalOrganizer(userRepo.countByRoleAndStatus(Role.ORGANIZER, UserStatus.ACTIVE));
+        dto.setTotalVender(userRepo.countByRoleAndStatus(Role.VENDOR, UserStatus.ACTIVE));
         return dto;
     }
 
@@ -215,8 +218,55 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     @Override
     public PageResponse<?> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
-        // TODO: 設定管理員後台: 使用者搜尋
-        throw new UnsupportedOperationException("Unimplemented method 'setUserList'");
+        // ----------撈資料----------
+        //只撈頁面需要用到的欄位，避免撈出整張表
+        // 設定要join的表
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<User> root = cq.from(User.class);
+        Join<User, UserProfile> userProfile = root.join("userProfile");
+        // 設定搜尋條件
+        Specification<User> spec = UserSpecification.build(request);
+        Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        // 組裝select欄位
+        cq.multiselect(
+            root.get("id").alias("id"), 
+            userProfile.get("name").alias("name"),
+            root.get("email").alias("email"),
+            root.get("role").alias("role"),
+            root.get("createdAt").alias("createdAt"),
+            //FIXME:確認User的各項欄位意義
+            root.get("expiredTime").alias("lastLoginAt "),
+            //--------------------
+            root.get("status").alias("status")
+
+        );
+        // 設定orderBy: 帳號創建時間:由新到舊(desc)
+        cq.orderBy(cb.desc(root.get("createdAt")));
+        // 查詢結果(有設定limit)
+        List<Tuple> rows = entityManager.createQuery(cq).setFirstResult((pageNumber - 1) * pageSize).setMaxResults(pageSize).getResultList();
+        // 另外查詢符合條件的總筆數
+        long total = userRepo.count(spec);
+        // ----------設定回傳資料----------
+        List<AdminUserItemDto> dtoList = new ArrayList<>();
+        for (Tuple row : rows) {
+            AdminUserItemDto dtoItem = new AdminUserItemDto(
+                row.get("id", Long.class), 
+                row.get("name", String.class), 
+                row.get("email", String.class), 
+                row.get("role", Role.class).getRole(), 
+                row.get("createdAt", LocalDateTime.class), 
+                row.get("lastLoginAt", LocalDateTime.class), 
+                row.get("status", UserStatus.class).getStatus()
+            );
+
+            dtoList.add(dtoItem);
+        }        
+        PageResponse<AdminUserItemDto> response = new PageResponse<>(dtoList, pageNumber, pageSize, total);
+        return response;
     }
 
     // for 管理員後台使用者詳細
