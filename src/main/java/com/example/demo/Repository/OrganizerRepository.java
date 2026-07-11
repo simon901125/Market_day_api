@@ -21,7 +21,7 @@ public class OrganizerRepository {
                 SELECT
                     u.id AS userId,
                     u.role,
-                    up.name AS organizerName,
+                    op.organizer_name AS organizerName,
                     up.contact_name AS contactName,
                     up.contact_phone AS contactPhone,
                     up.contact_email AS contactEmail,
@@ -36,7 +36,7 @@ public class OrganizerRepository {
                 FROM dbo.users u
                 INNER JOIN dbo.user_profiles up ON up.user_id = u.id
                     AND up.profile_type = N'ORGANIZER'
-                INNER JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
+                LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
                 WHERE u.email = :email
                 """;
 
@@ -45,6 +45,48 @@ public class OrganizerRepository {
 
         List<Map<String, Object>> list = namedParameterJdbcTemplate.queryForList(sql, map);
         return RepositoryResultMapper.normalizeOptional(list.stream().findFirst());
+    }
+
+    public int saveOrganizerProfile(Long organizerUserId, Map<String, Object> profile) {
+        String sql = """
+                UPDATE up
+                SET contact_name = :contactName,
+                    contact_phone = :contactPhone,
+                    contact_email = :contactEmail,
+                    city = :city,
+                    district = :district,
+                    address = :address
+                FROM dbo.user_profiles up
+                WHERE up.user_id = :organizerUserId
+                  AND up.profile_type = N'ORGANIZER';
+
+                INSERT INTO dbo.organizer_profiles (user_profile_id)
+                SELECT up.id
+                FROM dbo.user_profiles up
+                WHERE up.user_id = :organizerUserId
+                  AND up.profile_type = N'ORGANIZER'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM dbo.organizer_profiles existing_op
+                      WHERE existing_op.user_profile_id = up.id
+                  );
+
+                UPDATE op
+                SET organizer_name = :organizerName,
+                    company_name = :companyName,
+                    tax_id = :taxId,
+                    service_days = :serviceDays,
+                    service_start_time = :serviceStartTime,
+                    service_end_time = :serviceEndTime
+                FROM dbo.organizer_profiles op
+                INNER JOIN dbo.user_profiles up ON up.id = op.user_profile_id
+                WHERE up.user_id = :organizerUserId
+                  AND up.profile_type = N'ORGANIZER';
+                """;
+
+        Map<String, Object> map = new HashMap<>(profile);
+        map.put("organizerUserId", organizerUserId);
+        return namedParameterJdbcTemplate.update(sql, map);
     }
 
     public List<Map<String, Object>> findOrganizerAccountingEvents(
@@ -320,14 +362,15 @@ public class OrganizerRepository {
                     p.status AS paymentStatus,
                     p.paid_at AS paidAt,
                     p.created_at AS paymentCreatedAt,
-                    vendor_up.name AS brandName,
+                    vp.brand_name AS brandName,
                     vendor_up.contact_name AS contactName,
-                    vp.brand_type AS brandType,
+                    c.name AS brandType,
                     COALESCE(refund_data.refundAmount, 0) AS refundAmount,
                     refund_data.refundStatus
                 FROM dbo.payments p
                 INNER JOIN dbo.event_applications a ON a.id = p.application_id
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
+                INNER JOIN dbo.categories c ON c.id = vp.category_id
                 INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
                 OUTER APPLY (
                     SELECT
@@ -379,6 +422,12 @@ public class OrganizerRepository {
                     e.brands_public_at AS brandsPublicAt,
                     e.workflow_status AS workflowStatus,
                     COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) AS totalStallCount,
+                    COALESCE(stall_selection.selectedStallCount, 0) AS selectedStallCount,
+                    CASE
+                        WHEN COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) - COALESCE(stall_selection.selectedStallCount, 0) < 0
+                        THEN 0
+                        ELSE COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) - COALESCE(stall_selection.selectedStallCount, 0)
+                    END AS availableStallCount,
                     COALESCE(full_status.isFullySelected, 0) AS isFullySelected
                 FROM dbo.market_events e
                 OUTER APPLY (
@@ -411,6 +460,23 @@ public class OrganizerRepository {
                         THEN 1 ELSE 0
                     END AS isFullySelected
                 ) full_status
+                OUTER APPLY (
+                    SELECT MAX(COALESCE(selected_count.selectedStallCount, 0)) AS selectedStallCount
+                    FROM (
+                        SELECT TOP (DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1)
+                            DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY object_id) - 1, CONVERT(date, e.start_at)) AS applyDate
+                        FROM sys.all_objects
+                    ) event_dates
+                    OUTER APPLY (
+                        SELECT COUNT(DISTINCT ad.selected_stall_id) AS selectedStallCount
+                        FROM dbo.application_dates ad
+                        INNER JOIN dbo.event_applications a ON a.id = ad.application_id
+                            AND a.event_id = e.id
+                            AND a.is_cancelled = 0
+                        WHERE ad.apply_date = event_dates.applyDate
+                          AND ad.selected_stall_id IS NOT NULL
+                    ) selected_count
+                ) stall_selection
                 WHERE e.user_id = :organizerUserId
                   AND e.workflow_status IN (
                       N'READY_TO_PUBLISH',
@@ -564,9 +630,9 @@ public class OrganizerRepository {
                     ) AS eventTime,
                     e.start_at AS eventStartAt,
                     e.end_at AS eventEndAt,
-                    vendor_up.name AS vendorName,
+                    vp.brand_name AS vendorName,
                     vendor_up.contact_name AS vendorOwnerName,
-                    vp.brand_type AS brandType,
+                    c.name AS brandType,
                     a.created_at AS appliedAt,
                     application_dates.applyDates,
                     application_dates.applicationDateCount,
@@ -579,6 +645,7 @@ public class OrganizerRepository {
                 FROM dbo.event_applications a
                 INNER JOIN dbo.market_events e ON e.id = a.event_id
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
+                INNER JOIN dbo.categories c ON c.id = vp.category_id
                 INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
                 OUTER APPLY (
                     SELECT
@@ -610,7 +677,7 @@ public class OrganizerRepository {
                       N'UNPUBLISHED'
                   )
                   AND (:eventTitle IS NULL OR e.title LIKE N'%' + :eventTitle + N'%')
-                  AND (:brandName IS NULL OR vendor_up.name LIKE N'%' + :brandName + N'%')
+                  AND (:brandName IS NULL OR vp.brand_name LIKE N'%' + :brandName + N'%')
                   AND (:appliedStartAt IS NULL OR a.created_at >= :appliedStartAt)
                   AND (:appliedEndExclusive IS NULL OR a.created_at < :appliedEndExclusive)
                 ORDER BY
@@ -650,7 +717,7 @@ public class OrganizerRepository {
                     vendor_user.id AS vendorUserId,
                     vendor_user.email AS vendorEmail,
                     vendor_up.id AS vendorUserProfileId,
-                    vendor_up.name AS vendorName,
+                    vp.brand_name AS vendorName,
                     vendor_up.contact_name AS vendorOwnerName,
                     vendor_up.contact_phone AS vendorPhone,
                     vendor_up.contact_email AS vendorContactEmail,
@@ -658,9 +725,9 @@ public class OrganizerRepository {
                     vendor_up.district AS vendorDistrict,
                     vendor_up.address AS vendorAddress,
                     vp.id AS vendorProfileId,
-                    vp.brand_type AS brandType,
+                    c.name AS brandType,
                     vp.brand_description AS brandDescription,
-                    vp.product_summary AS productSummary,
+                    vp.brand_summary AS brandSummary,
                     vp.instagram_url AS instagramUrl,
                     vp.facebook_url AS facebookUrl,
                     vp.website_url AS websiteUrl,
@@ -679,7 +746,8 @@ public class OrganizerRepository {
                     a.deposit_status AS depositStatus,
                     a.payment_due_at AS paymentDueAt,
                     a.review_status AS reviewStatus,
-                    a.review_note AS reviewNote,
+                    review_note_summary.reviewNote,
+                    review_note_summary.reviewNoteDetail,
                     a.payment_status AS paymentStatus,
                     a.is_cancelled AS isCancelled,
                     a.created_at AS appliedAt,
@@ -732,6 +800,14 @@ public class OrganizerRepository {
                     FROM dbo.application_dates ad
                     WHERE ad.application_id = a.id
                 ) application_dates
+                OUTER APPLY (
+                    SELECT TOP 1
+                        arn.review_note AS reviewNote,
+                        arn.review_note_detail AS reviewNoteDetail
+                    FROM dbo.application_review_notes arn
+                    WHERE arn.application_id = a.id
+                    ORDER BY arn.created_at DESC, arn.id DESC
+                ) review_note_summary
                 OUTER APPLY (
                     SELECT TOP 1
                         p.payment_no AS paymentNo,
@@ -974,7 +1050,7 @@ public class OrganizerRepository {
                 SELECT
                     a.id AS applicationId,
                     stall_summary.stallNo,
-                    vendor_up.name AS brandName,
+                    vp.brand_name AS brandName,
                     ee.id AS eventEquipmentId,
                     ee.name AS equipmentName,
                     er.quantity
@@ -1007,7 +1083,7 @@ public class OrganizerRepository {
                 SELECT
                     a.id AS applicationId,
                     stall_summary.stallNo,
-                    vendor_up.name AS brandName,
+                    vp.brand_name AS brandName,
                     ee.id AS eventEquipmentId,
                     ee.name AS equipmentName,
                     ee.wattage_limit AS wattageLimit,
@@ -1041,7 +1117,7 @@ public class OrganizerRepository {
                 SELECT
                     a.id AS applicationId,
                     stall_summary.stallNo,
-                    vendor_up.name AS brandName,
+                    vp.brand_name AS brandName,
                     vendor_up.contact_name AS contactName,
                     a.vehicle_no AS vehicleNo
                 FROM dbo.event_applications a
@@ -1067,12 +1143,10 @@ public class OrganizerRepository {
     public int updateApplicationReviewStatus(
             Long organizerUserId,
             Long applicationId,
-            String reviewStatus,
-            String reviewNote) {
+            String reviewStatus) {
         String sql = """
                 UPDATE a
-                SET review_status = :reviewStatus,
-                    review_note = :reviewNote
+                SET review_status = :reviewStatus
                 FROM dbo.event_applications a
                 INNER JOIN dbo.market_events e ON e.id = a.event_id
                 WHERE a.id = :applicationId
@@ -1085,7 +1159,30 @@ public class OrganizerRepository {
         map.put("organizerUserId", organizerUserId);
         map.put("applicationId", applicationId);
         map.put("reviewStatus", reviewStatus);
+        return namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public int insertApplicationReviewNote(
+            Long applicationId,
+            String reviewNote,
+            String reviewNoteDetail) {
+        String sql = """
+                INSERT INTO dbo.application_review_notes (
+                    application_id,
+                    review_note,
+                    review_note_detail
+                )
+                VALUES (
+                    :applicationId,
+                    :reviewNote,
+                    :reviewNoteDetail
+                )
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("applicationId", applicationId);
         map.put("reviewNote", normalizeText(reviewNote));
+        map.put("reviewNoteDetail", normalizeText(reviewNoteDetail));
         return namedParameterJdbcTemplate.update(sql, map);
     }
 

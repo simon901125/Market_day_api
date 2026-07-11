@@ -14,7 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.StallSelectionRequest;
+import com.example.demo.dto.request.VendorProductSaveRequest;
+import com.example.demo.dto.request.VendorStallSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
+import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorAccountResponse;
 import com.example.demo.dto.response.VendorStallMapResponse;
@@ -57,6 +60,46 @@ public class StallController {
     public ApiResponse<VendorAccountResponse> getVendorAccount(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         return stallService.getVendorAccount(authorizationHeader);
+    }
+
+    @Operation(summary = "讀取攤主品牌資料", description = "取得目前登入攤主的品牌、聯絡資料、圖片、分類與商品資料。")
+    @GetMapping("/api/vendor/stall/load")
+    public ApiResponse<MapBackedResponse> loadVendorStallProfile(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        return stallService.loadVendorStallProfile(authorizationHeader);
+    }
+
+    @Operation(summary = "儲存攤主品牌資料", description = "更新目前登入攤主的品牌、聯絡資料、圖片、分類與商品資料。")
+    @PostMapping("/api/vendor/stall/save")
+    public ApiResponse<MapBackedResponse> saveVendorStallProfile(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody(required = false) VendorStallSaveRequest body) {
+        return stallService.saveVendorStallProfile(authorizationHeader, body);
+    }
+
+    @Operation(summary = "新增攤主商品", description = "新增目前登入攤主的商品資料。")
+    @PostMapping("/api/vendor/stall/addproduct")
+    public ApiResponse<MapBackedResponse> addVendorProduct(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody(required = false) VendorProductSaveRequest body) {
+        return stallService.addVendorProduct(authorizationHeader, body);
+    }
+
+    @Operation(summary = "編輯攤主商品", description = "依商品 ID 讀取目前登入攤主原商品資料後，用新資料儲存變更。")
+    @PostMapping("/api/vendor/stall/edituct/{id}")
+    public ApiResponse<MapBackedResponse> editVendorProduct(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long id,
+            @RequestBody(required = false) VendorProductSaveRequest body) {
+        return stallService.editVendorProduct(authorizationHeader, id, body);
+    }
+
+    @Operation(summary = "刪除攤主商品", description = "依商品 ID 將目前登入攤主的商品狀態改為隱藏。")
+    @PostMapping("/api/vendor/stall/deleteproduct/{id}")
+    public ApiResponse<MapBackedResponse> deleteVendorProduct(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long id) {
+        return stallService.deleteVendorProduct(authorizationHeader, id);
     }
 
     @Operation(summary = "取得攤主申請單選位地圖", description = "依申請編號取得攤主自己的選位地圖；applyDate 用於切換要查看或選位的日期。")
