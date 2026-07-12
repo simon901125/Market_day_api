@@ -1,6 +1,7 @@
 package com.example.demo.dto.response.admin;
 
 import java.util.List;
+import java.util.Set;
 
 import com.example.demo.dto.response.PageResponse;
 
@@ -44,7 +45,7 @@ public record AdminEventDetailDto(
     //----------活動基礎狀態----------
     String eventName,
     String coverImg,
-    String eventType,
+    Set<String> eventType,
     String eventTime,
     String locationName,
     String addr,
