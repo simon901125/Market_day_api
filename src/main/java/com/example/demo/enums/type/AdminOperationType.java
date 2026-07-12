@@ -6,15 +6,34 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * 
+ * 管理員操作類型，包含系統設定、活動審核、要求補件、完成地圖建置、活動下架審核、帳號恢復、帳號停用
+ * 
+ * @see com.example.demo.entity.AdminOperationLog
+ */
 @Getter
 @RequiredArgsConstructor
 public enum AdminOperationType {
+    /**系統設定 */
     SYSTEM_SETTING("systemSetting", "系統設定"), 
+
+    /**完成地圖建置 */
     MAP_BUILD_COMPLETED("mapBuildCompleted", "完成地圖建置"), 
+
+    /**活動下架審核 */
     EVENT_UNPUBLISH_REVIEW("eventUnpublishReview", "活動下架審核"), 
+
+    /**帳號恢復 */
     ACCOUNT_RESTORED("accountRestored", "帳號恢復"), 
+
+    /**帳號停用 */
     ACCOUNT_DISABLED("accountDisabled", "帳號停用"), 
+
+    /**要求補件 */
     REQUEST_REVISION("requestRevision", "要求補件"), 
+
+    /**活動審核 */
     ACTIVITY_REVIEW("activityReview", "活動審核");
 
     @JsonValue
