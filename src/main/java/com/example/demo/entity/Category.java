@@ -1,12 +1,13 @@
 package com.example.demo.entity;
 
-import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -39,6 +40,6 @@ public class Category {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
-    @OneToMany(mappedBy = "category")
-    private List<MarketEvent> marketEvents;
+    @ManyToMany(mappedBy = "category")
+    private Set<MarketEvent> marketEvents;
 }

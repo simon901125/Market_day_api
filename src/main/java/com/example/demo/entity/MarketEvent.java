@@ -2,7 +2,9 @@ package com.example.demo.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import com.example.demo.enums.status.WorkflowStatus;
 
@@ -15,6 +17,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
@@ -48,9 +51,15 @@ public class MarketEvent {
     private User user;
 
     /** 活動類型 */
-    @ManyToOne
+    @ManyToMany
     @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_categories"))
-    private Category category;
+    private Set<Category> categories = new HashSet<>();
+
+    public void addCategory(Category category){
+        if (categories.add(category)) {
+            category.getMarketEvents().add(this);
+        }
+    }
 
     /** 活動名稱 */
     @Column(name = "title", length = 200, nullable = false)
