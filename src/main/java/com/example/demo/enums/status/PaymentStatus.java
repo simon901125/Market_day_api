@@ -32,7 +32,7 @@ public enum PaymentStatus {
     @JsonCreator
     public static PaymentStatus fromStatus(String status) {
         for (PaymentStatus s : values()) {
-            if (s.status.equals(status)) {
+            if (s.status.equalsIgnoreCase(status) || s.description.equals(status) || s.name().equals(status)) {
                 return s;
             }
         }

@@ -42,7 +42,7 @@ public enum WorkflowStatus {
     @JsonCreator
     public static WorkflowStatus fromStatus(String status) {
         for (WorkflowStatus s : values()) {
-            if (s.status.equals(status)) {
+            if (s.status.equalsIgnoreCase(status) || s.description.equals(status) || s.name().equals(status)) {
                 return s;
             }
         }

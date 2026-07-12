@@ -23,10 +23,10 @@ public enum Role {
     @JsonCreator
     public static Role fromRole(String role){
         for (Role r : values()) {
-            if (r.role.equals(role)) {
+            if (r.role.equalsIgnoreCase(role) || r.description.equals(role) || r.name().equals(role)) {
                 return r;
             }
         }
-        throw new IllegalArgumentException("未知的角色: " + role);
+        return null;
     }
 }

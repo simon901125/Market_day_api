@@ -28,7 +28,7 @@ public enum DepositStatus {
     @JsonCreator
     public static DepositStatus fromStatus(String status) {
         for (DepositStatus s : values()) {
-            if (s.status.equals(status)) {
+            if (s.status.equalsIgnoreCase(status) || s.description.equals(status) || s.name().equals(status)) {
                 return s;
             }
         }

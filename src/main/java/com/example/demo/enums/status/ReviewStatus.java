@@ -30,7 +30,7 @@ public enum ReviewStatus {
     @JsonCreator
     public static ReviewStatus fromStatus(String status) {
         for (ReviewStatus s : values()) {
-            if (s.status.equals(status)) {
+            if (s.status.equalsIgnoreCase(status) || s.description.equals(status) || s.name().equals(status)) {
                 return s;
             }
         }

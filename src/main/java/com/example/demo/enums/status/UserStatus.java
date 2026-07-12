@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
         @JsonCreator
         public static UserStatus fromStatus(String status) {
             for (UserStatus s : values()) {
-                if (s.status.equals(status)) {
+                if (s.status.equalsIgnoreCase(status) || s.description.equals(status) || s.name().equals(status)) {
                     return s;
                 }
             }
