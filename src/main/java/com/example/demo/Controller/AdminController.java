@@ -11,6 +11,8 @@ import com.example.demo.Service.AdminService;
 import com.example.demo.Service.AdminServiceInterface;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminEventSearchRequest;
+import com.example.demo.dto.request.admin.AdminLogSearchDto;
+import com.example.demo.dto.request.admin.AdminLogsSearchRequest;
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchRequest;
 import com.example.demo.dto.response.ApiResponse;
@@ -136,10 +138,22 @@ public class AdminController {
         return ApiResponse.success("ok");
     }
 
+    /**
+     * 用來獲取管理員後台: Logs搜尋頁面所需資料<br>
+     * <b>API路徑</b>: /api/admin/logs/search<br>
+     * @param request 搜尋條件與分頁參數，pageNumber從1開始計算
+     * @return ApiResponse<T>
+     */
     @PostMapping("/logs/search")
-    public ApiResponse<?> getLogList(@RequestBody Map<String, Object> data) {
-        // TODO:取得操作紀錄
-        return ApiResponse.success("ok");
+    public ApiResponse<?> getLogList(@RequestBody AdminLogsSearchRequest request) {
+        AdminLogSearchDto data = new AdminLogSearchDto(
+            request.keyWord(), 
+            request.operationType(), 
+            request.targetType(), 
+            request.startAt(), 
+            request.endAt()
+        );
+        return ApiResponse.success("ok", service.getLogs(data, request.pageNumber(), request.pageSize()));
     }
 
 }
