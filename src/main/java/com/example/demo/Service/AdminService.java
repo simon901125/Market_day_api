@@ -3,7 +3,9 @@ package com.example.demo.Service;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.jpa.domain.Specification;
@@ -28,6 +30,7 @@ import com.example.demo.dto.response.admin.AdminOrganizerDetailDto;
 import com.example.demo.dto.response.admin.AdminUserItemDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
 import com.example.demo.entity.AdminOperationLog;
+import com.example.demo.entity.Category;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.OrganizerProfile;
 import com.example.demo.entity.User;
@@ -191,11 +194,16 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 organizerProfile.getServiceDays(),
                 organizerProfile.getServiceStartTime().format(timeFormatter),
                 organizerProfile.getServiceEndTime().format(timeFormatter));
+        Set<Category> categories = event.getCategories();
+        Set<String> categorySet = new HashSet<>();
+        for (Category category : categories) {
+            categorySet.add(category.getName());
+        }
 
         AdminEventDetailDto dto = new AdminEventDetailDto(
                 event.getTitle(),
                 event.getCoverImageUrl(),
-                event.getCategory().getName(),
+                categorySet,
                 eventTime,
                 event.getLocationName(),
                 String.format("%s%s%s", event.getCity(), event.getDistrict(), event.getAddress()),
