@@ -1,6 +1,6 @@
 package com.example.demo.dto.response.admin;
 
-import com.example.demo.enums.Role;
+import com.example.demo.enums.type.Role;
 
 import lombok.Data;
 

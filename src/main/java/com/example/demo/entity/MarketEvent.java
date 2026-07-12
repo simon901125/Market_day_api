@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.example.demo.enums.status.WorkflowStatus;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,8 +19,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
-
-import com.example.demo.enums.WorkflowStatus;
 
 /**
  * 市集活動的Entity。<br>
@@ -80,9 +80,12 @@ public class MarketEvent {
     @Column(name = "address", length = 255, nullable = false)
     private String address;
 
+    //TODO:要再確認資料庫 :AdminService:getEventDetail()
+    //----------我是分隔線----------
     /** 交通方式 */
     @Column(name = "traffic_info", columnDefinition = "nvarchar(max)")
     private String trafficInfo;
+    //----------我是分隔線----------
 
     /** 活動注意事項 */
     @Column(name = "notice", columnDefinition = "nvarchar(max)")

@@ -2,8 +2,8 @@ package com.example.demo.Service;
 
 import java.time.LocalDateTime;
 
-import com.example.demo.enums.EventStatus;
-import com.example.demo.enums.WorkflowStatus;
+import com.example.demo.enums.status.EventStatus;
+import com.example.demo.enums.status.WorkflowStatus;
 
 public interface EventStatusServiceInterface<T> {
     

@@ -7,9 +7,9 @@ import org.springframework.data.jpa.domain.Specification;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.entity.EventApplication;
 import com.example.demo.entity.MarketEvent;
-import com.example.demo.enums.EventStatus;
-import com.example.demo.enums.ReviewStatus;
-import com.example.demo.enums.WorkflowStatus;
+import com.example.demo.enums.status.EventStatus;
+import com.example.demo.enums.status.ReviewStatus;
+import com.example.demo.enums.status.WorkflowStatus;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;

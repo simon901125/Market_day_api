@@ -1,4 +1,4 @@
-package com.example.demo.enums;
+package com.example.demo.enums.status;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
@@ -47,7 +47,7 @@ public enum EventStatus {
     @JsonCreator
     public static EventStatus fromStatus(String status) {
         for (EventStatus s : values()) {
-            if (s.status.equals(status)) {
+            if (s.status.equalsIgnoreCase(status) || s.description.equals(status) || s.name().equals(status)) {
                 return s;
             }
         }

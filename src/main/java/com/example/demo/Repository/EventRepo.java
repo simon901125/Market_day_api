@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.demo.entity.MarketEvent;
-import com.example.demo.enums.WorkflowStatus;
+import com.example.demo.enums.status.WorkflowStatus;
 
 import java.time.LocalDateTime;
 

@@ -2,7 +2,7 @@ package com.example.demo.dto.request.admin;
 
 import java.time.LocalDateTime;
 
-import com.example.demo.enums.EventStatus;
+import com.example.demo.enums.status.EventStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 

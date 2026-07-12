@@ -3,6 +3,8 @@ package com.example.demo.entity;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.hibernate.annotations.CreationTimestamp;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,8 +18,8 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
 
-import com.example.demo.enums.Role;
-import com.example.demo.enums.UserStatus;
+import com.example.demo.enums.status.UserStatus;
+import com.example.demo.enums.type.Role;
 
 /**
  * 使用者的Entity。<br>
@@ -76,12 +78,15 @@ public class User {
     private LocalDateTime expiredTime;
 
     /** 使用者帳號創建時間 */
-    @Column(name = "created_at", nullable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     /** 使用者帳號更新時間 */
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    //----------我是分隔線----------
 
     /** 使用者舉辦的活動清單 */
     @OneToMany(mappedBy = "user")
@@ -101,6 +106,12 @@ public class User {
             userProfile.setUser(this);
         }
     }
+
+    /**管理員操作紀錄 */
+    @OneToMany(mappedBy = "user")
+    private List<AdminOperationLog> adminOperationLogs;
+
+    //----------我是分隔線----------
 
     /** 帳號登入方式 */
     public enum Provider {

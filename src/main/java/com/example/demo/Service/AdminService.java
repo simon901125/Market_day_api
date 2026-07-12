@@ -30,10 +30,10 @@ import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.OrganizerProfile;
 import com.example.demo.entity.User;
 import com.example.demo.entity.UserProfile;
-import com.example.demo.enums.EventStatus;
-import com.example.demo.enums.Role;
-import com.example.demo.enums.UserStatus;
-import com.example.demo.enums.WorkflowStatus;
+import com.example.demo.enums.status.EventStatus;
+import com.example.demo.enums.status.UserStatus;
+import com.example.demo.enums.status.WorkflowStatus;
+import com.example.demo.enums.type.Role;
 import com.example.demo.projection.admin.AdminEventItemProjection;
 
 import jakarta.persistence.EntityManager;

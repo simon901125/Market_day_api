@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param id 使用者id
  * @param name 使用者名稱
  * @param email 使用者email
- * @param role 使用者角色 (參照 {@link com.example.demo.enums.Role})
+ * @param role 使用者角色 (參照 {@link com.example.demo.enums.type.Role})
  * @param createdAt 創建時間 yyyy-MM-dd HH:mm 
  * @param lastLoginAt 最後登入時間 yyyy-MM-dd HH:mm
  * @param status 使用者帳號狀態(參照 {@link com.example.demo.entity.User.Status})

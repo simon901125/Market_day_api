@@ -4,8 +4,8 @@ import org.springframework.data.jpa.domain.Specification;
 
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
 import com.example.demo.entity.User;
-import com.example.demo.enums.Role;
-import com.example.demo.enums.UserStatus;
+import com.example.demo.enums.status.UserStatus;
+import com.example.demo.enums.type.Role;
 
 public class UserSpecification {
 

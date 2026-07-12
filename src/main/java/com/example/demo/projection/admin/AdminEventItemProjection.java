@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 
 import org.springframework.beans.factory.annotation.Value;
 
-import com.example.demo.enums.WorkflowStatus;
+import com.example.demo.enums.status.WorkflowStatus;
 
 public interface AdminEventItemProjection {
     /**活動id */

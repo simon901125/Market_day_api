@@ -18,12 +18,12 @@ import com.example.demo.entity.EventApplication;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.User;
 import com.example.demo.entity.UserProfile;
-import com.example.demo.enums.DepositStatus;
-import com.example.demo.enums.PaymentStatus;
-import com.example.demo.enums.ReviewStatus;
-import com.example.demo.enums.Role;
-import com.example.demo.enums.UserStatus;
-import com.example.demo.enums.WorkflowStatus;
+import com.example.demo.enums.status.DepositStatus;
+import com.example.demo.enums.status.PaymentStatus;
+import com.example.demo.enums.status.ReviewStatus;
+import com.example.demo.enums.status.UserStatus;
+import com.example.demo.enums.status.WorkflowStatus;
+import com.example.demo.enums.type.Role;
 
 import jakarta.persistence.EntityManager;
 

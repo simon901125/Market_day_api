@@ -1,7 +1,7 @@
 package com.example.demo.dto.request.admin;
 
-import com.example.demo.enums.Role;
-import com.example.demo.enums.UserStatus;
+import com.example.demo.enums.status.UserStatus;
+import com.example.demo.enums.type.Role;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 

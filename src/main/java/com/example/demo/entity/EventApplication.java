@@ -3,6 +3,8 @@ package com.example.demo.entity;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.CreationTimestamp;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,9 +19,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
 
-import com.example.demo.enums.DepositStatus;
-import com.example.demo.enums.PaymentStatus;
-import com.example.demo.enums.ReviewStatus;
+import com.example.demo.enums.status.DepositStatus;
+import com.example.demo.enums.status.PaymentStatus;
+import com.example.demo.enums.status.ReviewStatus;
 
 /**
  * 攤位報名的Entity。<br>
@@ -102,7 +104,8 @@ public class EventApplication {
     private Boolean isCancelled = false;
 
     /**建立時間 */
-    @Column(name = "created_at", nullable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
 }
