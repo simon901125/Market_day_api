@@ -10,8 +10,10 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
+import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.UserRepo;
+import com.example.demo.Repository.specification.AdminLogSpecification;
 import com.example.demo.Repository.specification.EventSpecification;
 import com.example.demo.Repository.specification.UserSpecification;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
@@ -21,11 +23,11 @@ import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.dto.response.admin.AdminEventDetailDto;
 import com.example.demo.dto.response.admin.AdminEventsItemDto;
+import com.example.demo.dto.response.admin.AdminLogDto;
 import com.example.demo.dto.response.admin.AdminOrganizerDetailDto;
 import com.example.demo.dto.response.admin.AdminUserItemDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
-import com.example.demo.dto.response.admin.BoothZone;
-import com.example.demo.entity.EventStallZone;
+import com.example.demo.entity.AdminOperationLog;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.OrganizerProfile;
 import com.example.demo.entity.User;
@@ -33,6 +35,8 @@ import com.example.demo.entity.UserProfile;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
+import com.example.demo.enums.type.AdminOperationType;
+import com.example.demo.enums.type.AdminTargetTypeForFront;
 import com.example.demo.enums.type.Role;
 import com.example.demo.projection.admin.AdminEventItemProjection;
 
@@ -41,6 +45,7 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -52,6 +57,9 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     @Autowired
     UserRepo userRepo;
+
+    @Autowired
+    AdminLogRepo logRepo;
 
     @PersistenceContext
     EntityManager entityManager;
@@ -219,7 +227,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     @Override
     public PageResponse<?> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
         // ----------撈資料----------
-        //只撈頁面需要用到的欄位，避免撈出整張表
+        // 只撈頁面需要用到的欄位，避免撈出整張表
         // 設定要join的表
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
@@ -233,38 +241,38 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         }
         // 組裝select欄位
         cq.multiselect(
-            root.get("id").alias("id"), 
-            userProfile.get("name").alias("name"),
-            root.get("email").alias("email"),
-            root.get("role").alias("role"),
-            root.get("createdAt").alias("createdAt"),
-            //FIXME:確認User的各項欄位意義
-            root.get("expiredTime").alias("lastLoginAt "),
-            //--------------------
-            root.get("status").alias("status")
+                root.get("id").alias("id"),
+                userProfile.get("name").alias("name"),
+                root.get("email").alias("email"),
+                root.get("role").alias("role"),
+                root.get("createdAt").alias("createdAt"),
+                // FIXME:確認User的各項欄位意義
+                root.get("expiredTime").alias("lastLoginAt "),
+                // --------------------
+                root.get("status").alias("status")
 
         );
         // 設定orderBy: 帳號創建時間:由新到舊(desc)
         cq.orderBy(cb.desc(root.get("createdAt")));
         // 查詢結果(有設定limit)
-        List<Tuple> rows = entityManager.createQuery(cq).setFirstResult((pageNumber - 1) * pageSize).setMaxResults(pageSize).getResultList();
+        List<Tuple> rows = entityManager.createQuery(cq).setFirstResult((pageNumber - 1) * pageSize)
+                .setMaxResults(pageSize).getResultList();
         // 另外查詢符合條件的總筆數
         long total = userRepo.count(spec);
         // ----------設定回傳資料----------
         List<AdminUserItemDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
             AdminUserItemDto dtoItem = new AdminUserItemDto(
-                row.get("id", Long.class), 
-                row.get("name", String.class), 
-                row.get("email", String.class), 
-                row.get("role", Role.class).getRole(), 
-                row.get("createdAt", LocalDateTime.class), 
-                row.get("lastLoginAt", LocalDateTime.class), 
-                row.get("status", UserStatus.class).getStatus()
-            );
+                    row.get("id", Long.class),
+                    row.get("name", String.class),
+                    row.get("email", String.class),
+                    row.get("role", Role.class).getRole(),
+                    row.get("createdAt", LocalDateTime.class),
+                    row.get("lastLoginAt", LocalDateTime.class),
+                    row.get("status", UserStatus.class).getStatus());
 
             dtoList.add(dtoItem);
-        }        
+        }
         PageResponse<AdminUserItemDto> response = new PageResponse<>(dtoList, pageNumber, pageSize, total);
         return response;
     }
@@ -284,8 +292,54 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     @Override
     public PageResponse<?> getLogs(AdminLogSearchDto request, int pageNumber, int pageSize) {
-        // TODO: 設定管理員後台: 操作紀錄
-        throw new UnsupportedOperationException("Unimplemented method 'setLogs'");
+        // ----------撈資料----------
+        // 只撈頁面需要用到的欄位，避免撈出整張表
+        // 設定要join的表
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<AdminOperationLog> root = cq.from(AdminOperationLog.class);
+        Join<AdminOperationLog, User> user = root.join("user");
+        // 設定搜尋條件
+        Specification<AdminOperationLog> spec = AdminLogSpecification.build(request);
+        Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        Expression<String> targetEmail = AdminLogSpecification.targetEmailSubquery(root, cq, cb);
+        Expression<AdminTargetTypeForFront> targetTypeForFront = AdminLogSpecification.targetTypeForFrontExpression(root, cq, cb);
+        // 組裝select欄位
+        cq.multiselect(
+                root.get("operationType").alias("operationType"),
+                root.get("targetLabel").alias("targetName"),
+                root.get("createdAt").alias("createdAt"),
+                root.get("content").alias("content"),
+                targetEmail.alias("email"),
+                targetTypeForFront.alias("targetType")
+            );
+        // 設定orderBy: 操作時間:由新到舊(desc)
+        cq.orderBy(cb.desc(root.get("createdAt")));
+        // 查詢結果(有設定limit)
+        List<Tuple> rows = entityManager.createQuery(cq).setFirstResult((pageNumber - 1) * pageSize)
+                .setMaxResults(pageSize).getResultList();
+        // 另外查詢符合條件的總筆數
+        long total = logRepo.count(spec);
+        // ----------設定回傳資料----------
+        List<AdminLogDto> dtoList = new ArrayList<>();
+        for (Tuple row : rows) {
+            AdminLogDto dtoItem = new AdminLogDto(
+                    null, //TODO:確認資料庫
+                    row.get("operationType", AdminOperationType.class),
+                    row.get("targetType", AdminTargetTypeForFront.class),
+                    row.get("targetName", String.class),
+                    row.get("email", String.class),
+                    row.get("createdAt", LocalDateTime.class).format(dateTimeFormatter),
+                    row.get("content", String.class));
+
+            dtoList.add(dtoItem);
+        }
+
+        PageResponse<AdminLogDto> response = new PageResponse<>(dtoList, pageNumber, pageSize, total);
+        return response;
     }
 
     /**
