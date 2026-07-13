@@ -113,6 +113,7 @@ Response data:
 | `UserProfileResponse` | `/api/auth/me` |
 | `UserResponse` | `/usersall` |
 | `VendorAccountResponse` | `/api/vendor/account` |
+| `VendorApplicationSubmitResponse` | `/api/vendor/applications` |
 | `VendorStallMapResponse` | `/api/vendor/stall-map/{applicationNo}` |
 | `OrganizerAccountResponse` | `/api/organizer/account` |
 | `OrganizerAccountingSearchResponse` | `/api/organizer/accounts/search` |
@@ -210,6 +211,60 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
   "message": "此攤位已被選走",
   "messageDetails": null,
   "data": null
+}
+```
+
+## 攤主活動報名送出 Response
+
+`POST /api/vendor/applications`
+
+Request body 需要 `eventId` 與 `applyDates[]`；可選填 `vehicleNo`、`applicantNote` 與 `equipmentRentals[]`。成功後會建立 `event_applications`、`application_dates`、`equipment_rentals` 與 `rental_appliances`，申請單狀態預設為待審核。
+
+```json
+{
+  "eventId": 1,
+  "applyDates": ["2026-08-01", "2026-08-02"],
+  "vehicleNo": "ABC-1234",
+  "applicantNote": "需要靠近出入口的位置",
+  "equipmentRentals": [
+    {
+      "eventEquipmentId": 3,
+      "quantity": 1,
+      "rentalUnits": 2,
+      "appliances": [
+        {
+          "applianceName": "咖啡機",
+          "wattage": 800
+        }
+      ]
+    }
+  ]
+}
+```
+
+成功時 `data` 為 `VendorApplicationSubmitResponse`：
+
+```json
+{
+  "statusCode": 200,
+  "message": "Vendor application submitted successfully",
+  "messageDetails": null,
+  "data": {
+    "applicationId": 101,
+    "applicationNo": "MD202608010001",
+    "eventId": 1,
+    "eventTitle": "夏日手作市集",
+    "applicationStatus": "待審核",
+    "reviewStatus": "PENDING",
+    "paymentStatus": "PENDING",
+    "applyDates": ["2026-08-01", "2026-08-02"],
+    "applicationFee": 2000.00,
+    "equipmentTotal": 300.00,
+    "depositAmount": 0,
+    "totalAmount": 2300.00,
+    "paymentDueAt": "2026-07-13T12:00:00",
+    "equipmentRentals": []
+  }
 }
 ```
 

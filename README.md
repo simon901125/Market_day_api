@@ -247,6 +247,7 @@ POST /api/auth/google-bind
 GET  /api/auth/me
 POST /api/account/deactivate
 GET  /api/vendor/account
+POST /api/vendor/applications
 GET  /api/vendor/stall-map/{applicationNo}
 POST /api/stalls/select
 GET  /api/organizer/account
@@ -294,6 +295,9 @@ POST /api/organizer/applications/{id}/reject
 | POST   | `/api/stalls/select`                    | `StallSelectionRequest` | 是  | 依`applicationNo` 與 `selections[]` 一次送出該申請單所有報名日期的選位。         |
 | GET    | `/api/eventsMap/{eventId}/stallsStatus` | -                         | 否  | 公開查詢活動指定日期攤位狀態；未帶日期時預設活動第一天。                             |
 | GET    | `/api/vendor/account`                   | -                         | 是  | 取得目前登入攤主資料。                                                               |
+| POST   | `/api/vendor/applications`              | `VendorApplicationSubmitRequest` | 是  | 攤主送出活動報名資料，建立申請單、報名日期、租借設備與用電電器明細。 |
+| POST   | `/api/vendor/markets/search`           | Query params              | 否  | 取得攤主「我的報名紀錄」列表，支援活動名稱、報名編號、狀態、活動日期區間與分頁。 |
+| GET    | `/api/vendor/markets/{id}`             | -                         | 否  | 依報名 ID 取得活動報名詳細資料。 |
 | GET    | `/api/vendor/stall-map/{applicationNo}` | -                         | 是  | 查詢攤主自己的申請單選位地圖，可用`applyDate` 切換目前查看日期，並回傳報名日期數。 |
 
 ### 主辦方 API

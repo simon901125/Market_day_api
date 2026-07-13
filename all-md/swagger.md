@@ -176,6 +176,7 @@ Bearer <JWT_TOKEN>
 | GET | `/api/auth/me` |
 | POST | `/api/account/deactivate` |
 | GET | `/api/vendor/account` |
+| POST | `/api/vendor/applications` |
 | GET | `/api/vendor/stall-map/{applicationNo}` |
 | POST | `/api/stalls/select` |
 | GET | `/api/organizer/account` |
@@ -226,7 +227,43 @@ Bearer <JWT_TOKEN>
 | POST | `/api/stalls/select` | `StallSelectionRequest` | 是 | 依 `applicationNo` 與 `selections[]` 一次送出該申請單所有報名日期的選位。 |
 | GET | `/api/eventsMap/{eventId}/stallsStatus` | - | 否 | 公開查詢活動指定日期攤位狀態；未帶日期時預設活動第一天。 |
 | GET | `/api/vendor/account` | - | 是 | 取得目前登入攤主資料。 |
+| POST | `/api/vendor/applications` | `VendorApplicationSubmitRequest` | 是 | 攤主送出活動報名資料，建立申請單、報名日期、租借設備與用電電器明細。 |
+| POST | `/api/vendor/markets/search` | Query params | 否 | 取得活動報名列表，支援活動名稱、報名編號、狀態、活動日期區間與分頁。 |
+| GET | `/api/vendor/markets/{id}` | - | 否 | 依報名 ID 取得活動報名詳細資料。 |
 | GET | `/api/vendor/stall-map/{applicationNo}` | - | 是 | 查詢待選位或已成功選位申請單的攤位圖；已選位時回傳 `selectedStall`。 |
+
+#### 攤主活動報名送出 API
+
+`POST /api/vendor/applications`
+
+```json
+{
+  "eventId": 1,
+  "applyDates": ["2026-08-01", "2026-08-02"],
+  "vehicleNo": "ABC-1234",
+  "applicantNote": "需要靠近出入口的位置",
+  "equipmentRentals": [
+    {
+      "eventEquipmentId": 3,
+      "quantity": 1,
+      "rentalUnits": 2,
+      "appliances": [
+        {
+          "applianceName": "咖啡機",
+          "wattage": 800
+        }
+      ]
+    }
+  ]
+}
+```
+
+- 需要 JWT，且登入者必須是 `VENDOR`。
+- 活動必須是 `PUBLISHED`，且目前時間必須落在活動報名期間內。
+- `applyDates[]` 會去重排序，每個日期都必須落在活動開始與結束日期內。
+- 同一個攤主品牌在同一活動只能建立一筆報名。
+- 設備租借會檢查設備是否屬於該活動、是否啟用，以及是否超過庫存或單攤租借上限。
+- 成功後回傳 `VendorApplicationSubmitResponse`，狀態預設為 `待審核`。
 
 #### 攤位選位 API
 
