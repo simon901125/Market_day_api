@@ -16,20 +16,20 @@ import com.example.demo.projection.admin.AdminVenderDetailProjection;
 
 public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExecutor<User>{
     int countByRoleAndStatus(Role role, UserStatus status);
-    @Query("""
-            SELECT 
-                user.id id,
-                userProfile.name,
-                user.role,
-                user.status,
-                user.provider,
-                user.createdAt,
+    // @Query("""
+    //         SELECT 
+    //             user.id id,
+    //             userProfile.name,
+    //             user.role,
+    //             user.status,
+    //             user.provider,
+    //             user.createdAt,
 
 
             
-            FROM User user
-            LEFT JOIN user.userProfile userProfile
-            WHERE user.id = :id
-            """)
-    Optional<AdminVenderDetailProjection>findVenderDetailById(@Param("id") Long id);
+    //         FROM User user
+    //         LEFT JOIN user.userProfile userProfile
+    //         WHERE user.id = :id
+    //         """)
+    // Optional<AdminVenderDetailProjection>findVenderDetailById(@Param("id") Long id);
 }
