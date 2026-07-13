@@ -111,6 +111,10 @@ public class User {
     @OneToMany(mappedBy = "user")
     private List<AdminOperationLog> adminOperationLogs;
 
+    /**API請求紀錄 */
+    @OneToMany(mappedBy = "user")
+    private List<RequestLog> requestLogs;
+
     //----------我是分隔線----------
 
     /** 帳號登入方式 */
