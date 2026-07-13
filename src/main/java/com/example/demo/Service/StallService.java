@@ -1,11 +1,15 @@
 package com.example.demo.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,11 +27,19 @@ import com.example.demo.Repository.StallRepository;
 import com.example.demo.dto.request.StallSelectionRequest;
 import com.example.demo.dto.request.VendorProductSaveRequest;
 import com.example.demo.dto.request.VendorStallSaveRequest;
+import com.example.demo.dto.request.VendorApplicationSubmitRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.EventStallStatusResponse;
 import com.example.demo.dto.response.MapBackedResponse;
+import com.example.demo.dto.response.MarketSearchResponse;
+import com.example.demo.dto.response.MarketSummaryResponse;
+import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
+import com.example.demo.dto.response.VendorApplicationSubmitResponse;
 import com.example.demo.dto.response.VendorAccountResponse;
+import com.example.demo.dto.response.VendorMarketDetailResponse;
+import com.example.demo.dto.response.VendorMarketSearchResponse;
+import com.example.demo.dto.response.VendorMarketSummaryResponse;
 import com.example.demo.dto.response.VendorStallMapResponse;
 
 @Service
@@ -350,26 +362,428 @@ public class StallService {
                 "brandSummary", normalizeText(body.getBrandSummary()),
                 "brandDescription", normalizeText(body.getBrandDescription()));
 
-        try {
-            int updatedRows = stallRepository.updateVendorProfile(userId, vendorProfileId, profile);
-            if (updatedRows == 0) {
-                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                return ApiResponse.fail("Vendor profile save failed");
-            }
-            int savedProducts = stallRepository.replaceVendorProducts(vendorProfileId, productSnapshots);
-            if (savedProducts != productSnapshots.size()) {
-                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                return ApiResponse.fail("Vendor product snapshot save failed");
-            }
-            Map<String, Object> refreshedVendor = stallRepository.findVendorAccountByEmail(email)
-                    .orElse(vendor);
-            return ApiResponse.success(
-                    "Vendor stall profile saved successfully",
-                    new MapBackedResponse(toVendorStallProfile(refreshedVendor)));
-        } catch (RuntimeException exception) {
-            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        int updatedRows = stallRepository.updateVendorProfile(userId, vendorProfileId, profile);
+        if (updatedRows == 0) {
             return ApiResponse.fail("Vendor profile save failed");
         }
+        stallRepository.saveVendorImage(vendorProfileId, "AVATAR", nullIfBlank(body.getAvatarImageUrl()));
+        stallRepository.saveVendorImage(vendorProfileId, "COVER", nullIfBlank(body.getCoverImageUrl()));
+
+        Map<String, Object> refreshedVendor = stallRepository
+                .findVendorAccountByEmail(normalizeText(vendor.get("email")))
+                .orElse(vendor);
+        return ApiResponse.success(
+                "Vendor stall profile saved successfully",
+                new MapBackedResponse(toVendorStallProfile(refreshedVendor)));
+    }
+
+    @Transactional
+    public ApiResponse<MapBackedResponse> addVendorProduct(
+            String authorizationHeader,
+            VendorProductSaveRequest body) {
+        if (body == null) {
+            return ApiResponse.fail("Vendor product request is required");
+        }
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+        String validationError = validateVendorProduct(body);
+        if (validationError != null) {
+            return ApiResponse.fail(validationError);
+        }
+
+        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        Long productId = stallRepository.createVendorProduct(vendorProfileId, productMap(body));
+        if (productId == null) {
+            return ApiResponse.fail("Vendor product save failed");
+        }
+        Map<String, Object> product = stallRepository.findVendorProduct(vendorProfileId, productId).orElse(null);
+        return ApiResponse.success(
+                "Vendor product saved successfully",
+                new MapBackedResponse(orderedMap("product", product)));
+    }
+
+    @Transactional
+    public ApiResponse<MapBackedResponse> deleteVendorProduct(
+            String authorizationHeader,
+            Long productId) {
+        if (productId == null) {
+            return ApiResponse.fail("Product id is required");
+        }
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+
+        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        Map<String, Object> existingProduct = stallRepository.findVendorProduct(vendorProfileId, productId)
+                .orElse(null);
+        if (existingProduct == null || !"ACTIVE".equals(stringValue(existingProduct.get("status")))) {
+            return ApiResponse.fail("Vendor product not found");
+        }
+
+        int updatedRows = stallRepository.hideVendorProduct(vendorProfileId, productId);
+        if (updatedRows == 0) {
+            return ApiResponse.fail("Vendor product delete failed");
+        }
+
+        return ApiResponse.success(
+                "Vendor product deleted successfully",
+                new MapBackedResponse(orderedMap(
+                        "productId", productId,
+                        "status", "HIDDEN")));
+    }
+
+    @Transactional
+    public ApiResponse<MapBackedResponse> editVendorProduct(
+            String authorizationHeader,
+            Long productId,
+            VendorProductSaveRequest body) {
+        if (productId == null) {
+            return ApiResponse.fail("Product id is required");
+        }
+        if (body == null) {
+            return ApiResponse.fail("Vendor product request is required");
+        }
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+
+        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        Map<String, Object> existingProduct = stallRepository.findVendorProduct(vendorProfileId, productId)
+                .orElse(null);
+        if (existingProduct == null) {
+            return ApiResponse.fail("Vendor product not found");
+        }
+
+        String validationError = validateVendorProduct(body);
+        if (validationError != null) {
+            return ApiResponse.fail(validationError);
+        }
+        int updatedRows = stallRepository.updateVendorProduct(vendorProfileId, productId, productMap(body));
+        if (updatedRows == 0) {
+            return ApiResponse.fail("Vendor product save failed");
+        }
+
+        Map<String, Object> product = stallRepository.findVendorProduct(vendorProfileId, productId)
+                .orElse(existingProduct);
+        return ApiResponse.success(
+                "Vendor product saved successfully",
+                new MapBackedResponse(orderedMap("product", product)));
+    }
+
+    /**
+     * 攤主送出活動報名。
+     * 
+     * 流程：
+     * 1. 驗證 JWT 並確認登入者是攤主。
+     * 2. 確認活動已發布、目前仍在報名期間，且報名日期落在活動期間內。
+     * 3. 計算報名費與租借設備費用。
+     * 4. 寫入 event_applications、application_dates、equipment_rentals 與
+     * rental_appliances。
+     */
+    @Transactional
+    public ApiResponse<VendorApplicationSubmitResponse> submitVendorApplication(
+            String authorizationHeader,
+            VendorApplicationSubmitRequest body) {
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+        if (body == null || body.getEventId() == null) {
+            return ApiResponse.fail("Event id is required");
+        }
+
+        Map<String, Object> event = stallRepository.findMarketEventForApplication(body.getEventId()).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail("Event not found");
+        }
+        String workflowStatus = stringValue(event.get("workflowStatus"));
+        if (!"PUBLISHED".equals(workflowStatus)) {
+            return ApiResponse.fail("活動尚未開放報名");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+        if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+            return ApiResponse.fail("活動報名尚未開始");
+        }
+        if (registrationEndAt != null && now.isAfter(registrationEndAt)) {
+            return ApiResponse.fail("活動報名已結束");
+        }
+
+        List<LocalDate> applyDates = normalizedApplyDates(body.getApplyDates());
+        if (applyDates.isEmpty()) {
+            return ApiResponse.fail("Apply dates are required");
+        }
+        for (LocalDate applyDate : applyDates) {
+            if (!isDateInEventRange(applyDate, event)) {
+                return ApiResponse.fail("Apply date is not part of this event");
+            }
+        }
+
+        Long vendorUserId = ((Number) vendor.get("userId")).longValue();
+        Long vendorProfileId = ((Number) vendor.get("vendorProfileId")).longValue();
+        if (stallRepository.existsVendorApplication(body.getEventId(), vendorProfileId)) {
+            return ApiResponse.fail("此活動已建立報名資料");
+        }
+
+        List<Map<String, Object>> rentalResponses = new ArrayList<>();
+        BigDecimal equipmentTotal = BigDecimal.ZERO;
+        List<PreparedEquipmentRental> preparedRentals = new ArrayList<>();
+        List<VendorApplicationSubmitRequest.EquipmentRental> requestedRentals = body.getEquipmentRentals() == null
+                ? List.of()
+                : body.getEquipmentRentals();
+        for (VendorApplicationSubmitRequest.EquipmentRental rental : requestedRentals) {
+            if (rental == null || rental.getEventEquipmentId() == null) {
+                return ApiResponse.fail("請提供活動設備 ID");
+            }
+            Map<String, Object> equipment = stallRepository
+                    .findEventEquipmentForApplication(body.getEventId(), rental.getEventEquipmentId())
+                    .orElse(null);
+            if (equipment == null) {
+                return ApiResponse.fail("找不到活動設備資料");
+            }
+            if (!"ACTIVE".equals(stringValue(equipment.get("rentalStatus")))) {
+                return ApiResponse.fail("活動設備目前不可租借");
+            }
+
+            int quantity = rental.getQuantity() == null ? 1 : rental.getQuantity();
+            int rentalUnits = rental.getRentalUnits() == null ? applyDates.size() : rental.getRentalUnits();
+            if (quantity < 1 || rentalUnits < 1) {
+                return ApiResponse.fail("設備租借數量與租借單位數必須大於 0");
+            }
+
+            Integer stockQuantity = toInteger(equipment.get("stockQuantity"));
+            Integer perStallRentalLimit = toInteger(equipment.get("perStallRentalLimit"));
+            if (stockQuantity != null && quantity > stockQuantity) {
+                return ApiResponse.fail("設備租借數量超過可租借庫存");
+            }
+            if (perStallRentalLimit != null && quantity > perStallRentalLimit) {
+                return ApiResponse.fail("設備租借數量超過單攤租借上限");
+            }
+
+            BigDecimal rentalFee = toBigDecimal(equipment.get("rentalFee"));
+            if ("FREE".equals(stringValue(equipment.get("chargeType")))) {
+                rentalFee = BigDecimal.ZERO;
+            }
+            BigDecimal subtotal = rentalFee
+                    .multiply(BigDecimal.valueOf(quantity))
+                    .multiply(BigDecimal.valueOf(rentalUnits));
+            equipmentTotal = equipmentTotal.add(subtotal);
+
+            PreparedEquipmentRental preparedRental = new PreparedEquipmentRental(
+                    rental.getEventEquipmentId(),
+                    normalizeText(equipment.get("name")),
+                    rentalFee,
+                    normalizeText(equipment.get("pricingUnit")),
+                    blankToNull(normalizeText(equipment.get("unit"))),
+                    quantity,
+                    rentalUnits,
+                    subtotal,
+                    rental.getAppliances() == null ? List.of() : rental.getAppliances());
+            preparedRentals.add(preparedRental);
+            rentalResponses.add(orderedMap(
+                    "eventEquipmentId", preparedRental.eventEquipmentId(),
+                    "equipmentName", preparedRental.equipmentName(),
+                    "rentalFee", preparedRental.rentalFee(),
+                    "pricingUnit", preparedRental.pricingUnit(),
+                    "unit", preparedRental.unit(),
+                    "quantity", preparedRental.quantity(),
+                    "rentalUnits", preparedRental.rentalUnits(),
+                    "subtotal", preparedRental.subtotal()));
+        }
+
+        BigDecimal baseFee = toBigDecimal(event.get("baseFee"));
+        BigDecimal applicationFee = baseFee.multiply(BigDecimal.valueOf(applyDates.size()));
+        BigDecimal depositAmount = BigDecimal.ZERO;
+        BigDecimal totalAmount = applicationFee.add(equipmentTotal).add(depositAmount);
+        String applicationNo = nextApplicationNo(event);
+        LocalDateTime paymentDueAt = now.plusDays(3);
+
+        try {
+            Long applicationId = stallRepository.createEventApplication(
+                    applicationNo,
+                    body.getEventId(),
+                    vendorUserId,
+                    vendorProfileId,
+                    blankToNull(body.getVehicleNo()),
+                    blankToNull(body.getApplicantNote()),
+                    totalAmount,
+                    depositAmount,
+                    paymentDueAt);
+            for (LocalDate applyDate : applyDates) {
+                stallRepository.createApplicationDate(applicationId, applyDate);
+            }
+            for (PreparedEquipmentRental rental : preparedRentals) {
+                Long equipmentRentalId = stallRepository.createEquipmentRental(
+                        applicationId,
+                        rental.eventEquipmentId(),
+                        rental.equipmentName(),
+                        rental.rentalFee(),
+                        rental.pricingUnit(),
+                        rental.unit(),
+                        rental.quantity(),
+                        rental.rentalUnits(),
+                        rental.subtotal());
+                for (VendorApplicationSubmitRequest.Appliance appliance : rental.appliances()) {
+                    stallRepository.createRentalAppliance(
+                            equipmentRentalId,
+                            appliance.getApplianceName().trim(),
+                            appliance.getWattage());
+                }
+            }
+
+            Map<String, Object> response = orderedMap(
+                    "applicationId", applicationId,
+                    "applicationNo", applicationNo,
+                    "eventId", body.getEventId(),
+                    "eventTitle", event.get("eventTitle"),
+                    "applicationStatus", "待審核",
+                    "reviewStatus", "PENDING",
+                    "paymentStatus", "PENDING",
+                    "applyDates", applyDates,
+                    "applicationFee", applicationFee,
+                    "equipmentTotal", equipmentTotal,
+                    "depositAmount", depositAmount,
+                    "totalAmount", totalAmount,
+                    "paymentDueAt", paymentDueAt,
+                    "equipmentRentals", rentalResponses);
+            return ApiResponse.success(
+                    "活動報名送出成功",
+                    new VendorApplicationSubmitResponse(response));
+        } catch (DataIntegrityViolationException exception) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return ApiResponse.fail("此活動已建立報名資料");
+        }
+    }
+
+    /**
+     * 查詢攤主後台「我的報名紀錄」列表。
+     *
+     * <p>
+     * 流程：
+     * 1. 驗證 JWT 並確認登入者是攤主。
+     * 2. 依攤主 userId 查詢自己的報名紀錄。
+     * 3. 使用 ApplicationStatusService 統一推導顯示狀態。
+     * 4. 依狀態分頁籤篩選並回傳分頁結果。
+     * </p>
+     */
+    public ApiResponse<VendorMarketSearchResponse> searchVendorMarkets(
+            String authorizationHeader,
+            String eventTitle,
+            String applicationNo,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+
+        Long vendorUserId = ((Number) vendor.get("userId")).longValue();
+        List<VendorMarketSummaryResponse> applications = stallRepository
+                .findVendorMarketApplications(vendorUserId, eventTitle, applicationNo, eventStartAt, eventEndAt)
+                .stream()
+                .map(this::withDisplayApplicationStatus)
+                .filter(application -> matchesApplicationStatus(application, status))
+                .map(this::toVendorMarketSummaryResponse)
+                .map(VendorMarketSummaryResponse::new)
+                .toList();
+
+        return ApiResponse.success(
+                "Vendor market applications retrieved successfully",
+                new VendorMarketSearchResponse(PageResponse.from(applications, page, pageSize)));
+    }
+
+    /**
+     * 公開查詢活動報名列表，不驗證登入者。
+     */
+    public ApiResponse<VendorMarketSearchResponse> searchVendorMarkets(
+            String eventTitle,
+            String applicationNo,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
+        List<VendorMarketSummaryResponse> applications = stallRepository
+                .findVendorMarketApplications(null, eventTitle, applicationNo, eventStartAt, eventEndAt)
+                .stream() // 依序對資料執行後面的操作
+                .map(this::withDisplayApplicationStatus) // 依序對三筆資料執行後面的操作
+                .filter(application -> matchesApplicationStatus(application, status)) // 篩選前端傳入的key = status
+                .map(this::toVendorMarketSummaryResponse)
+                // toVendorMarketSummaryResponse() 就是負責把資料整理成前端需要的 Response DTO
+                .map(VendorMarketSummaryResponse::new)
+                .toList();
+        // Service 最後包裝回傳結果
+        return ApiResponse.success(
+                "Vendor market applications retrieved successfully",
+                new VendorMarketSearchResponse(PageResponse.from(applications, page, pageSize)));
+    }
+
+    /**
+     * 取得攤主後台「我的報名紀錄」單筆詳細資料。
+     */
+    public ApiResponse<VendorMarketDetailResponse> getVendorMarketDetail(
+            String authorizationHeader,
+            Long applicationId) {
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+        if (applicationId == null) {
+            return ApiResponse.fail("Application id is required");
+        }
+
+        Long vendorUserId = ((Number) vendor.get("userId")).longValue();
+        Map<String, Object> application = stallRepository
+                .findVendorMarketApplicationDetail(vendorUserId, applicationId)
+                .orElse(null);
+        if (application == null) {
+            return ApiResponse.fail("Application not found");
+        }
+
+        List<Map<String, Object>> applicationDates = organizerRepository.findApplicationDates(applicationId);
+        List<Map<String, Object>> equipmentRentals = organizerRepository.findApplicationEquipmentRentals(applicationId);
+        Map<String, Object> response = toVendorMarketDetailResponse(
+                withDisplayApplicationStatus(application),
+                applicationDates,
+                equipmentRentals);
+
+        return ApiResponse.success(
+                "Vendor market application detail retrieved successfully",
+                new VendorMarketDetailResponse(response));
+    }
+
+    /**
+     * 取得攤主報名前看到的活動詳細資料，不需要登入。
+     * 活動主資料、每日剩餘攤位、設備與交通資訊分開查詢後再組成前端需要的區塊。
+     */
+    public ApiResponse<VendorMarketDetailResponse> getVendorMarketDetail(Long eventId) {
+        if (eventId == null) {
+            return ApiResponse.fail("Event id is required");
+        }
+
+        Map<String, Object> event = stallRepository.findPublishedMarketDetail(eventId).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail("Event not found");
+        }
+
+        // 使用 LinkedHashMap 固定 JSON 區塊順序，方便前端依畫面區塊直接取用。
+        Map<String, Object> response = new LinkedHashMap<>(event);
+        response.put("dailyAvailability", stallRepository.findMarketDailyAvailability(eventId));
+        response.put("equipments", stallRepository.findPublishedMarketEquipments(eventId));
+        response.put("trafficInfos", stallRepository.findPublishedMarketTrafficInfos(eventId));
+
+        return ApiResponse.success(
+                "Market event detail retrieved successfully",
+                new VendorMarketDetailResponse(response));
     }
 
     public ApiResponse<VendorStallMapResponse> getVendorStallMap(
@@ -469,7 +883,302 @@ public class StallService {
                 applicationData.get("district"),
                 applicationData.get("address")));
 
-        return ApiResponse.success("Vendor stall map retrieved successfully", new VendorStallMapResponse(application, event, stalls));
+        return ApiResponse.success("Vendor stall map retrieved successfully",
+                new VendorStallMapResponse(application, event, stalls));
+    }
+
+    /**
+     * 驗證目前登入者是否為攤主，並回傳攤主帳號與品牌資料。
+     */
+    // private Map<String, Object> authenticatedVendor(String authorizationHeader) {
+    // String token =
+    // jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+    // if (token == null || token.isBlank()) {
+    // return Map.of("message", "Authorization token is required");
+    // }
+    // if (!jwtService.isTokenValid(token)) {
+    // return Map.of("message", "Invalid or expired token");
+    // }
+    // if (!"VENDOR".equals(jwtService.getRole(token))) {
+    // return Map.of("message", "This account is not a vendor");
+    // }
+
+    // Map<String, Object> vendor =
+    // stallRepository.findVendorAccountByEmail(jwtService.getEmail(token))
+    // .orElse(null);
+    // if (vendor == null) {
+    // return Map.of("message", "Vendor profile not found");
+    // }
+    // if (!"VENDOR".equals(vendor.get("role"))) {
+    // return Map.of("message", "This account is not a vendor");
+    // }
+    // return vendor;
+    // }
+
+    /**
+     * 將 DB 狀態欄位轉成前台顯示用的報名狀態。
+     */
+    private Map<String, Object> withDisplayApplicationStatus(Map<String, Object> application) {
+        Map<String, Object> response = new LinkedHashMap<>(application);
+        response.put("applicationStatus", applicationStatusService.resolveApplicationStatus(application));
+        return response;
+    }
+
+    /**
+     * 對應畫面上方的狀態分頁籤；空值、全部、全部狀態都視為不篩選。
+     */
+    private boolean matchesApplicationStatus(Map<String, Object> application, String status) {
+        String normalizedStatus = normalizeText(status);
+        if (normalizedStatus.isEmpty()
+                || "全部".equals(normalizedStatus)
+                || "全部狀態".equals(normalizedStatus)
+                || "ALL".equalsIgnoreCase(normalizedStatus)) {
+            return true;
+        }
+        String applicationStatus = normalizeText(application.get("applicationStatus"));
+        if (normalizedStatus.equals(applicationStatus)) {
+            return true;
+        }
+        return switch (normalizedStatus.toUpperCase()) {
+            case "PENDING", "REVIEW_PENDING" -> "待審核".equals(applicationStatus);
+            case "PAYMENT_PENDING", "UNPAID", "FAILED", "EXPIRED" -> "待付款".equals(applicationStatus);
+            case "STALL_PENDING", "SELECT_STALL", "WAITING_STALL" -> "待選位".equals(applicationStatus);
+            case "COMPLETED", "FINISHED" -> "報名完成".equals(applicationStatus);
+            case "REFUND_REQUESTED" -> "退款申請中".equals(applicationStatus);
+            case "REFUNDING", "REFUND_FAILED" -> "退款處理中".equals(applicationStatus);
+            case "REFUNDED" -> "已退款".equals(applicationStatus);
+            case "CANCELLED", "REJECTED" -> "已取消".equals(applicationStatus) || "審核未通過".equals(applicationStatus);
+            case "HISTORY" -> isHistoryApplicationStatus(applicationStatus);
+            default -> "歷史紀錄".equals(normalizedStatus) && isHistoryApplicationStatus(applicationStatus);
+        };
+    }
+
+    /**
+     * 「歷史紀錄」分頁用來收攏已完成流程或已結束的報名紀錄。
+     */
+    private boolean isHistoryApplicationStatus(String applicationStatus) {
+        return "保證金已退還".equals(applicationStatus)
+                || "已取消".equals(applicationStatus)
+                || "審核未通過".equals(applicationStatus)
+                || "已退款".equals(applicationStatus);
+    }
+
+    /**
+     * 組成攤主報名列表需要的欄位與操作按鈕旗標。
+     */
+    private Map<String, Object> toVendorMarketSummaryResponse(Map<String, Object> application) {
+        return orderedMap(
+                "applicationId", application.get("applicationId"),
+                "applicationNo", application.get("applicationNo"),
+                "eventId", application.get("eventId"),
+                "eventTitle", application.get("eventTitle"),
+                "eventDate", formatEventDate(application.get("startAt"), application.get("endAt")),
+                "startAt", application.get("startAt"),
+                "endAt", application.get("endAt"),
+                "locationName", application.get("locationName"),
+                "address", joinAddress(
+                        application.get("city"),
+                        application.get("district"),
+                        application.get("address")),
+                "imageUrl", application.get("imageUrl"),
+                "applicationStatus", application.get("applicationStatus"),
+                "reviewStatus", application.get("reviewStatus"),
+                "paymentStatus", application.get("paymentStatus"),
+                "depositStatus", application.get("depositStatus"),
+                "refundStatus", application.get("refundStatus"),
+                "isCancelled", application.get("isCancelled"),
+                "appliedAt", application.get("appliedAt"),
+                "canManagePayment", canManagePayment(application),
+                "canSelectStall", canSelectStall(application),
+                "canRequestRefund", canRequestRefund(application));
+    }
+
+    /**
+     * 組成攤主報名詳情頁需要的區塊資料。
+     */
+    private Map<String, Object> toVendorMarketDetailResponse(
+            Map<String, Object> application,
+            List<Map<String, Object>> applicationDates,
+            List<Map<String, Object>> equipmentRentals) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("application", orderedMap(
+                "applicationId", application.get("applicationId"),
+                "applicationNo", application.get("applicationNo"),
+                "applicationStatus", application.get("applicationStatus"),
+                "reviewStatus", application.get("reviewStatus"),
+                "paymentStatus", application.get("paymentStatus"),
+                "depositStatus", application.get("depositStatus"),
+                "refundStatus", application.get("refundStatus"),
+                "isCancelled", application.get("isCancelled"),
+                "appliedAt", formatDateTimeValue(application.get("appliedAt"))));
+        response.put("event", orderedMap(
+                "eventId", application.get("eventId"),
+                "eventTitle", application.get("eventTitle"),
+                "summary", application.get("eventSummary"),
+                "description", application.get("eventDescription"),
+                "eventDate", formatEventDate(application.get("eventStartAt"), application.get("eventEndAt")),
+                "startAt", application.get("eventStartAt"),
+                "endAt", application.get("eventEndAt"),
+                "registrationStartAt", application.get("registrationStartAt"),
+                "registrationEndAt", application.get("registrationEndAt"),
+                "locationName", application.get("locationName"),
+                "address", joinAddress(
+                        application.get("eventCity"),
+                        application.get("eventDistrict"),
+                        application.get("eventAddress")),
+                "coverImageUrl", application.get("eventCoverImageUrl")));
+        response.put("brand", orderedMap(
+                "vendorProfileId", application.get("vendorProfileId"),
+                "brandName", application.get("brandName"),
+                "categoryName", application.get("categoryName"),
+                "brandType", application.get("brandType"),
+                "brandDescription", application.get("brandDescription"),
+                "productSummary", application.get("productSummary"),
+                "instagramUrl", application.get("instagramUrl"),
+                "facebookUrl", application.get("facebookUrl"),
+                "websiteUrl", application.get("websiteUrl")));
+        response.put("contact", orderedMap(
+                "contactName", application.get("contactName"),
+                "contactPhone", application.get("contactPhone"),
+                "contactEmail", application.get("contactEmail"),
+                "address", joinAddress(
+                        application.get("vendorCity"),
+                        application.get("vendorDistrict"),
+                        application.get("vendorAddress"))));
+        response.put("applicationDetail", orderedMap(
+                "applyDates", application.get("applyDates"),
+                "applicationDateCount", application.get("applicationDateCount"),
+                "selectedStallCount", application.get("selectedStallCount"),
+                "vehicleNo", application.get("vehicleNo"),
+                "applicantNote", application.get("applicantNote"),
+                "reviewNote", application.get("reviewNote")));
+        response.put("stalls", toVendorApplicationDateResponses(applicationDates));
+        response.put("fee", orderedMap(
+                "baseFee", application.get("baseFee"),
+                "totalAmount", application.get("totalAmount"),
+                "depositAmount", application.get("depositAmount"),
+                "paymentDueAt", formatDateTimeValue(application.get("paymentDueAt")),
+                "paymentNo", application.get("paymentNo"),
+                "paymentAmount", application.get("paymentAmount"),
+                "paymentProvider", application.get("paymentProvider"),
+                "paymentProviderTradeNo", application.get("paymentProviderTradeNo"),
+                "paymentRecordStatus", application.get("paymentRecordStatus"),
+                "paidAt", formatDateTimeValue(application.get("paidAt")),
+                "refundNo", application.get("refundNo"),
+                "refundAmount", application.get("refundAmount"),
+                "refundedAt", formatDateTimeValue(application.get("refundedAt"))));
+        response.put("equipmentRentals", toVendorEquipmentRentalResponses(equipmentRentals));
+        response.put("actions", orderedMap(
+                "canManagePayment", canManagePayment(application),
+                "canSelectStall", canSelectStall(application),
+                "canRequestRefund", canRequestRefund(application)));
+        return response;
+    }
+
+    /**
+     * 將報名日期轉成前端選位區塊可直接使用的格式。
+     */
+    private List<Map<String, Object>> toVendorApplicationDateResponses(List<Map<String, Object>> applicationDates) {
+        return applicationDates.stream()
+                .map(date -> orderedMap(
+                        "applicationDateId", date.get("applicationDateId"),
+                        "applyDate", formatDateValue(date.get("applyDate")),
+                        "selectedStallId", date.get("selectedStallId"),
+                        "stallNo", date.get("stallNo"),
+                        "zoneName", date.get("zoneName"),
+                        "width", date.get("width"),
+                        "length", date.get("length"),
+                        "height", date.get("height"),
+                        "selectionStatus", date.get("selectedStallId") == null ? "未選位" : "已選位"))
+                .toList();
+    }
+
+    /**
+     * 將設備租借資料依 rental id 合併，避免有多個電器時主設備重複出現。
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> toVendorEquipmentRentalResponses(List<Map<String, Object>> equipmentRentals) {
+        Map<Object, Map<String, Object>> rentalsById = new LinkedHashMap<>();
+        for (Map<String, Object> row : equipmentRentals) {
+            Object rentalId = row.get("equipmentRentalId");
+            Map<String, Object> rental = rentalsById.computeIfAbsent(rentalId, id -> orderedMap(
+                    "equipmentRentalId", row.get("equipmentRentalId"),
+                    "eventEquipmentId", row.get("eventEquipmentId"),
+                    "equipmentName", row.get("equipmentName"),
+                    "equipmentDescription", row.get("equipmentDescription"),
+                    "chargeType", row.get("chargeType"),
+                    "itemType", row.get("itemType"),
+                    "wattageLimit", row.get("wattageLimit"),
+                    "rentalFee", row.get("rentalFee"),
+                    "pricingUnit", row.get("pricingUnit"),
+                    "quantity", row.get("quantity"),
+                    "rentalUnits", row.get("rentalUnits"),
+                    "subtotal", row.get("subtotal"),
+                    "appliances", new java.util.ArrayList<Map<String, Object>>()));
+            if (row.get("applianceId") != null) {
+                List<Map<String, Object>> appliances = (List<Map<String, Object>>) rental.get("appliances");
+                appliances.add(orderedMap(
+                        "applianceId", row.get("applianceId"),
+                        "applianceName", row.get("applianceName"),
+                        "wattage", row.get("wattage")));
+            }
+        }
+        return List.copyOf(rentalsById.values());
+    }
+
+    /**
+     * 待付款、付款失敗或付款逾期時，前台可顯示「前往收款管理」。
+     */
+    private boolean canManagePayment(Map<String, Object> application) {
+        return !isTrue(application.get("isCancelled"))
+                && "APPROVED".equals(stringValue(application.get("reviewStatus")))
+                && !"PAID".equals(stringValue(application.get("paymentStatus")))
+                && stringValue(application.get("refundStatus")).isEmpty();
+    }
+
+    /**
+     * 已付款但尚未完成全部活動日期選位時，前台可顯示「選擇攤位」。
+     */
+    private boolean canSelectStall(Map<String, Object> application) {
+        return !isTrue(application.get("isCancelled"))
+                && "APPROVED".equals(stringValue(application.get("reviewStatus")))
+                && "PAID".equals(stringValue(application.get("paymentStatus")))
+                && stringValue(application.get("refundStatus")).isEmpty()
+                && toLong(application.get("selectedStallCount")) < toLong(application.get("applicationDateCount"));
+    }
+
+    /**
+     * 已付款且尚未進入退款流程時，前台可顯示「退款」。
+     */
+    private boolean canRequestRefund(Map<String, Object> application) {
+        return !isTrue(application.get("isCancelled"))
+                && "PAID".equals(stringValue(application.get("paymentStatus")))
+                && stringValue(application.get("refundStatus")).isEmpty();
+    }
+
+    private String formatEventDate(Object startValue, Object endValue) {
+        LocalDate startDate = toLocalDate(startValue);
+        LocalDate endDate = toLocalDate(endValue);
+        if (startDate == null && endDate == null) {
+            return null;
+        }
+        if (startDate == null) {
+            return endDate.toString();
+        }
+        if (endDate == null || startDate.equals(endDate)) {
+            return startDate.toString();
+        }
+        return startDate + " - " + endDate;
+    }
+
+    private String formatDateValue(Object value) {
+        LocalDate date = toLocalDate(value);
+        return date == null ? null : date.toString();
+    }
+
+    private String formatDateTimeValue(Object value) {
+        LocalDateTime dateTime = toLocalDateTime(value);
+        return dateTime == null ? null : dateTime.toString();
     }
 
     public ApiResponse<MapBackedResponse> getOrganizerStallMap(
@@ -594,14 +1303,15 @@ public class StallService {
 
         Map<String, Object> response = orderedMap(
                 "stall", stall,
-                "application", applicationData == null ? null : orderedMap(
-                        "id", detail.get("applicationId")),
-                "vendor", applicationData == null ? null : orderedMap(
-                        "brandName", detail.get("brandName"),
-                        "brandType", detail.get("categoryName"),
-                        "vendorOwnerName", detail.get("vendorOwnerName"),
-                        "vendorPhone", detail.get("vendorPhone"),
-                        "vendorEmail", detail.get("vendorEmail")));
+                "application", applicationData == null ? null
+                        : orderedMap(
+                                "id", detail.get("applicationId")),
+                "vendor", applicationData == null ? null
+                        : orderedMap(
+                                "brandName", detail.get("brandName"),
+                                "vendorOwnerName", detail.get("vendorOwnerName"),
+                                "vendorPhone", detail.get("vendorPhone"),
+                                "vendorEmail", detail.get("vendorEmail")));
 
         return ApiResponse.success(
                 "Organizer stall detail retrieved successfully",
@@ -951,7 +1661,8 @@ public class StallService {
 
     private boolean isSelectedStallApplication(Map<String, Object> applicationData) {
         return toLong(applicationData.get("selectedStallCount")) > 0
-                && toLong(applicationData.get("selectedStallCount")).equals(toLong(applicationData.get("applicationDateCount")))
+                && toLong(applicationData.get("selectedStallCount"))
+                        .equals(toLong(applicationData.get("applicationDateCount")))
                 && "PAID".equals(stringValue(applicationData.get("paymentStatus")))
                 && !isTrue(applicationData.get("isCancelled"))
                 && stringValue(applicationData.get("refundStatus")).isEmpty();
@@ -1066,6 +1777,68 @@ public class StallService {
         return 0L;
     }
 
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String string && !string.isBlank()) {
+            return Integer.valueOf(string);
+        }
+        return null;
+    }
+
+    private BigDecimal toBigDecimal(Object value) {
+        if (value instanceof BigDecimal bigDecimal) {
+            return bigDecimal;
+        }
+        if (value instanceof Number number) {
+            return BigDecimal.valueOf(number.doubleValue());
+        }
+        if (value instanceof String string && !string.isBlank()) {
+            return new BigDecimal(string);
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private List<LocalDate> normalizedApplyDates(List<LocalDate> applyDates) {
+        if (applyDates == null) {
+            return List.of();
+        }
+        List<LocalDate> normalizedDates = new ArrayList<>(new LinkedHashSet<>(
+                applyDates.stream()
+                        .filter(date -> date != null)
+                        .toList()));
+        normalizedDates.sort(LocalDate::compareTo);
+        return normalizedDates;
+    }
+
+    private String nextApplicationNo(Map<String, Object> event) {
+        LocalDate eventStartDate = toLocalDate(event.get("startAt"));
+        LocalDate prefixDate = eventStartDate == null ? LocalDate.now() : eventStartDate;
+        String prefix = "MD" + prefixDate.format(DateTimeFormatter.BASIC_ISO_DATE);
+        String latestApplicationNo = stallRepository.findLatestApplicationNoByPrefix(prefix).orElse(null);
+        int nextSequence = 1;
+        if (latestApplicationNo != null && latestApplicationNo.length() > prefix.length()) {
+            String sequenceText = latestApplicationNo.substring(prefix.length());
+            try {
+                nextSequence = Integer.parseInt(sequenceText) + 1;
+            } catch (NumberFormatException ignored) {
+                nextSequence = 1;
+            }
+        }
+        return prefix + String.format("%04d", nextSequence);
+    }
+
+    private String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
     private Map<String, Object> orderedMap(Object... keyValues) {
         Map<String, Object> map = new LinkedHashMap<>();
         for (int i = 0; i + 1 < keyValues.length; i += 2) {
@@ -1073,4 +1846,51 @@ public class StallService {
         }
         return map;
     }
+
+    private record PreparedEquipmentRental(
+            Long eventEquipmentId,
+            String equipmentName,
+            BigDecimal rentalFee,
+            String pricingUnit,
+            String unit,
+            Integer quantity,
+            Integer rentalUnits,
+            BigDecimal subtotal,
+            List<VendorApplicationSubmitRequest.Appliance> appliances) {
+    }
+
+    /**
+     * 查詢攤主專區可報名的市集；Repository 負責條件篩選，Service 負責 DTO 轉換與分頁。
+     */
+    public ApiResponse<MarketSearchResponse> searchMarkets(
+            String keyword,
+            String city,
+            String district,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
+
+        List<MarketSummaryResponse> markets = stallRepository
+                .findMarkets(
+                        keyword,
+                        city,
+                        district,
+                        status,
+                        eventStartAt,
+                        eventEndAt)
+                .stream()
+                .map(MarketSummaryResponse::new)
+                .toList();
+
+        return ApiResponse.success(
+                "Market list retrieved successfully",
+                new MarketSearchResponse(
+                        PageResponse.from(
+                                markets,
+                                page,
+                                pageSize)));
+    }
+
 }

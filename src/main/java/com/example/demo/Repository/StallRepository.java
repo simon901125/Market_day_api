@@ -1,13 +1,18 @@
 package com.example.demo.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -16,6 +21,13 @@ public class StallRepository {
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
+    /**
+     * 查詢攤主ID
+     * 
+     * @param eventId 活動ID
+     * @param stallNo 攤主ID
+     * @return
+     */
     public Optional<Long> findStallId(Long eventId, String stallNo) {
         String sql = """
                 SELECT id
@@ -48,7 +60,8 @@ public class StallRepository {
         map.put("eventId", eventId);
         map.put("stallNo", stallNo);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public Optional<Map<String, Object>> findApplicationForSelection(String applicationNo) {
@@ -78,7 +91,8 @@ public class StallRepository {
         Map<String, Object> map = new HashMap<>();
         map.put("applicationNo", applicationNo);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public Optional<Map<String, Object>> findSelectableApplication(String applicationNo) {
@@ -115,7 +129,8 @@ public class StallRepository {
         Map<String, Object> map = new HashMap<>();
         map.put("applicationNo", applicationNo);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public List<Map<String, Object>> findApplicationDatesForSelection(Long applicationId) {
@@ -173,7 +188,461 @@ public class StallRepository {
         Map<String, Object> map = new HashMap<>();
         map.put("email", email);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    /**
+     * 查詢(攤主自己的)活動報名紀錄
+     * 列表需要同時顯示活動基本資料、報名狀態、退款狀態與選位進度，
+     * 因此在這裡先把狀態判斷會用到的欄位一次查出來。
+     * 
+     * @param vendorUserId
+     * @param eventTitle
+     * @param applicationNo
+     * @param eventStartAt
+     * @param eventEndAt
+     * @return
+     */
+    public List<Map<String, Object>> findVendorMarketApplications(
+            Long vendorUserId,
+            String eventTitle,
+            String applicationNo,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt) {
+        String sql = """
+                SELECT
+                    a.id AS applicationId,
+                    a.application_no AS applicationNo,
+                    a.user_id AS userId,
+                    a.vendor_profile_id AS vendorProfileId,
+                    a.review_status AS reviewStatus,
+                    a.payment_status AS paymentStatus,
+                    a.deposit_status AS depositStatus,
+                    a.is_cancelled AS isCancelled,
+                    a.created_at AS appliedAt,
+                    e.id AS eventId,
+                    e.title AS eventTitle,
+                    e.location_name AS locationName,
+                    e.city,
+                    e.district,
+                    e.address,
+                    e.start_at AS startAt,
+                    e.end_at AS endAt,
+                    e.end_at AS eventEndAt,
+                    COALESCE(e.cover_image_url, first_image.imageUrl) AS imageUrl,
+                    date_counts.applicationDateCount,
+                    date_counts.selectedStallCount,
+                    refund_data.refundStatus
+                FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
+                OUTER APPLY (
+                    SELECT TOP 1 ei.image_url AS imageUrl
+                    FROM dbo.event_images ei
+                    WHERE ei.event_id = e.id
+                    ORDER BY ei.id ASC
+                ) first_image
+                OUTER APPLY (
+                    SELECT
+                        COUNT(*) AS applicationDateCount,
+                        SUM(CASE WHEN ad.selected_stall_id IS NULL THEN 0 ELSE 1 END) AS selectedStallCount
+                    FROM dbo.application_dates ad
+                    WHERE ad.application_id = a.id
+                ) date_counts
+                OUTER APPLY (
+                    SELECT TOP 1 r.refund_status AS refundStatus
+                    FROM dbo.refunds r
+                    WHERE r.application_id = a.id
+                    ORDER BY
+                        CASE r.refund_status
+                            WHEN N'REFUNDED' THEN 1
+                            WHEN N'REFUNDING' THEN 2
+                            WHEN N'REFUND_REQUESTED' THEN 3
+                            WHEN N'REFUND_FAILED' THEN 4
+                            ELSE 5
+                        END,
+                        r.id DESC
+                ) refund_data
+                WHERE (:vendorUserId IS NULL OR a.user_id = :vendorUserId)
+                  AND (:eventTitle IS NULL OR e.title LIKE N'%' + :eventTitle + N'%')
+                  AND (:applicationNo IS NULL OR a.application_no LIKE N'%' + :applicationNo + N'%')
+                  AND (:eventStartAt IS NULL OR CONVERT(date, e.end_at) >= :eventStartAt)
+                  AND (:eventEndAt IS NULL OR CONVERT(date, e.start_at) <= :eventEndAt)
+                ORDER BY a.created_at DESC, a.id DESC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("vendorUserId", vendorUserId);
+        map.put("eventTitle", blankToNull(eventTitle));
+        map.put("applicationNo", blankToNull(applicationNo));
+        map.put("eventStartAt", eventStartAt);
+        map.put("eventEndAt", eventEndAt);
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
+    /**
+     * 查詢攤主自己的單筆活動報名詳情。
+     *
+     * 使用 vendorUserId 限制資料歸屬，避免攤主透過 id 查到其他人的報名單。
+     */
+    public Optional<Map<String, Object>> findVendorMarketApplicationDetail(Long vendorUserId, Long applicationId) {
+        String sql = """
+                SELECT
+                    a.id AS applicationId,
+                    a.application_no AS applicationNo,
+                    a.event_id AS eventId,
+                    a.user_id AS userId,
+                    a.vendor_profile_id AS vendorProfileId,
+                    a.vehicle_no AS vehicleNo,
+                    a.applicant_note AS applicantNote,
+                    a.total_amount AS totalAmount,
+                    a.deposit_amount AS depositAmount,
+                    a.deposit_status AS depositStatus,
+                    a.payment_due_at AS paymentDueAt,
+                    a.review_status AS reviewStatus,
+                    a.review_note AS reviewNote,
+                    a.payment_status AS paymentStatus,
+                    a.is_cancelled AS isCancelled,
+                    a.created_at AS appliedAt,
+                    e.title AS eventTitle,
+                    e.summary AS eventSummary,
+                    e.description AS eventDescription,
+                    e.location_name AS locationName,
+                    e.city AS eventCity,
+                    e.district AS eventDistrict,
+                    e.address AS eventAddress,
+                    e.start_at AS eventStartAt,
+                    e.end_at AS eventEndAt,
+                    e.registration_start_at AS registrationStartAt,
+                    e.registration_end_at AS registrationEndAt,
+                    e.base_fee AS baseFee,
+                    COALESCE(e.cover_image_url, first_image.imageUrl) AS eventCoverImageUrl,
+                    up.name AS brandName,
+                    up.contact_name AS contactName,
+                    up.contact_phone AS contactPhone,
+                    up.contact_email AS contactEmail,
+                    up.city AS vendorCity,
+                    up.district AS vendorDistrict,
+                    up.address AS vendorAddress,
+                    vp.brand_type AS brandType,
+                    vp.brand_description AS brandDescription,
+                    vp.product_summary AS productSummary,
+                    vp.instagram_url AS instagramUrl,
+                    vp.facebook_url AS facebookUrl,
+                    vp.website_url AS websiteUrl,
+                    c.name AS categoryName,
+                    application_dates.applyDates,
+                    application_dates.applicationDateCount,
+                    application_dates.selectedStallCount,
+                    latest_payment.paymentNo,
+                    latest_payment.paymentAmount,
+                    latest_payment.paymentProvider,
+                    latest_payment.paymentProviderTradeNo,
+                    latest_payment.paymentRecordStatus,
+                    latest_payment.paidAt,
+                    latest_payment.paymentCreatedAt,
+                    latest_refund.refundNo,
+                    latest_refund.refundAmount,
+                    latest_refund.refundStatus,
+                    latest_refund.refundedAt
+                FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
+                INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
+                INNER JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
+                INNER JOIN dbo.categories c ON c.id = vp.category_id
+                OUTER APPLY (
+                    SELECT TOP 1 ei.image_url AS imageUrl
+                    FROM dbo.event_images ei
+                    WHERE ei.event_id = e.id
+                    ORDER BY ei.id ASC
+                ) first_image
+                OUTER APPLY (
+                    SELECT
+                        STRING_AGG(CONVERT(varchar(10), ad.apply_date, 23), ',') WITHIN GROUP (ORDER BY ad.apply_date) AS applyDates,
+                        COUNT(*) AS applicationDateCount,
+                        SUM(CASE WHEN ad.selected_stall_id IS NULL THEN 0 ELSE 1 END) AS selectedStallCount
+                    FROM dbo.application_dates ad
+                    WHERE ad.application_id = a.id
+                ) application_dates
+                OUTER APPLY (
+                    SELECT TOP 1
+                        p.payment_no AS paymentNo,
+                        p.amount AS paymentAmount,
+                        p.provider AS paymentProvider,
+                        p.provider_trade_no AS paymentProviderTradeNo,
+                        p.status AS paymentRecordStatus,
+                        p.paid_at AS paidAt,
+                        p.created_at AS paymentCreatedAt
+                    FROM dbo.payments p
+                    WHERE p.application_id = a.id
+                    ORDER BY p.created_at DESC, p.id DESC
+                ) latest_payment
+                OUTER APPLY (
+                    SELECT TOP 1
+                        r.refund_no AS refundNo,
+                        r.amount AS refundAmount,
+                        r.refund_status AS refundStatus,
+                        r.refunded_at AS refundedAt
+                    FROM dbo.refunds r
+                    WHERE r.application_id = a.id
+                    ORDER BY
+                        CASE r.refund_status
+                            WHEN N'REFUNDED' THEN 1
+                            WHEN N'REFUNDING' THEN 2
+                            WHEN N'REFUND_REQUESTED' THEN 3
+                            WHEN N'REFUND_FAILED' THEN 4
+                            ELSE 5
+                        END,
+                        r.id DESC
+                ) latest_refund
+                WHERE a.id = :applicationId
+                  AND (:vendorUserId IS NULL OR a.user_id = :vendorUserId)
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("vendorUserId", vendorUserId);
+        map.put("applicationId", applicationId);
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    /**
+     * 查詢攤主報名前需要驗證的活動資料。
+     */
+    public Optional<Map<String, Object>> findMarketEventForApplication(Long eventId) {
+        String sql = """
+                SELECT
+                    e.id AS eventId,
+                    e.title AS eventTitle,
+                    e.start_at AS startAt,
+                    e.end_at AS endAt,
+                    e.registration_start_at AS registrationStartAt,
+                    e.registration_end_at AS registrationEndAt,
+                    e.workflow_status AS workflowStatus,
+                    e.base_fee AS baseFee
+                FROM dbo.market_events e
+                WHERE e.id = :eventId
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("eventId", eventId);
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    /**
+     * 同一個品牌在同一活動只能建立一筆報名單。
+     */
+    public boolean existsVendorApplication(Long eventId, Long vendorProfileId) {
+        String sql = """
+                SELECT COUNT(1)
+                FROM dbo.event_applications
+                WHERE event_id = :eventId
+                  AND vendor_profile_id = :vendorProfileId
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("eventId", eventId);
+        map.put("vendorProfileId", vendorProfileId);
+        Integer count = namedParameterJdbcTemplate.queryForObject(sql, map, Integer.class);
+        return count != null && count > 0;
+    }
+
+    /**
+     * 取得同一活動日期前綴下最後一筆申請單號，用來產生下一個流水號。
+     */
+    public Optional<String> findLatestApplicationNoByPrefix(String prefix) {
+        String sql = """
+                SELECT TOP 1 application_no
+                FROM dbo.event_applications
+                WHERE application_no LIKE :prefix + N'%'
+                ORDER BY application_no DESC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("prefix", prefix);
+        return namedParameterJdbcTemplate.queryForList(sql, map, String.class).stream().findFirst();
+    }
+
+    /**
+     * 查詢活動可租借設備，限制設備必須屬於目前報名活動。
+     */
+    public Optional<Map<String, Object>> findEventEquipmentForApplication(Long eventId, Long eventEquipmentId) {
+        String sql = """
+                SELECT
+                    ee.id AS eventEquipmentId,
+                    ee.event_id AS eventId,
+                    ee.name,
+                    ee.rental_fee AS rentalFee,
+                    ee.pricing_unit AS pricingUnit,
+                    ee.unit,
+                    ee.charge_type AS chargeType,
+                    ee.item_type AS itemType,
+                    ee.stock_quantity AS stockQuantity,
+                    ee.per_stall_rental_limit AS perStallRentalLimit,
+                    ee.rental_status AS rentalStatus,
+                    ee.wattage_limit AS wattageLimit
+                FROM dbo.event_equipments ee
+                WHERE ee.event_id = :eventId
+                  AND ee.id = :eventEquipmentId
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("eventId", eventId);
+        map.put("eventEquipmentId", eventEquipmentId);
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    /**
+     * 新增活動報名主檔，回傳 event_applications.id。
+     */
+    public Long createEventApplication(
+            String applicationNo,
+            Long eventId,
+            Long userId,
+            Long vendorProfileId,
+            String vehicleNo,
+            String applicantNote,
+            BigDecimal totalAmount,
+            BigDecimal depositAmount,
+            LocalDateTime paymentDueAt) {
+        String sql = """
+                INSERT INTO dbo.event_applications (
+                    application_no,
+                    event_id,
+                    user_id,
+                    vendor_profile_id,
+                    vehicle_no,
+                    applicant_note,
+                    total_amount,
+                    deposit_amount,
+                    payment_due_at
+                )
+                VALUES (
+                    :applicationNo,
+                    :eventId,
+                    :userId,
+                    :vendorProfileId,
+                    :vehicleNo,
+                    :applicantNote,
+                    :totalAmount,
+                    :depositAmount,
+                    :paymentDueAt
+                )
+                """;
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("applicationNo", applicationNo)
+                .addValue("eventId", eventId)
+                .addValue("userId", userId)
+                .addValue("vendorProfileId", vendorProfileId)
+                .addValue("vehicleNo", vehicleNo)
+                .addValue("applicantNote", applicantNote)
+                .addValue("totalAmount", totalAmount)
+                .addValue("depositAmount", depositAmount)
+                .addValue("paymentDueAt", paymentDueAt);
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        namedParameterJdbcTemplate.update(sql, params, keyHolder, new String[] { "id" });
+        return keyHolder.getKey().longValue();
+    }
+
+    /**
+     * 新增單一報名日期；每個日期後續都可以獨立選位。
+     */
+    public void createApplicationDate(Long applicationId, LocalDate applyDate) {
+        String sql = """
+                INSERT INTO dbo.application_dates (
+                    application_id,
+                    apply_date
+                )
+                VALUES (
+                    :applicationId,
+                    :applyDate
+                )
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("applicationId", applicationId);
+        map.put("applyDate", applyDate);
+        namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    /**
+     * 新增設備租借資料，保留報名當下的設備名稱與價格快照。
+     */
+    public Long createEquipmentRental(
+            Long applicationId,
+            Long eventEquipmentId,
+            String equipmentName,
+            BigDecimal rentalFee,
+            String pricingUnit,
+            String unit,
+            Integer quantity,
+            Integer rentalUnits,
+            BigDecimal subtotal) {
+        String sql = """
+                INSERT INTO dbo.equipment_rentals (
+                    application_id,
+                    event_equipment_id,
+                    equipment_name,
+                    rental_fee,
+                    pricing_unit,
+                    unit,
+                    quantity,
+                    rental_units,
+                    subtotal
+                )
+                VALUES (
+                    :applicationId,
+                    :eventEquipmentId,
+                    :equipmentName,
+                    :rentalFee,
+                    :pricingUnit,
+                    :unit,
+                    :quantity,
+                    :rentalUnits,
+                    :subtotal
+                )
+                """;
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("applicationId", applicationId)
+                .addValue("eventEquipmentId", eventEquipmentId)
+                .addValue("equipmentName", equipmentName)
+                .addValue("rentalFee", rentalFee)
+                .addValue("pricingUnit", pricingUnit)
+                .addValue("unit", unit)
+                .addValue("quantity", quantity)
+                .addValue("rentalUnits", rentalUnits)
+                .addValue("subtotal", subtotal);
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        namedParameterJdbcTemplate.update(sql, params, keyHolder, new String[] { "id" });
+        return keyHolder.getKey().longValue();
+    }
+
+    /**
+     * 新增加購用電時的電器明細。
+     */
+    public void createRentalAppliance(Long equipmentRentalId, String applianceName, Integer wattage) {
+        String sql = """
+                INSERT INTO dbo.rental_appliances (
+                    equipment_rental_id,
+                    appliance_name,
+                    wattage
+                )
+                VALUES (
+                    :equipmentRentalId,
+                    :applianceName,
+                    :wattage
+                )
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("equipmentRentalId", equipmentRentalId);
+        map.put("applianceName", applianceName);
+        map.put("wattage", wattage);
+        namedParameterJdbcTemplate.update(sql, map);
     }
 
     public List<Map<String, Object>> findVendorProducts(Long vendorProfileId) {
@@ -193,6 +662,28 @@ public class StallRepository {
         Map<String, Object> map = new HashMap<>();
         map.put("vendorProfileId", vendorProfileId);
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
+    public Optional<Map<String, Object>> findVendorProduct(Long vendorProfileId, Long productId) {
+        String sql = """
+                SELECT
+                    id,
+                    vendor_profile_id AS vendorProfileId,
+                    name AS productName,
+                    price AS productPrice,
+                    short_description AS productSummary,
+                    image_url AS productImageUrl,
+                    status
+                FROM dbo.vendor_products
+                WHERE id = :productId
+                  AND vendor_profile_id = :vendorProfileId
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("vendorProfileId", vendorProfileId);
+        map.put("productId", productId);
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public Optional<Long> findActiveCategoryIdByName(String categoryName) {
@@ -256,10 +747,10 @@ public class StallRepository {
         } else {
             namedParameterJdbcTemplate.update(
                     """
-                    DELETE FROM dbo.vendor_products
-                    WHERE vendor_profile_id = :vendorProfileId
-                      AND id NOT IN (:productIds)
-                    """,
+                            DELETE FROM dbo.vendor_products
+                            WHERE vendor_profile_id = :vendorProfileId
+                              AND id NOT IN (:productIds)
+                            """,
                     Map.of("vendorProfileId", vendorProfileId, "productIds", retainedProductIds));
         }
 
@@ -320,7 +811,8 @@ public class StallRepository {
         return namedParameterJdbcTemplate.update(sql, map);
     }
 
-    public Optional<Map<String, Object>> findSelectedStallApplication(String applicationNo, LocalDate applyDate, String stallNo) {
+    public Optional<Map<String, Object>> findSelectedStallApplication(String applicationNo, LocalDate applyDate,
+            String stallNo) {
         String sql = """
                 SELECT
                     a.id AS applicationId,
@@ -341,7 +833,8 @@ public class StallRepository {
         map.put("applyDate", applyDate);
         map.put("stallNo", stallNo);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public List<Map<String, Object>> findSelectedApplicationDates(String applicationNo) {
@@ -438,7 +931,8 @@ public class StallRepository {
         map.put("applicationNo", applicationNo);
         map.put("applyDate", applyDate);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public List<Map<String, Object>> findEventStallsMap(Long eventId, LocalDate applyDate) {
@@ -548,7 +1042,8 @@ public class StallRepository {
         map.put("organizerUserId", organizerUserId);
         map.put("eventId", eventId);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public Optional<Map<String, Object>> findEventForStallStatus(Long eventId) {
@@ -564,7 +1059,8 @@ public class StallRepository {
         Map<String, Object> map = new HashMap<>();
         map.put("eventId", eventId);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public Optional<Map<String, Object>> findOrganizerStallMapDetail(
@@ -650,7 +1146,8 @@ public class StallRepository {
         map.put("stallNo", stallNo);
         map.put("applyDate", applyDate);
 
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public List<Map<String, Object>> findEventStallsStatus(Long eventId, LocalDate applyDate) {
@@ -686,5 +1183,272 @@ public class StallRepository {
         map.put("eventId", eventId);
         map.put("applyDate", applyDate);
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
+    /**
+     * 依攤主市集報名頁的篩選條件查詢 workflow_status 為 PUBLISHED 的活動。
+     * 日期採「區間有交集」判斷，讓跨日活動不會因只查其中一天而被漏掉。
+     */
+    public List<Map<String, Object>> findMarkets(
+            String keyword,
+            String city,
+            String district,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt) {
+        StringBuilder sql = new StringBuilder("""
+                        SELECT
+                    e.id AS eventId,
+                    e.title AS eventTitle,
+                    e.summary,
+                    e.location_name AS locationName,
+                    e.city,
+                    e.district,
+                    e.address,
+                    e.max_booths AS maxBooths,
+                    e.start_at AS startAt,
+                    e.end_at AS endAt,
+                    e.registration_start_at AS registrationStartAt,
+                    e.registration_end_at AS registrationEndAt,
+                    e.base_fee AS baseFee,
+
+                    t.traffic_title AS trafficTitle,
+                    t.traffic_details AS trafficDetail,
+
+                    c.name AS categoryName,
+                    op.organizer_name AS organizerName,
+
+                    COALESCE(e.cover_image_url, first_image.image_url) AS imageUrl,
+
+                    CASE
+                        WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
+                        WHEN GETDATE() <= e.registration_end_at THEN N'OPEN'
+                        ELSE N'CLOSED'
+                    END AS registrationStatus
+
+                FROM dbo.market_events AS e
+
+                OUTER APPLY
+                (
+                    SELECT TOP (1)
+                        ti.traffic_title,
+                        ti.traffic_details
+                    FROM dbo.event_traffic_infos AS ti
+                    WHERE ti.event_id = e.id
+                    ORDER BY ti.id ASC
+                ) AS t
+
+                LEFT JOIN dbo.categories AS c
+                    ON c.id = e.category_id
+
+                LEFT JOIN dbo.user_profiles AS up
+                    ON up.user_id = e.user_id
+                   AND up.profile_type = N'ORGANIZER'
+
+                LEFT JOIN dbo.organizer_profiles AS op
+                    ON op.user_profile_id = up.id
+
+                OUTER APPLY
+                (
+                    SELECT TOP (1)
+                        ei.image_url
+                    FROM dbo.event_images AS ei
+                    WHERE ei.event_id = e.id
+                    ORDER BY ei.id ASC
+                ) AS first_image
+
+                WHERE e.workflow_status = N'PUBLISHED'
+                        AND e.registration_end_at >= GETDATE()
+                        """);
+
+        Map<String, Object> params = new HashMap<>();
+        String normalizedKeyword = blankToNull(keyword);
+        if (normalizedKeyword != null) {
+            sql.append(
+                    " AND (e.title LIKE :keyword OR e.summary LIKE :keyword OR e.location_name LIKE :keyword OR e.address LIKE :keyword)");
+            params.put("keyword", "%" + normalizedKeyword + "%");
+        }
+        if (blankToNull(city) != null) {
+            sql.append(" AND e.city = :city");
+            params.put("city", city.trim());
+        }
+        if (blankToNull(district) != null) {
+            sql.append(" AND e.district = :district");
+            params.put("district", district.trim());
+        }
+        if (eventStartAt != null) {
+            sql.append(" AND e.end_at >= :eventStartAt");
+            params.put("eventStartAt", eventStartAt);
+        }
+        if (eventEndAt != null) {
+            sql.append(" AND e.start_at <= :eventEndAt");
+            params.put("eventEndAt", eventEndAt);
+        }
+
+        String normalizedStatus = blankToNull(status);
+        if (normalizedStatus != null && !"ALL".equalsIgnoreCase(normalizedStatus)
+                && !"全部狀態".equals(normalizedStatus)) {
+            switch (normalizedStatus.toUpperCase()) {
+                case "OPEN" -> sql.append(" AND GETDATE() BETWEEN e.registration_start_at AND e.registration_end_at");
+                case "UPCOMING" -> sql.append(" AND GETDATE() < e.registration_start_at");
+                case "CLOSED" -> sql.append(" AND GETDATE() > e.registration_end_at");
+                default -> sql.append(" AND 1 = 0"); // 未知狀態不應意外回傳全部資料。
+            }
+        }
+
+        sql.append(" ORDER BY e.start_at ASC, e.id ASC");
+        return RepositoryResultMapper.normalizeList(
+                namedParameterJdbcTemplate.queryForList(sql.toString(), params));
+    }
+
+    /** 取得已發布活動的基本資料、分類及主辦方聯絡資訊。 */
+    public Optional<Map<String, Object>> findPublishedMarketDetail(Long eventId) {
+        String sql = """
+                SELECT
+                    e.id AS eventId,
+                    e.title AS eventTitle,
+                    e.summary,
+                    e.description,
+                    e.location_name AS locationName,
+                    e.city,
+                    e.district,
+                    e.address,
+                    e.notice,
+                    e.start_at AS startAt,
+                    e.end_at AS endAt,
+                    e.registration_start_at AS registrationStartAt,
+                    e.registration_end_at AS registrationEndAt,
+                    e.max_booths AS maxBooths,
+                    e.base_fee AS baseFee,
+                    COALESCE(e.cover_image_url, first_image.image_url) AS coverImageUrl,
+                    e.map_image_url AS mapImageUrl,
+                    c.name AS categoryName,
+                    op.organizer_name AS organizerName,
+                    op.company_name AS companyName,
+                    op.service_days AS serviceDays,
+                    op.service_start_time AS serviceStartTime,
+                    op.service_end_time AS serviceEndTime,
+                    up.contact_name AS contactName,
+                    up.contact_phone AS contactPhone,
+                    up.contact_email AS contactEmail,
+                    stall_size.width AS stallWidth,
+                    stall_size.length AS stallLength,
+                    stall_size.height AS stallHeight,
+                    CASE
+                        WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
+                        WHEN GETDATE() <= e.registration_end_at THEN N'OPEN'
+                        ELSE N'CLOSED'
+                    END AS registrationStatus
+                FROM dbo.market_events e
+                INNER JOIN dbo.categories c ON c.id = e.category_id
+                LEFT JOIN dbo.user_profiles up
+                    ON up.user_id = e.user_id AND up.profile_type = N'ORGANIZER'
+                LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
+                OUTER APPLY (
+                    SELECT TOP 1 image_url
+                    FROM dbo.event_images
+                    WHERE event_id = e.id
+                    ORDER BY id
+                ) first_image
+                OUTER APPLY (
+                    SELECT TOP 1 width, length, height
+                    FROM dbo.event_stalls
+                    WHERE event_id = e.id AND status <> N'DISABLED'
+                    ORDER BY id
+                ) stall_size
+                WHERE e.id = :eventId
+                  AND e.workflow_status = N'PUBLISHED'
+                """;
+        return RepositoryResultMapper.normalizeOptional(
+                namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)).stream().findFirst());
+    }
+
+    /** 逐日計算活動可用攤位數；已被有效報名選走的攤位不計入剩餘數。 */
+    public List<Map<String, Object>> findMarketDailyAvailability(Long eventId) {
+        String sql = """
+                WITH event_dates AS (
+                    SELECT CAST(start_at AS DATE) AS applyDate, CAST(end_at AS DATE) AS endDate
+                    FROM dbo.market_events
+                    WHERE id = :eventId
+                    UNION ALL
+                    SELECT DATEADD(DAY, 1, applyDate), endDate
+                    FROM event_dates
+                    WHERE applyDate < endDate
+                )
+                SELECT
+                    d.applyDate,
+                    stall_count.totalStalls,
+                    stall_count.totalStalls - COUNT(DISTINCT selected_stall.id) AS remainingStalls
+                FROM event_dates d
+                CROSS APPLY (
+                    SELECT COUNT(*) AS totalStalls
+                    FROM dbo.event_stalls
+                    WHERE event_id = :eventId AND status <> N'DISABLED'
+                ) stall_count
+                LEFT JOIN dbo.application_dates ad ON ad.apply_date = d.applyDate
+                LEFT JOIN dbo.event_applications a
+                    ON a.id = ad.application_id
+                    AND a.event_id = :eventId
+                    AND a.is_cancelled = 0
+                    AND a.review_status <> N'REJECTED'
+                LEFT JOIN dbo.event_stalls selected_stall
+                    ON selected_stall.id = ad.selected_stall_id
+                    AND selected_stall.event_id = :eventId
+                    AND a.id IS NOT NULL
+                GROUP BY d.applyDate, stall_count.totalStalls
+                ORDER BY d.applyDate
+                OPTION (MAXRECURSION 366)
+                """;
+        return RepositoryResultMapper.normalizeList(
+                namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)));
+    }
+
+    /** 取得活動目前啟用中的免費設備、租借設備及用電方案。 */
+    public List<Map<String, Object>> findPublishedMarketEquipments(Long eventId) {
+        String sql = """
+                SELECT
+                    id AS eventEquipmentId,
+                    equipment_group_key AS equipmentGroupKey,
+                    name,
+                    description,
+                    rental_fee AS rentalFee,
+                    pricing_unit AS pricingUnit,
+                    unit,
+                    charge_type AS chargeType,
+                    item_type AS itemType,
+                    stock_quantity AS stockQuantity,
+                    per_stall_rental_limit AS perStallRentalLimit,
+                    wattage_limit AS wattageLimit
+                FROM dbo.event_equipments
+                WHERE event_id = :eventId AND rental_status = N'ACTIVE'
+                ORDER BY item_type, charge_type, id
+                """;
+        return RepositoryResultMapper.normalizeList(
+                namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)));
+    }
+
+    /** 取得活動的交通方式說明。 */
+    public List<Map<String, Object>> findPublishedMarketTrafficInfos(Long eventId) {
+        String sql = """
+                SELECT id, traffic_title AS trafficTitle, traffic_details AS trafficDetails
+                FROM dbo.event_traffic_infos
+                WHERE event_id = :eventId
+                ORDER BY id
+                """;
+        return RepositoryResultMapper.normalizeList(
+                namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)));
+    }
+
+    /**
+     * 處理Blank字串
+     * 
+     * @param value 任意參數
+     * @return Null
+     */
+    private String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }
