@@ -1,21 +1,13 @@
 package com.example.demo.dto.response.admin;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-/**管理員活動列表頁list */
+/**管理員活動列表頁item */
 @Schema(description = "管理員活動列表")
 @Data
-public class AdminEventsListDto {
-    private List<AdminEventItemDto> adminEvents;
+public class AdminEventsItemDto {
 
-
-    /**管理員活動列表頁item */
-    @Data
-    private class AdminEventItemDto {
         /**活動id */
         private Long id;
         /**活動圖片url */
@@ -24,13 +16,13 @@ public class AdminEventsListDto {
         private String name;
         /**活動主辦方 */
         private String organizer;
-        /**活動開始時間 yyyy-MM-dd HH:mm */
+        /**活動開始日期 yyyy-MM-dd */
         private String startDate;
-        /**活動結束時間 yyyy-MM-dd HH:mm */
+        /**活動結束日期 yyyy-MM-dd */
         private String endDate;
         /**活動目前狀態 */
         private String status;
         /**活動創建時間 yyyy-MM-dd HH:mm*/
         private String createdAt;
-    }
+        
 }

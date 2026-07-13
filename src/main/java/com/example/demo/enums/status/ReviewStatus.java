@@ -1,12 +1,17 @@
-package com.example.demo.enums;
+package com.example.demo.enums.status;
 
+import com.example.demo.entity.EventApplication;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**用來對應{@link com.example.demo.entity.EventApplication}中的報名審核狀態 */
+/**
+ * 攤主報名活動的審核狀態，包含待審核、審核通過、審核拒絕
+ * 
+ * @see EventApplication#reviewStatus
+ */
 @Getter
 @RequiredArgsConstructor
 public enum ReviewStatus {
@@ -25,10 +30,10 @@ public enum ReviewStatus {
     @JsonCreator
     public static ReviewStatus fromStatus(String status) {
         for (ReviewStatus s : values()) {
-            if (s.status.equals(status)) {
+            if (s.status.equalsIgnoreCase(status) || s.description.equals(status) || s.name().equals(status)) {
                 return s;
             }
         }
-        throw new IllegalArgumentException("未知的狀態: " + status);
+        return null;
     }
 }
