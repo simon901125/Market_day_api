@@ -56,8 +56,8 @@ public class BrandRepository {
                 WITH brand_rows AS (
                     SELECT
                         vp.id AS brandId,
-                        cover.image_url AS mainImageUrl,
-                        avatar.image_url AS avatarImageUrl,
+                        vp.cover_image_url AS mainImageUrl,
+                        vp.avatar_image_url AS avatarImageUrl,
                         vp.brand_name AS brandName,
                         c.id AS categoryId,
                         c.name AS categoryName,
@@ -68,20 +68,6 @@ public class BrandRepository {
                         AND up.profile_type = N'VENDOR'
                     INNER JOIN dbo.users u ON u.id = up.user_id
                     INNER JOIN dbo.categories c ON c.id = vp.category_id
-                    OUTER APPLY (
-                        SELECT TOP 1 vi.image_url
-                        FROM dbo.vendor_images vi
-                        WHERE vi.vendor_profile_id = vp.id
-                          AND vi.image_type = N'COVER'
-                        ORDER BY vi.id DESC
-                    ) cover
-                    OUTER APPLY (
-                        SELECT TOP 1 vi.image_url
-                        FROM dbo.vendor_images vi
-                        WHERE vi.vendor_profile_id = vp.id
-                          AND vi.image_type = N'AVATAR'
-                        ORDER BY vi.id DESC
-                    ) avatar
                     OUTER APPLY (
                         SELECT COUNT(DISTINCT ea.event_id) AS participatedMarketCount
                         FROM dbo.event_applications ea
@@ -168,8 +154,8 @@ public class BrandRepository {
         String sql = """
                 SELECT
                     vp.id AS brandId,
-                    cover.image_url AS mainImageUrl,
-                    avatar.image_url AS avatarImageUrl,
+                    vp.cover_image_url AS mainImageUrl,
+                    vp.avatar_image_url AS avatarImageUrl,
                     vp.brand_name AS brandName,
                     c.id AS categoryId,
                     c.name AS categoryName,
@@ -184,20 +170,6 @@ public class BrandRepository {
                     AND up.profile_type = N'VENDOR'
                 INNER JOIN dbo.users u ON u.id = up.user_id
                 INNER JOIN dbo.categories c ON c.id = vp.category_id
-                OUTER APPLY (
-                    SELECT TOP 1 vi.image_url
-                    FROM dbo.vendor_images vi
-                    WHERE vi.vendor_profile_id = vp.id
-                      AND vi.image_type = N'COVER'
-                    ORDER BY vi.id DESC
-                ) cover
-                OUTER APPLY (
-                    SELECT TOP 1 vi.image_url
-                    FROM dbo.vendor_images vi
-                    WHERE vi.vendor_profile_id = vp.id
-                      AND vi.image_type = N'AVATAR'
-                    ORDER BY vi.id DESC
-                ) avatar
                 OUTER APPLY (
                     SELECT COUNT(DISTINCT ea.event_id) AS participatedMarketCount
                     FROM dbo.event_applications ea

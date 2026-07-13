@@ -732,12 +732,11 @@ public class OrganizerRepository {
                     vp.facebook_url AS facebookUrl,
                     vp.website_url AS websiteUrl,
                     c.name AS categoryName,
-                    vendor_avatar.image_url AS vendorAvatarUrl,
+                    vp.avatar_image_url AS vendorAvatarUrl,
                     selected_stall_summary.selectedStallId,
                     selected_stall_summary.selectedStallNo,
                     selected_stall_summary.stallWidth,
                     selected_stall_summary.stallLength,
-                    selected_stall_summary.stallHeight,
                     selected_stall_summary.stallZoneName,
                     a.vehicle_no AS vehicleNo,
                     a.applicant_note AS applicantNote,
@@ -775,9 +774,8 @@ public class OrganizerRepository {
                     SELECT TOP 1
                         ad.selected_stall_id AS selectedStallId,
                         selected_stall.stall_no AS selectedStallNo,
-                        selected_stall.width AS stallWidth,
-                        selected_stall.length AS stallLength,
-                        selected_stall.height AS stallHeight,
+                        e.stall_width AS stallWidth,
+                        e.stall_length AS stallLength,
                         selected_zone.zone_name AS stallZoneName
                     FROM dbo.application_dates ad
                     INNER JOIN dbo.event_stalls selected_stall ON selected_stall.id = ad.selected_stall_id
@@ -785,13 +783,6 @@ public class OrganizerRepository {
                     WHERE ad.application_id = a.id
                     ORDER BY ad.apply_date ASC
                 ) selected_stall_summary
-                OUTER APPLY (
-                    SELECT TOP 1 vi.image_url
-                    FROM dbo.vendor_images vi
-                    WHERE vi.vendor_profile_id = vp.id
-                      AND vi.image_type = N'AVATAR'
-                    ORDER BY vi.id DESC
-                ) vendor_avatar
                 OUTER APPLY (
                     SELECT
                         STRING_AGG(CONVERT(varchar(10), ad.apply_date, 23), ',') WITHIN GROUP (ORDER BY ad.apply_date) AS applyDates,
@@ -916,11 +907,11 @@ public class OrganizerRepository {
                     ad.selected_stall_id AS selectedStallId,
                     s.stall_no AS stallNo,
                     z.zone_name AS zoneName,
-                    s.width,
-                    s.length,
-                    s.height
+                    e.stall_width AS width,
+                    e.stall_length AS length
                 FROM dbo.application_dates ad
                 LEFT JOIN dbo.event_stalls s ON s.id = ad.selected_stall_id
+                LEFT JOIN dbo.market_events e ON e.id = s.event_id
                 LEFT JOIN dbo.event_stall_zones z ON z.id = s.zone_id
                 WHERE ad.application_id = :applicationId
                 ORDER BY ad.apply_date ASC, ad.id ASC

@@ -1198,7 +1198,8 @@ public class OrganizerService {
 
         response.put("applicationdetail", orderedMap(
                 "registrationPeriods", toRegistrationPeriods(application, applicationDateRows),
-                "stallSize", stallSize(application),
+                "width", application.get("stallWidth"),
+                "length", application.get("stallLength"),
                 "stallZone", application.get("stallZoneName"),
                 "stallCategory", application.get("categoryName"),
                 "vehicleNo", application.get("vehicleNo"),
@@ -1335,15 +1336,6 @@ public class OrganizerService {
                         "zoneName", row.get("zoneName"),
                         "selectionStatus", row.get("selectedStallId") == null ? "未選擇" : "已選擇"))
                 .toList();
-    }
-
-    private String stallSize(Map<String, Object> application) {
-        String length = decimalText(application.get("stallLength"));
-        String height = decimalText(application.get("stallHeight"));
-        if (length == null || height == null) {
-            return null;
-        }
-        return length + "x" + height;
     }
 
     private List<Map<String, Object>> toFeeDetail(

@@ -1,7 +1,5 @@
 package com.example.demo.entity;
 
-import java.math.BigDecimal;
-
 import com.example.demo.enums.status.StallStatus;
 
 import jakarta.persistence.Column;
@@ -48,21 +46,6 @@ public class EventStall {
     /**攤位編號 */
     @Column(name = "stall_no", length = 30, nullable = false)
     private String stallNo;
-
-    //TODO:要再確認資料庫 :AdminService:getEventDetail()
-    //----------要再確認資料庫----------
-    /**攤位寬度 */
-    @Column(name = "width", precision = 6, scale = 2)
-    private BigDecimal width;
-    
-    /**攤位長度 */
-    @Column(name = "length", precision = 6, scale = 2)
-    private BigDecimal length;
-    
-    /**攤位高度 */
-    @Column(name = "height", precision = 6, scale = 2)
-    private BigDecimal height;
-    //----------要再確認資料庫----------
 
     /**攤位狀態 */
     @Enumerated(EnumType.STRING)

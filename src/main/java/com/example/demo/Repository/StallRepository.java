@@ -157,8 +157,8 @@ public class StallRepository {
                     vp.instagram_url AS instagramUrl,
                     vp.facebook_url AS facebookUrl,
                     vp.website_url AS websiteUrl,
-                    avatar.image_url AS avatarImageUrl,
-                    cover.image_url AS coverImageUrl,
+                    vp.avatar_image_url AS avatarImageUrl,
+                    vp.cover_image_url AS coverImageUrl,
                     vp.brand_description AS brandDescription,
                     c.name AS brandType,
                     vp.brand_summary AS brandSummary
@@ -167,20 +167,6 @@ public class StallRepository {
                     AND up.profile_type = N'VENDOR'
                 INNER JOIN dbo.vendor_profiles vp ON vp.user_profile_id = up.id
                 INNER JOIN dbo.categories c ON c.id = vp.category_id
-                OUTER APPLY (
-                    SELECT TOP 1 vi.image_url
-                    FROM dbo.vendor_images vi
-                    WHERE vi.vendor_profile_id = vp.id
-                      AND vi.image_type = N'AVATAR'
-                    ORDER BY vi.id DESC
-                ) avatar
-                OUTER APPLY (
-                    SELECT TOP 1 vi.image_url
-                    FROM dbo.vendor_images vi
-                    WHERE vi.vendor_profile_id = vp.id
-                      AND vi.image_type = N'COVER'
-                    ORDER BY vi.id DESC
-                ) cover
                 WHERE u.email = :email
                 """;
 
@@ -264,6 +250,8 @@ public class StallRepository {
                 UPDATE dbo.vendor_profiles
                 SET category_id = :categoryId,
                     brand_name = :brandName,
+                    avatar_image_url = :avatarImageUrl,
+                    cover_image_url = :coverImageUrl,
                     instagram_url = :instagramUrl,
                     facebook_url = :facebookUrl,
                     website_url = :websiteUrl,
@@ -276,40 +264,6 @@ public class StallRepository {
         map.put("userId", userId);
         map.put("vendorProfileId", vendorProfileId);
         return namedParameterJdbcTemplate.update(sql, map);
-    }
-
-    public void saveVendorImage(Long vendorProfileId, String imageType, String imageUrl) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("vendorProfileId", vendorProfileId);
-        map.put("imageType", imageType);
-        map.put("imageUrl", imageUrl);
-
-        if (imageUrl == null || imageUrl.isBlank()) {
-            String deleteSql = """
-                    DELETE FROM dbo.vendor_images
-                    WHERE vendor_profile_id = :vendorProfileId
-                      AND image_type = :imageType
-                    """;
-            namedParameterJdbcTemplate.update(deleteSql, map);
-            return;
-        }
-
-        String sql = """
-                UPDATE dbo.vendor_images
-                SET image_url = :imageUrl
-                WHERE vendor_profile_id = :vendorProfileId
-                  AND image_type = :imageType;
-
-                INSERT INTO dbo.vendor_images (vendor_profile_id, image_type, image_url)
-                SELECT :vendorProfileId, :imageType, :imageUrl
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM dbo.vendor_images
-                    WHERE vendor_profile_id = :vendorProfileId
-                      AND image_type = :imageType
-                );
-                """;
-        namedParameterJdbcTemplate.update(sql, map);
     }
 
     public Long createVendorProduct(Long vendorProfileId, Map<String, Object> product) {
@@ -424,11 +378,12 @@ public class StallRepository {
                     ad.selected_stall_id AS selectedStallId,
                     s.stall_no AS stallNo,
                     z.zone_name AS zoneName,
-                    s.width,
-                    s.length
+                    e.stall_width AS width,
+                    e.stall_length AS length
                 FROM dbo.event_applications a
                 INNER JOIN dbo.application_dates ad ON ad.application_id = a.id
                 INNER JOIN dbo.event_stalls s ON s.id = ad.selected_stall_id
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
                 LEFT JOIN dbo.event_stall_zones z ON z.id = s.zone_id
                 WHERE a.application_no = :applicationNo
                 ORDER BY ad.apply_date ASC
@@ -451,9 +406,8 @@ public class StallRepository {
                     ad_target.apply_date AS currentApplyDate,
                     ad_target.selected_stall_id AS selectedStallId,
                     selected_stall.stall_no AS selectedStallNo,
-                    selected_stall.width AS selectedStallWidth,
-                    selected_stall.length AS selectedStallLength,
-                    selected_stall.height AS selectedStallHeight,
+                    e.stall_width AS selectedStallWidth,
+                    e.stall_length AS selectedStallLength,
                     selected_zone.zone_name AS selectedStallZoneName,
                     date_counts.applicationDateCount,
                     date_counts.selectedStallCount,
@@ -519,9 +473,8 @@ public class StallRepository {
                     s.zone_id AS zoneId,
                     z.zone_name AS zoneName,
                     s.stall_no AS stallNo,
-                    s.width,
-                    s.length,
-                    s.height,
+                    e.stall_width AS width,
+                    e.stall_length AS length,
                     CASE
                         WHEN s.status <> N'AVAILABLE' THEN s.status
                         WHEN selected_application.id IS NOT NULL THEN N'SELECTED'
@@ -533,6 +486,7 @@ public class StallRepository {
                     selected_vendor.contact_name AS vendorOwnerName,
                     selected_at.selectedAt
                 FROM dbo.event_stalls s
+                INNER JOIN dbo.market_events e ON e.id = s.event_id
                 INNER JOIN dbo.event_stall_zones z ON z.id = s.zone_id
                 LEFT JOIN dbo.application_dates selected_date ON selected_date.selected_stall_id = s.id
                     AND selected_date.apply_date = :applyDate
@@ -650,9 +604,8 @@ public class StallRepository {
                     s.zone_id AS zoneId,
                     z.zone_name AS zoneName,
                     s.stall_no AS stallNo,
-                    s.width,
-                    s.length,
-                    s.height,
+                    e.stall_width AS width,
+                    e.stall_length AS length,
                     CASE
                         WHEN s.status <> N'AVAILABLE' THEN s.status
                         WHEN a.id IS NOT NULL THEN N'SELECTED'
@@ -733,9 +686,8 @@ public class StallRepository {
                     s.zone_id AS zoneId,
                     z.zone_name AS zoneName,
                     s.stall_no AS stallNo,
-                    s.width,
-                    s.length,
-                    s.height,
+                    e.stall_width AS width,
+                    e.stall_length AS length,
                     CASE
                         WHEN s.status <> N'AVAILABLE' THEN s.status
                         WHEN a.id IS NOT NULL THEN N'SELECTED'
@@ -743,6 +695,7 @@ public class StallRepository {
                     END AS status,
                     vp.brand_name AS vendorName
                 FROM dbo.event_stalls s
+                INNER JOIN dbo.market_events e ON e.id = s.event_id
                 INNER JOIN dbo.event_stall_zones z ON z.id = s.zone_id
                 LEFT JOIN dbo.application_dates ad ON ad.selected_stall_id = s.id
                     AND ad.apply_date = :applyDate

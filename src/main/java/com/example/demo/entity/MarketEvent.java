@@ -2,9 +2,7 @@ package com.example.demo.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import com.example.demo.enums.status.WorkflowStatus;
 
@@ -17,7 +15,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
@@ -55,6 +52,10 @@ public class MarketEvent {
     @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_categories"))
     private Category category;
 
+    public void addCategory(Category category){
+        this.category = category;
+    }
+
     /** 活動名稱 */
     @Column(name = "title", length = 200, nullable = false)
     private String title;
@@ -83,12 +84,17 @@ public class MarketEvent {
     @Column(name = "address", length = 255, nullable = false)
     private String address;
 
-    //TODO:要再確認資料庫 :AdminService:getEventDetail()
-    //----------我是分隔線----------
-    /** 交通方式 */
-    @Column(name = "traffic_info", columnDefinition = "nvarchar(max)")
-    private String trafficInfo;
-    //----------我是分隔線----------
+    /** 開車交通資訊 */
+    @Column(name = "traffic_info_driving", columnDefinition = "nvarchar(max)")
+    private String trafficInfoDriving;
+
+    /** 公車交通資訊 */
+    @Column(name = "traffic_info_bus", columnDefinition = "nvarchar(max)")
+    private String trafficInfoBus;
+
+    /** 捷運交通資訊 */
+    @Column(name = "traffic_info_metro", columnDefinition = "nvarchar(max)")
+    private String trafficInfoMetro;
 
     /** 活動注意事項 */
     @Column(name = "notice", columnDefinition = "nvarchar(max)")
@@ -117,6 +123,14 @@ public class MarketEvent {
     /** 攤位總數 */
     @Column(name = "max_booths", nullable = false)
     private Integer maxBooths;
+
+    /** 本活動固定攤位寬度 */
+    @Column(name = "stall_width", precision = 6, scale = 2)
+    private BigDecimal stallWidth;
+
+    /** 本活動固定攤位長度 */
+    @Column(name = "stall_length", precision = 6, scale = 2)
+    private BigDecimal stallLength;
 
     /** 基本攤位費用 */
     @Column(name = "base_fee", precision = 10, scale = 2, nullable = false)
