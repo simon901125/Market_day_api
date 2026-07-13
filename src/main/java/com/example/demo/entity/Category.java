@@ -40,6 +40,6 @@ public class Category {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
-    @ManyToMany(mappedBy = "category")
+    @OneToMany(mappedBy = "category")
     private Set<MarketEvent> marketEvents;
 }
