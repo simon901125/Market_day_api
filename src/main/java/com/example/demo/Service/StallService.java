@@ -452,15 +452,13 @@ public class StallService {
 
     /**
      * 攤主送出活動報名。
-     *
-     * <p>
+     * 
      * 流程：
      * 1. 驗證 JWT 並確認登入者是攤主。
      * 2. 確認活動已發布、目前仍在報名期間，且報名日期落在活動期間內。
      * 3. 計算報名費與租借設備費用。
      * 4. 寫入 event_applications、application_dates、equipment_rentals 與
      * rental_appliances。
-     * </p>
      */
     @Transactional
     public ApiResponse<VendorApplicationSubmitResponse> submitVendorApplication(

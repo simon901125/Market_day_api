@@ -31,30 +31,19 @@ public class VendorController {
   @Autowired
   private StallService stallService;
 
-  /**
-   * 取得活動報名列表
-   * 
-   * @param eventTitle
-   * @param applicationNo
-   * @param status
-   * @param eventStartAt
-   * @param eventEndAt
-   * @param page
-   * @param pageSize
-   * @return
-   */
   @Operation(summary = "取得活動報名列表", description = "公開查詢市集活動列表，依關鍵字、縣市、行政區、日期區間及活動狀態查詢可報名的市集活動")
   @PostMapping("/api/vendor/markets/search")
   /**
    * 取得當前活動列表，攤主可依活動名稱、報名編號、報名狀態、活動日期區間進行查詢。
    * 
-   * @param eventTitle    活動名稱
-   * @param applicationNo 報名編號
-   * @param status        報名狀態
-   * @param eventStartAt  活動開始日期
-   * @param eventEndAt    活動結束日期
-   * @param page          頁碼
-   * @param pageSize      每頁筆數
+   * @param keyword      關鍵字
+   * @param city         城市
+   * @param district     地區
+   * @param status       狀態
+   * @param eventStartAt 活動開始日
+   * @param eventEndAt   活動結束日
+   * @param page         頁數
+   * @param pageSize     總頁數
    * @return
    */
   public ApiResponse<MarketSearchResponse> searchMarkets(
@@ -81,7 +70,7 @@ public class VendorController {
   /**
    * 活動單筆詳細資料。
    * 
-   * @param id
+   * @param id 活動 ID
    * @return
    */
   @Operation(summary = "取得活動報名詳細資料", description = "依活動 ID 取得已發布活動、每日剩餘攤位、設備、主辦方與交通資訊。")
