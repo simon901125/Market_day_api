@@ -40,7 +40,7 @@ public interface EventStatusServiceInterface<T> {
                 }
                 return EventStatus.FULL;
             case FINAL_REVIEW:
-                if (brandPublicTime.isAfter(now)) {
+                if (brandPublicTime == null || brandPublicTime.isAfter(now)) {
                     return EventStatus.FULL;
                 } else if (brandPublicTime.isBefore(now) && startTime.isAfter(now)) {
                     return EventStatus.PUBLISHED;

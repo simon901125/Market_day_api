@@ -7,8 +7,10 @@ import org.springframework.data.repository.query.Param;
 
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.enums.status.WorkflowStatus;
+import com.example.demo.projection.admin.AdminEventDetailProjection;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecificationExecutor<MarketEvent> {
     int countByWorkflowStatus(WorkflowStatus workflowStatus);
@@ -24,4 +26,47 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
     /** 計算活動目前報名攤位(不計入被拒絕的攤位) */
     @Query("select count(a.id) from EventApplication a where a.event.id = :eventId and a.reviewStatus != 'REJECTED'")
     int countRegBoothsByEventId(@Param("eventId") Long eventId);
+
+    /** 管理員後台: 活動詳細 (不含攤位分區清單，需另外查詢) */
+    @Query("""
+            SELECT new com.example.demo.projection.admin.AdminEventDetailProjection(
+                market.title,
+                category.name,
+                market.startAt,
+                market.endAt,
+                market.brandPublicAt,
+                market.locationName,
+                market.city,
+                market.district,
+                market.address,
+                market.id,
+                market.workflowStatus,
+                market.coverImageUrl,
+                market.description,
+                market.registrationStartAt,
+                market.registrationEndAt,
+                market.publicInfoAt,
+                market.maxBooths,
+                market.baseFee,
+                market.mapImageUrl,
+                organizerProfile.companyName,
+                userProfile.contactName,
+                userProfile.contactPhone,
+                userProfile.contactEmail,
+                userProfile.city,
+                userProfile.district,
+                userProfile.address,
+                organizerProfile.taxId,
+                organizerProfile.serviceDays,
+                organizerProfile.serviceStartTime,
+                organizerProfile.serviceEndTime
+            )
+            FROM MarketEvent market
+            JOIN market.category category
+            JOIN market.user user
+            LEFT JOIN user.userProfile userProfile
+            LEFT JOIN userProfile.organizerProfile organizerProfile
+            WHERE market.id = :id
+            """)
+    Optional<AdminEventDetailProjection> findEventDetailById(@Param("id") Long id);
 }

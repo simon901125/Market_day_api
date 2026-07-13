@@ -51,15 +51,9 @@ public class MarketEvent {
     private User user;
 
     /** 活動類型 */
-    @ManyToMany
+    @ManyToOne
     @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_categories"))
-    private Set<Category> categories = new HashSet<>();
-
-    public void addCategory(Category category){
-        if (categories.add(category)) {
-            category.getMarketEvents().add(this);
-        }
-    }
+    private Category category;
 
     /** 活動名稱 */
     @Column(name = "title", length = 200, nullable = false)

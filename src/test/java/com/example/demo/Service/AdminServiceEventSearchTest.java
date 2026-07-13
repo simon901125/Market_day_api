@@ -123,7 +123,7 @@ class AdminServiceEventSearchTest {
     private MarketEvent newEvent(Category category, User user, String title) {
         LocalDateTime now = LocalDateTime.now();
         MarketEvent event = new MarketEvent();
-        event.addCategory(category);
+        event.setCategory(category);
         event.setUser(user);
         event.setTitle(title);
         event.setSummary("summary");
