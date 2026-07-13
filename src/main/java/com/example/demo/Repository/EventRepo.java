@@ -12,7 +12,7 @@ import com.example.demo.enums.status.WorkflowStatus;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecificationExecutor<MarketEvent> {
+public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecificationExecutor<MarketEvent>, EventRepoCustom {
     int countByWorkflowStatus(WorkflowStatus workflowStatus);
 
     /** 計算(活動狀態=ACTIVE(前端:活動中))的數量 */
@@ -84,4 +84,5 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             WHERE market.id = :id
             """)
     Optional<AdminEventDetailProjection> findEventDetailById(@Param("id") Long id);
+
 }

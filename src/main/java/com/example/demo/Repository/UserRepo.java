@@ -14,7 +14,7 @@ import com.example.demo.enums.type.Role;
 
 
 
-public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExecutor<User>{
+public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExecutor<User>, UserRepoCustom {
     int countByRoleAndStatus(Role role, UserStatus status);
     // @Query("""
     //         SELECT 

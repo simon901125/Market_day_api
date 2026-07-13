@@ -38,7 +38,6 @@ import com.example.demo.entity.AdminOperationLog;
 import com.example.demo.entity.EventStallZone;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.User;
-import com.example.demo.entity.UserProfile;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
@@ -47,15 +46,7 @@ import com.example.demo.enums.type.AdminTargetTypeForFront;
 import com.example.demo.enums.type.Role;
 
 import jakarta.annotation.Nonnull;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Tuple;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Expression;
-import jakarta.persistence.criteria.Join;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
 
 @Service
 public class AdminService implements AdminServiceInterface, EventStatusServiceInterface<Object> {
@@ -70,9 +61,6 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     @Autowired
     AdminLogRepo logRepo;
-
-    @PersistenceContext
-    EntityManager entityManager;
 
     /** yyyy/MM/dd HH:mm */
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
@@ -108,37 +96,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     @Override
     public PageResponse<AdminEventListDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize) {
         // ----------只撈頁面需要用到的欄位，避免撈出整張表----------
-        // 設定要join的表
-        TupleQueryContext<MarketEvent> ctx = newTupleQuery(MarketEvent.class);
-        CriteriaBuilder cb = ctx.cb();
-        CriteriaQuery<Tuple> cq = ctx.cq();
-        Root<MarketEvent> root = ctx.root();
-        Join<MarketEvent, User> user = root.join("user");
-        Join<User, UserProfile> userProfile = user.join("userProfile");
-
-        // 設定搜尋條件
         Specification<MarketEvent> spec = EventSpecification.build(request);
-        applyPredicate(root, cq, cb, spec);
-
-        // 組裝select欄位
-        cq.multiselect(
-                root.get("id").alias("id"),
-                root.get("coverImageUrl").alias("coverImageUrl"),
-                root.get("title").alias("title"),
-                userProfile.get("name").alias("organizerName"),
-                root.get("startAt").alias("startAt"),
-                root.get("endAt").alias("endAt"),
-                root.get("createAt").alias("createAt"),
-                root.get("workflowStatus").alias("workflowStatus"),
-                root.get("registrationStartAt").alias("registrationStartAt"),
-                root.get("registrationEndAt").alias("registrationEndAt"),
-                root.get("brandPublicAt").alias("brandPublicAt"),
-                root.get("maxBooths").alias("maxBooths"),
-                EventSpecification.registeredBoothCountSubquery(root, cq, cb).alias("registeredBoothCount"));
-        // 設定orderBy: 活動創建時間:由新到舊(desc)
-        cq.orderBy(cb.desc(root.get("createAt")));
-        // 查詢結果(有設定limit)
-        List<Tuple> rows = fetchPage(cq, pageNumber, pageSize);
+        List<Tuple> rows = eventRepo.findEventListTuples(spec, pageNumber, pageSize);
 
         // 另外查詢符合條件的總筆數
         long total = eventRepo.count(spec);
@@ -178,7 +137,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // 設定管理員後台: 活動詳細
     @Override
-    public AdminEventDetailDto getEventDetail(@NonNull Long eventId) {
+    public AdminEventDetailDto getEventDetail(@NonNull Long eventId) throws IllegalArgumentException {
         // ----------撈資料----------
         AdminEventDetailProjection event = eventRepo.findEventDetailById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
@@ -262,28 +221,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     @Override
     public PageResponse<AdminUserListDto> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
         // ----------撈資料----------
-        // 只撈頁面需要用到的欄位，避免撈出整張表
-        // 設定要join的表
-        TupleQueryContext<User> ctx = newTupleQuery(User.class);
-        CriteriaBuilder cb = ctx.cb();
-        CriteriaQuery<Tuple> cq = ctx.cq();
-        Root<User> root = ctx.root();
-        Join<User, UserProfile> userProfile = root.join("userProfile");
-        // 設定搜尋條件
         Specification<User> spec = UserSpecification.build(request);
-        applyPredicate(root, cq, cb, spec);
-        // 組裝select欄位
-        cq.multiselect(
-                root.get("id").alias("id"),
-                root.get("role").alias("role"),
-                userProfile.get("name").alias("name"),
-                root.get("status").alias("status"),
-                root.get("email").alias("email"),
-                root.get("createdAt").alias("regAt"));
-        // 設定orderBy: 帳號創建時間:由新到舊(desc)
-        cq.orderBy(cb.desc(root.get("createdAt")));
-        // 查詢結果(有設定limit)
-        List<Tuple> rows = fetchPage(cq, pageNumber, pageSize);
+        List<Tuple> rows = userRepo.findUserListTuples(spec, pageNumber, pageSize);
         // 另外查詢符合條件的總筆數
         long total = userRepo.count(spec);
         // ----------設定回傳資料----------
@@ -339,37 +278,15 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     public PageResponse<AdminOperationLogDto> getLogs(AdminLogSearchDto request, int pageNumber, int pageSize) {
         // ----------撈資料----------
         // 只撈頁面需要用到的欄位，避免撈出整張表
-        // 設定要join的表
-        TupleQueryContext<AdminOperationLog> ctx = newTupleQuery(AdminOperationLog.class);
-        CriteriaBuilder cb = ctx.cb();
-        CriteriaQuery<Tuple> cq = ctx.cq();
-        Root<AdminOperationLog> root = ctx.root();
-        Join<AdminOperationLog, User> user = root.join("user");
-        // 設定搜尋條件
         Specification<AdminOperationLog> spec = AdminLogSpecification.build(request);
-        applyPredicate(root, cq, cb, spec);
-        Expression<String> targetEmail = AdminLogSpecification.targetEmailSubquery(root, cq, cb);
-        Expression<AdminTargetTypeForFront> targetTypeForFront = AdminLogSpecification
-                .targetTypeForFrontExpression(root, cq, cb);
-        // 組裝select欄位
-        cq.multiselect(
-                root.get("operationType").alias("operationType"),
-                root.get("targetLabel").alias("targetName"),
-                root.get("createdAt").alias("createdAt"),
-                root.get("content").alias("content"),
-                targetEmail.alias("email"),
-                targetTypeForFront.alias("targetType"));
-        // 設定orderBy: 操作時間:由新到舊(desc)
-        cq.orderBy(cb.desc(root.get("createdAt")));
-        // 查詢結果(有設定limit)
-        List<Tuple> rows = fetchPage(cq, pageNumber, pageSize);
+        List<Tuple> rows = logRepo.findLogListTuples(spec, pageNumber, pageSize);
         // 另外查詢符合條件的總筆數
         long total = logRepo.count(spec);
         // ----------設定回傳資料----------
         List<AdminOperationLogDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
             AdminOperationLogDto dtoItem = new AdminOperationLogDto(
-                    null, // TODO:確認資料庫
+                    row.get("adminName", String.class), 
                     row.get("operationType", AdminOperationType.class),
                     row.get("targetType", AdminTargetTypeForFront.class),
                     row.get("targetName", String.class),
@@ -385,12 +302,12 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     }
 
     /**
-     * @param data 型別要是:AdminEventItemProjection或是MarketEvent
+     * @param data :MarketEvent
      * @return 轉換後顯示在前端的活動狀態
      * @throws IllegalArgumentException 型別不符時拋出
      */
     @Override
-    public EventStatus changeToEventStatus(Object data) {
+    public EventStatus changeToEventStatus(Object data) throws IllegalArgumentException {
         if (data instanceof MarketEvent) {
             MarketEvent entity = (MarketEvent) data;
 
@@ -404,37 +321,6 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     entity.getMaxBooths(),
                     entity.getEventApplications() == null ? 0 : entity.getEventApplications().size());
         }
-        throw new IllegalArgumentException("data須符合型別類型:AdminEventItemProjection或是MarketEvent");
+        throw new IllegalArgumentException("data須符合型別類型MarketEvent");
     }
-
-    /** 封裝一次tuple查詢共用的cb/cq/root，避免每個方法重複建立 */
-    private record TupleQueryContext<T>(CriteriaBuilder cb, CriteriaQuery<Tuple> cq, Root<T> root) {
-    }
-
-    /** 建立指定entity的tuple查詢context(cb、cq、root) */
-    private <T> TupleQueryContext<T> newTupleQuery(Class<T> entityClass) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
-        Root<T> root = cq.from(entityClass);
-        return new TupleQueryContext<>(cb, cq, root);
-    }
-
-    /** 套用Specification產生的搜尋條件(若有) */
-    private <T> void applyPredicate(Root<T> root, CriteriaQuery<?> cq, CriteriaBuilder cb, Specification<T> spec) {
-        Predicate predicate = spec.toPredicate(root, cq, cb);
-        if (predicate != null) {
-            cq.where(predicate);
-        }
-    }
-
-    /** 依分頁參數查詢tuple結果 */
-    private List<Tuple> fetchPage(CriteriaQuery<Tuple> cq, int pageNumber, int pageSize) {
-        return entityManager.createQuery(cq)
-                .setFirstResult((pageNumber - 1) * pageSize)
-                .setMaxResults(pageSize)
-                .getResultList();
-    }
-
-
-
 }
