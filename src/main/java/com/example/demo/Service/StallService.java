@@ -3,6 +3,7 @@ package com.example.demo.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -10,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,6 +22,8 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.Repository.StallRepository;
 import com.example.demo.dto.request.StallSelectionRequest;
+import com.example.demo.dto.request.VendorProductSaveRequest;
+import com.example.demo.dto.request.VendorStallSaveRequest;
 import com.example.demo.dto.request.VendorApplicationSubmitRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.EventStallStatusResponse;
@@ -38,6 +42,9 @@ import com.example.demo.dto.response.VendorStallMapResponse;
 @Service
 public class StallService {
 
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+    private static final Pattern TAIWAN_MOBILE_PATTERN = Pattern.compile("^09\\d{8}$");
+
     @Autowired
     private StallRepository stallRepository;
 
@@ -49,6 +56,9 @@ public class StallService {
 
     @Autowired
     private ApplicationStatusService applicationStatusService;
+
+    @Autowired
+    private TaiwanAddressService taiwanAddressService;
 
     @Transactional
     public ApiResponse<StallSelectionResponse> selectEventStall(
@@ -272,8 +282,172 @@ public class StallService {
         account.put("websiteUrl", vendor.get("websiteUrl"));
         account.put("brandDescription", vendor.get("brandDescription"));
         account.put("brandType", vendor.get("brandType"));
-        account.put("productSummary", vendor.get("productSummary"));
+        account.put("brandSummary", vendor.get("brandSummary"));
         return ApiResponse.success("Vendor account retrieved successfully", new VendorAccountResponse(account));
+    }
+
+    public ApiResponse<MapBackedResponse> loadVendorStallProfile(String authorizationHeader) {
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+
+        return ApiResponse.success(
+                "Vendor stall profile retrieved successfully",
+                new MapBackedResponse(toVendorStallProfile(vendor)));
+    }
+
+    @Transactional
+    public ApiResponse<MapBackedResponse> saveVendorStallProfile(
+            String authorizationHeader,
+            VendorStallSaveRequest body) {
+        if (body == null) {
+            return ApiResponse.fail("Vendor stall profile request is required");
+        }
+
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+
+        String validationError = validateVendorProfile(body);
+        if (validationError != null) {
+            return ApiResponse.fail(validationError);
+        }
+
+        Long categoryId = stallRepository.findActiveCategoryIdByName(normalizeText(body.getBrandType()))
+                .orElse(null);
+        if (categoryId == null) {
+            return ApiResponse.fail("Brand type is invalid");
+        }
+
+        Long userId = toLong(vendor.get("userId"));
+        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        Map<String, Object> profile = orderedMap(
+                "brandName", normalizeText(body.getBrandName()),
+                "contactName", normalizeText(body.getContactName()),
+                "contactPhone", normalizeText(body.getContactPhone()),
+                "contactEmail", normalizeText(body.getContactEmail()),
+                "city", normalizeText(body.getCity()),
+                "district", normalizeText(body.getDistrict()),
+                "address", normalizeText(body.getAddress()),
+                "categoryId", categoryId,
+                "instagramUrl", nullIfBlank(body.getInstagramUrl()),
+                "facebookUrl", nullIfBlank(body.getFacebookUrl()),
+                "websiteUrl", nullIfBlank(body.getWebsiteUrl()),
+                "brandSummary", normalizeText(body.getBrandSummary()),
+                "brandDescription", normalizeText(body.getBrandDescription()));
+
+        int updatedRows = stallRepository.updateVendorProfile(userId, vendorProfileId, profile);
+        if (updatedRows == 0) {
+            return ApiResponse.fail("Vendor profile save failed");
+        }
+        stallRepository.saveVendorImage(vendorProfileId, "AVATAR", nullIfBlank(body.getAvatarImageUrl()));
+        stallRepository.saveVendorImage(vendorProfileId, "COVER", nullIfBlank(body.getCoverImageUrl()));
+
+        Map<String, Object> refreshedVendor = stallRepository
+                .findVendorAccountByEmail(normalizeText(vendor.get("email")))
+                .orElse(vendor);
+        return ApiResponse.success(
+                "Vendor stall profile saved successfully",
+                new MapBackedResponse(toVendorStallProfile(refreshedVendor)));
+    }
+
+    @Transactional
+    public ApiResponse<MapBackedResponse> addVendorProduct(
+            String authorizationHeader,
+            VendorProductSaveRequest body) {
+        if (body == null) {
+            return ApiResponse.fail("Vendor product request is required");
+        }
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+        String validationError = validateVendorProduct(body);
+        if (validationError != null) {
+            return ApiResponse.fail(validationError);
+        }
+
+        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        Long productId = stallRepository.createVendorProduct(vendorProfileId, productMap(body));
+        if (productId == null) {
+            return ApiResponse.fail("Vendor product save failed");
+        }
+        Map<String, Object> product = stallRepository.findVendorProduct(vendorProfileId, productId).orElse(null);
+        return ApiResponse.success(
+                "Vendor product saved successfully",
+                new MapBackedResponse(orderedMap("product", product)));
+    }
+
+    @Transactional
+    public ApiResponse<MapBackedResponse> deleteVendorProduct(
+            String authorizationHeader,
+            Long productId) {
+        if (productId == null) {
+            return ApiResponse.fail("Product id is required");
+        }
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+
+        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        Map<String, Object> existingProduct = stallRepository.findVendorProduct(vendorProfileId, productId)
+                .orElse(null);
+        if (existingProduct == null || !"ACTIVE".equals(stringValue(existingProduct.get("status")))) {
+            return ApiResponse.fail("Vendor product not found");
+        }
+
+        int updatedRows = stallRepository.hideVendorProduct(vendorProfileId, productId);
+        if (updatedRows == 0) {
+            return ApiResponse.fail("Vendor product delete failed");
+        }
+
+        return ApiResponse.success(
+                "Vendor product deleted successfully",
+                new MapBackedResponse(orderedMap(
+                        "productId", productId,
+                        "status", "HIDDEN")));
+    }
+
+    @Transactional
+    public ApiResponse<MapBackedResponse> editVendorProduct(
+            String authorizationHeader,
+            Long productId,
+            VendorProductSaveRequest body) {
+        if (productId == null) {
+            return ApiResponse.fail("Product id is required");
+        }
+        if (body == null) {
+            return ApiResponse.fail("Vendor product request is required");
+        }
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+
+        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        Map<String, Object> existingProduct = stallRepository.findVendorProduct(vendorProfileId, productId)
+                .orElse(null);
+        if (existingProduct == null) {
+            return ApiResponse.fail("Vendor product not found");
+        }
+
+        String validationError = validateVendorProduct(body);
+        if (validationError != null) {
+            return ApiResponse.fail(validationError);
+        }
+        int updatedRows = stallRepository.updateVendorProduct(vendorProfileId, productId, productMap(body));
+        if (updatedRows == 0) {
+            return ApiResponse.fail("Vendor product save failed");
+        }
+
+        Map<String, Object> product = stallRepository.findVendorProduct(vendorProfileId, productId)
+                .orElse(existingProduct);
+        return ApiResponse.success(
+                "Vendor product saved successfully",
+                new MapBackedResponse(orderedMap("product", product)));
     }
 
     /**
@@ -1012,7 +1186,18 @@ public class StallService {
             return ApiResponse.fail("Apply date is not part of this event");
         }
 
-        List<Map<String, Object>> stallRows = stallRepository.findEventStallsMap(eventId, targetDate).stream()
+        List<Map<String, Object>> allStallRows = stallRepository.findEventStallsMap(eventId, targetDate);
+        long selectedStallCount = allStallRows.stream()
+                .filter(stall -> "SELECTED".equals(stringValue(stall.get("status"))))
+                .count();
+        long availableStallCount = allStallRows.stream()
+                .filter(stall -> "AVAILABLE".equals(stringValue(stall.get("status"))))
+                .count();
+        if (allStallRows.isEmpty()) {
+            availableStallCount = Math.max(0L, toLong(eventData.get("totalStallCount")) - selectedStallCount);
+        }
+
+        List<Map<String, Object>> stallRows = allStallRows.stream()
                 .map(this::withDisplayBoothStatus)
                 .filter(stall -> matchesStallKeyword(stall, keyword))
                 .filter(stall -> matchesStallStatus(stall, status))
@@ -1025,6 +1210,8 @@ public class StallService {
         event.put("eventStatus", displayOrganizerEventStatus(eventData));
         event.put("statusNote", displayRegistrationProgress(eventData));
         event.put("totalStallCount", eventData.get("totalStallCount"));
+        event.put("selectedStallCount", selectedStallCount);
+        event.put("availableStallCount", availableStallCount);
         event.put("startAt", eventData.get("startAt"));
         event.put("endAt", eventData.get("endAt"));
         event.put("currentApplyDate", targetDate);
@@ -1112,6 +1299,147 @@ public class StallService {
         return "PAID".equals(stringValue(applicationData.get("paymentStatus")))
                 && !isTrue(applicationData.get("isCancelled"))
                 && stringValue(applicationData.get("refundStatus")).isEmpty();
+    }
+
+    private Map<String, Object> authenticatedVendor(String authorizationHeader) {
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank()) {
+            return Map.of("message", "Authorization token is required");
+        }
+        if (!jwtService.isTokenValid(token)) {
+            return Map.of("message", "Invalid or expired token");
+        }
+        if (!"VENDOR".equals(jwtService.getRole(token))) {
+            return Map.of("message", "This account is not a vendor");
+        }
+
+        Map<String, Object> vendor = stallRepository.findVendorAccountByEmail(jwtService.getEmail(token))
+                .orElse(null);
+        if (vendor == null) {
+            return Map.of("message", "Vendor profile not found");
+        }
+        if (!"VENDOR".equals(vendor.get("role"))) {
+            return Map.of("message", "This account is not a vendor");
+        }
+        return vendor;
+    }
+
+    private Map<String, Object> toVendorStallProfile(Map<String, Object> vendor) {
+        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        return orderedMap(
+                "brandName", vendor.get("name"),
+                "contactName", vendor.get("contactName"),
+                "contactPhone", vendor.get("contactPhone"),
+                "contactEmail", vendor.get("contactEmail"),
+                "city", vendor.get("city"),
+                "district", vendor.get("district"),
+                "address", vendor.get("address"),
+                "instagramUrl", vendor.get("instagramUrl"),
+                "facebookUrl", vendor.get("facebookUrl"),
+                "websiteUrl", vendor.get("websiteUrl"),
+                "avatarImageUrl", vendor.get("avatarImageUrl"),
+                "coverImageUrl", vendor.get("coverImageUrl"),
+                "brandSummary", vendor.get("brandSummary"),
+                "brandDescription", vendor.get("brandDescription"),
+                "brandType", vendor.get("brandType"),
+                "products", stallRepository.findVendorProducts(vendorProfileId));
+    }
+
+    private String validateVendorProfile(VendorStallSaveRequest body) {
+        if (normalizeText(body.getBrandName()).isEmpty()) {
+            return "Brand name is required";
+        }
+        if (normalizeText(body.getBrandName()).length() > 150) {
+            return "Brand name must not exceed 150 characters";
+        }
+        if (normalizeText(body.getContactName()).isEmpty()) {
+            return "Contact name is required";
+        }
+        if (normalizeText(body.getContactName()).length() > 100) {
+            return "Contact name must not exceed 100 characters";
+        }
+        if (!TAIWAN_MOBILE_PATTERN.matcher(normalizeText(body.getContactPhone())).matches()) {
+            return "Contact phone must be 10 digits and start with 09";
+        }
+        String contactEmail = normalizeText(body.getContactEmail());
+        if (contactEmail.isEmpty()) {
+            return "Contact email is required";
+        }
+        if (contactEmail.length() > 255 || !EMAIL_PATTERN.matcher(contactEmail).matches()) {
+            return "Invalid contact email format";
+        }
+        String city = normalizeText(body.getCity());
+        if (city.isEmpty()) {
+            return "City is required";
+        }
+        if (city.length() > 50 || !taiwanAddressService.isValidCity(city)) {
+            return "City is invalid";
+        }
+        String district = normalizeText(body.getDistrict());
+        if (district.isEmpty()) {
+            return "District is required";
+        }
+        if (district.length() > 50 || !taiwanAddressService.isValidDistrict(city, district)) {
+            return "District is invalid for city";
+        }
+        if (normalizeText(body.getAddress()).isEmpty()) {
+            return "Address is required";
+        }
+        if (normalizeText(body.getAddress()).length() > 255) {
+            return "Address must not exceed 255 characters";
+        }
+        if (normalizeText(body.getBrandSummary()).isEmpty()) {
+            return "Brand summary is required";
+        }
+        if (normalizeText(body.getBrandSummary()).length() > 300) {
+            return "Brand summary must not exceed 300 characters";
+        }
+        if (normalizeText(body.getBrandDescription()).isEmpty()) {
+            return "Brand description is required";
+        }
+        if (normalizeText(body.getBrandType()).isEmpty()) {
+            return "Brand type is required";
+        }
+        return null;
+    }
+
+    private String validateVendorProduct(VendorProductSaveRequest product) {
+        if (product == null) {
+            return "Vendor product request is required";
+        }
+        if (normalizeText(product.getProductName()).isEmpty()) {
+            return "Product name is required";
+        }
+        if (normalizeText(product.getProductName()).length() > 150) {
+            return "Product name must not exceed 150 characters";
+        }
+        if (normalizeText(product.getProductSummary()).isEmpty()) {
+            return "Product summary is required";
+        }
+        if (normalizeText(product.getProductSummary()).length() > 255) {
+            return "Product summary must not exceed 255 characters";
+        }
+        BigDecimal price = product.getProductPrice();
+        if (price == null) {
+            return "Product price is required";
+        }
+        if (price.compareTo(BigDecimal.ZERO) < 0) {
+            return "Product price must be greater than or equal to 0";
+        }
+        return null;
+    }
+
+    private Map<String, Object> productMap(VendorProductSaveRequest product) {
+        return orderedMap(
+                "productName", normalizeText(product.getProductName()),
+                "productSummary", normalizeText(product.getProductSummary()),
+                "productPrice", product.getProductPrice(),
+                "productImageUrl", nullIfBlank(product.getProductImageUrl()));
+    }
+
+    private String nullIfBlank(Object value) {
+        String text = normalizeText(value);
+        return text.isEmpty() ? null : text;
     }
 
     private Map<String, Object> authenticatedOrganizer(String authorizationHeader) {

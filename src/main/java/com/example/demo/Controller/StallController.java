@@ -14,7 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.StallSelectionRequest;
+import com.example.demo.dto.request.VendorProductSaveRequest;
+import com.example.demo.dto.request.VendorStallSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
+import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorAccountResponse;
 import com.example.demo.dto.response.VendorMarketSearchResponse;
@@ -58,15 +61,8 @@ public class StallController {
     return stallService.selectEventStall(authorizationHeader, body);
   }
 
-  @Operation(summary = "取得攤主帳號資訊", description = "依 Authorization 取得目前登入攤主的帳號資料與品牌資料。")
+  @Operation(summary = "取得攤主帳號資訊", description = "取得目前登入攤主的帳號資料與品牌資料。")
   @GetMapping("/api/vendor/account")
-
-  /**
-   * 取得目前登入攤主的帳號與品牌資料
-   * 
-   * @param authorizationHeader
-   * @return
-   */
   public ApiResponse<VendorAccountResponse> getVendorAccount(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
     return stallService.getVendorAccount(authorizationHeader);
@@ -124,4 +120,47 @@ public class StallController {
         page,
         pageSize);
   }
+
 }
+
+  
+  
+  
+      
+    
+  
+
+  
+  
+  
+      
+      
+    
+  
+
+  
+  
+  
+      
+      
+    
+  
+
+  
+  
+  
+      
+      
+      
+    
+  
+
+  
+  
+  
+      
+      
+    
+  
+
+  

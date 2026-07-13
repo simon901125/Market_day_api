@@ -780,3 +780,64 @@ Service 或 Filter 即使傳入英文 key，也會透過 `ApiResponse.fail(...)`
   }
 }
 ```
+
+## 2026-07-11 補充：主辦方 Profile 輸入限制與錯誤回傳
+
+`POST /api/organizer/profile/save` 會驗證所有主辦方基本資料欄位，錯誤時透過 `ApiResponse.fail(...)` 回傳對應中文訊息。
+
+### Request Body
+
+```json
+{
+  "organizerName": "TEST11 城市週末市集",
+  "contactName": "TEST11 主辦窗口",
+  "contactPhone": "0911222333",
+  "contactEmail": "test11-contact@marketday.local",
+  "companyName": "TEST11 市集策展有限公司",
+  "taxId": "11112222",
+  "city": "台北市",
+  "district": "中正區",
+  "address": "TEST11 測試路 11 號 5 樓",
+  "serviceDays": "MON,TUE,WED,THU,FRI",
+  "serviceStartTime": "09:30",
+  "serviceEndTime": "18:30"
+}
+```
+
+### 輸入限制
+
+| 欄位 | 規範 |
+| --- | --- |
+| `organizerName` | 必填，最多 150 字 |
+| `contactName` | 必填，最多 100 字 |
+| `contactPhone` | 必填，台灣手機格式，需為 `09` 開頭共 10 碼 |
+| `contactEmail` | 必填，需符合 Email 格式，最多 255 字 |
+| `companyName` | 必填，最多 150 字 |
+| `taxId` | 必填，需為 8 碼數字 |
+| `city` | 必填，最多 50 字，需存在於 `TaiwanAddressService` 的台灣縣市清單 |
+| `district` | 必填，最多 50 字，需存在於該 `city` 對應的地區清單 |
+| `address` | 必填，最多 255 字，只填詳細地址，不含自動組合 |
+| `serviceDays` | 必填，逗號分隔且不可重複，只接受 `MON,TUE,WED,THU,FRI,SAT,SUN` |
+| `serviceStartTime` | 必填，格式 `HH:mm` |
+| `serviceEndTime` | 必填，格式 `HH:mm`，且必須晚於 `serviceStartTime` |
+
+### 錯誤訊息 key
+
+| Key | 中文訊息用途 |
+| --- | --- |
+| `Organizer profile request is required` | request body 不可為空 |
+| `Organizer name is required` / `Organizer name is too long` | 主辦方名稱必填 / 過長 |
+| `Contact name is required` / `Contact name is too long` | 聯絡人必填 / 過長 |
+| `Contact phone is required` / `Contact phone must be 10 digits and start with 09` | 聯絡電話必填 / 手機格式錯誤 |
+| `Contact email is required` / `Invalid contact email format` / `Contact email is too long` | 聯絡 Email 必填 / 格式錯誤 / 過長 |
+| `Company name is required` / `Company name is too long` | 公司或團體名稱必填 / 過長 |
+| `Tax id is required` / `Tax id must be 8 digits` | 統一編號必填 / 格式錯誤 |
+| `City is required` / `City is too long` / `Invalid city` | 縣市必填 / 過長 / 不在台灣縣市清單 |
+| `District is required` / `District is too long` / `Invalid district for city` | 地區必填 / 過長 / 不屬於該縣市 |
+| `Address is required` / `Address is too long` | 地址必填 / 過長 |
+| `Service days is required` / `Invalid service days` | 服務日期必填 / 格式或代碼錯誤 |
+| `Service start time is required` / `Invalid service start time` | 服務開始時間必填 / 格式錯誤 |
+| `Service end time is required` / `Invalid service end time` | 服務結束時間必填 / 格式錯誤 |
+| `Service end time must be after start time` | 服務結束時間必須晚於開始時間 |
+
+縣市與地區驗證集中在 `TaiwanAddressService`，內部以程式碼保存台灣縣市與各縣市行政區清單，並提供 `isValidCity(...)`、`isValidDistrict(...)`。輸入會將 `臺` 正規化為 `台` 後再比對。

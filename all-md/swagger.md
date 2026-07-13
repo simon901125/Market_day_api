@@ -448,3 +448,135 @@ Request body:
   "reviewNoteDetail": "請補上商品照片"
 }
 ```
+
+## 2026-07-11 補充：公開品牌與主辦方 Profile API
+
+### Public Brand APIs
+
+以下 API 提供一般使用者瀏覽品牌，不需要 JWT：
+
+| Method | API | Query / Path | 說明 |
+| --- | --- | --- | --- |
+| GET | `/api/brands/search` | `keyword`、`categoryName`、`marketName`、`page`、`pageSize` | 品牌列表查詢。`page` 預設 1，`pageSize` 最多 6。品牌依參與活動次數由多至少排序。 |
+| GET | `/api/brands/{id}` | `id` | 品牌詳情。歷史參與市集只計算 `market_events.end_at < now`。 |
+| GET | `/api/brands/scroll-options` | - | 提供品牌列表下拉選單使用的 `categoryNames` 與 `marketNames`。 |
+
+`GET /api/brands/search` response 重點：
+
+```json
+{
+  "items": [
+    {
+      "brandId": 1,
+      "coverImageUrl": "https://example.com/cover.jpg",
+      "avatarImageUrl": "https://example.com/avatar.jpg",
+      "brandName": "TEST10 品牌 001",
+      "categoryName": "餐飲甜點",
+      "brandSummary": "品牌簡述",
+      "representativeProducts": ["TEST10 商品 001-01", "TEST10 商品 001-02"],
+      "participationCount": 10
+    }
+  ],
+  "page": 1,
+  "pageSize": 6,
+  "totalItems": 50,
+  "totalPages": 9
+}
+```
+
+`representativeProducts` 為陣列，來源為該品牌 `vendor_products.status = ACTIVE` 且 `is_featured = 1` 的商品。
+
+`GET /api/brands/{id}` response 重點：
+
+```json
+{
+  "brandId": 1,
+  "coverImageUrl": "https://example.com/cover.jpg",
+  "avatarImageUrl": "https://example.com/avatar.jpg",
+  "brandName": "TEST10 品牌 001",
+  "brandSummary": "品牌簡述",
+  "participatedMarketCount": 4,
+  "brandDescription": "品牌介紹",
+  "representativeProducts": [
+    {
+      "imageUrl": "https://example.com/product.jpg",
+      "name": "TEST10 商品 001-01",
+      "price": 108.00,
+      "shortDescription": "商品簡介"
+    }
+  ],
+  "participatedMarkets": [
+    {
+      "marketTitle": "TEST10 城市風格市集 1",
+      "eventDate": "2026-06-01 - 2026-06-02"
+    }
+  ],
+  "categoryName": "餐飲甜點",
+  "instagramUrl": "https://instagram.com/test10_brand_001",
+  "facebookUrl": "https://facebook.com/test10_brand_001",
+  "websiteUrl": "https://test10-brand-001.example.com"
+}
+```
+
+### Organizer Profile APIs
+
+以下 API 需要 `Authorization: Bearer <JWT>`：
+
+| Method | API | Request | 說明 |
+| --- | --- | --- | --- |
+| GET | `/api/organizer/profile/load` | Authorization header | 讀取目前登入主辦方的基本資料。 |
+| POST | `/api/organizer/profile/save` | `OrganizerProfileSaveRequest` | 更新目前登入主辦方的基本資料。 |
+
+`GET /api/organizer/profile/load` 回傳 `organizerName`、`contactName`、`contactPhone`、`contactEmail`、`companyName`、`taxId`、`city`、`district`、`address`、`serviceDays`、`serviceStartTime`、`serviceEndTime`。`address` 僅為原始詳細地址，不自動組合縣市與地區。
+
+`POST /api/organizer/profile/save` request body：
+
+```json
+{
+  "organizerName": "TEST11 城市週末市集",
+  "contactName": "TEST11 主辦窗口",
+  "contactPhone": "0911222333",
+  "contactEmail": "test11-contact@marketday.local",
+  "companyName": "TEST11 市集策展有限公司",
+  "taxId": "11112222",
+  "city": "台北市",
+  "district": "中正區",
+  "address": "TEST11 測試路 11 號 5 樓",
+  "serviceDays": "MON,TUE,WED,THU,FRI",
+  "serviceStartTime": "09:30",
+  "serviceEndTime": "18:30"
+}
+```
+
+欄位儲存位置：
+
+| 欄位 | 儲存位置 |
+| --- | --- |
+| `contactName`、`contactPhone`、`contactEmail`、`city`、`district`、`address` | `user_profiles` |
+| `organizerName`、`companyName`、`taxId`、`serviceDays`、`serviceStartTime`、`serviceEndTime` | `organizer_profiles` |
+
+### Organizer Equipment Detail Overview
+
+`GET /api/organizer/equipment/{eventId}` 回傳新增 `equipmentOverview` 區塊，提供設備管理頁面上方總攬數字：
+
+```json
+{
+  "equipmentOverview": {
+    "registeredStallCount": 20,
+    "basicEquipmentCount": 40,
+    "basicPowerCount": 20,
+    "equipmentRentalCount": 12,
+    "extraPowerCount": 5,
+    "vehicleRegistrationCount": 8
+  }
+}
+```
+
+| 欄位 | 說明 |
+| --- | --- |
+| `registeredStallCount` | 報名攤數，來源為該活動未取消報名筆數 |
+| `basicEquipmentCount` | 基本設備數，統計 `item_type = EQUIPMENT` 且 `charge_type = FREE` 的租借數量 |
+| `basicPowerCount` | 基本用電數，統計 `item_type = POWER` 且 `charge_type = FREE` 的租借數量 |
+| `equipmentRentalCount` | 設備租借數，統計 `item_type = EQUIPMENT` 且 `charge_type = PAID` 的租借數量 |
+| `extraPowerCount` | 額外用電數，統計 `item_type = POWER` 且 `charge_type = PAID` 的租借數量 |
+| `vehicleRegistrationCount` | 車牌登記數，統計報名資料中有填寫車牌的筆數 |

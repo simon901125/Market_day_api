@@ -29,9 +29,11 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
+import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.OrganizerAccountResponse;
@@ -45,9 +47,6 @@ import com.example.demo.dto.response.OrganizerEquipmentSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.OrganizerStallEventSummaryResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class OrganizerService {
@@ -78,10 +77,10 @@ public class OrganizerService {
     private static final DateTimeFormatter DISPLAY_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DISPLAY_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Pattern VOLTAGE_PATTERN = Pattern.compile("(\\d{2,4})\\s*[vV]");
-    private static final TypeReference<Map<String, Object>> STRING_OBJECT_MAP = new TypeReference<>() {
-    };
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+    private static final Pattern TAIWAN_MOBILE_PATTERN = Pattern.compile("^09\\d{8}$");
+    private static final Pattern TAX_ID_PATTERN = Pattern.compile("^\\d{8}$");
+    private static final Set<String> SERVICE_DAY_CODES = Set.of("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
     @Autowired
     private OrganizerRepository organizerRepository;
 
@@ -91,7 +90,10 @@ public class OrganizerService {
     @Autowired
     private ApplicationStatusService applicationStatusService;
 
-    public ApiResponse<OrganizerAccountResponse> getOrganizerAccount(String authorizationHeader) {
+    @Autowired
+    private TaiwanAddressService taiwanAddressService;
+
+    private ApiResponse<OrganizerAccountResponse> loadOrganizerAccount(String authorizationHeader, String successMessage) {
         String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
         if (token == null || token.isBlank()) {
             return ApiResponse.fail("Authorization token is required");
@@ -119,15 +121,84 @@ public class OrganizerService {
         account.put("taxId", organizer.get("taxId"));
         account.put("city", organizer.get("city"));
         account.put("district", organizer.get("district"));
-        account.put("address", joinAddress(
-                organizer.get("city"),
-                organizer.get("district"),
-                organizer.get("address")));
+        account.put("address", organizer.get("address"));
         account.put("serviceDays", organizer.get("serviceDays"));
-        account.put("serviceTime", formatServiceTime(
-                organizer.get("serviceStartTime"),
-                organizer.get("serviceEndTime")));
-        return ApiResponse.success("Organizer account retrieved successfully", new OrganizerAccountResponse(account));
+        account.put("serviceStartTime", formatServiceTime(organizer.get("serviceStartTime")));
+        account.put("serviceEndTime", formatServiceTime(organizer.get("serviceEndTime")));
+        return ApiResponse.success(successMessage, new OrganizerAccountResponse(account));
+    }
+
+    public ApiResponse<OrganizerAccountResponse> loadOrganizerProfile(String authorizationHeader) {
+        return loadOrganizerAccount(authorizationHeader, "Organizer profile loaded successfully");
+    }
+
+    @Transactional
+    public ApiResponse<OrganizerAccountResponse> saveOrganizerProfile(
+            String authorizationHeader,
+            OrganizerProfileSaveRequest body) {
+        if (body == null) {
+            return ApiResponse.fail("Organizer profile request is required");
+        }
+
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+
+        String organizerName = normalizeText(body.getOrganizerName());
+        String contactName = normalizeText(body.getContactName());
+        String contactPhone = normalizeText(body.getContactPhone());
+        String contactEmail = normalizeText(body.getContactEmail());
+        String companyName = normalizeText(body.getCompanyName());
+        String taxId = normalizeText(body.getTaxId());
+        String city = normalizeText(body.getCity());
+        String district = normalizeText(body.getDistrict());
+        String address = normalizeText(body.getAddress());
+        String serviceDays = normalizeText(body.getServiceDays());
+        String serviceStartTimeText = normalizeText(body.getServiceStartTime());
+        String serviceEndTimeText = normalizeText(body.getServiceEndTime());
+
+        String validationError = validateOrganizerProfile(
+                organizerName,
+                contactName,
+                contactPhone,
+                contactEmail,
+                companyName,
+                taxId,
+                city,
+                district,
+                address,
+                serviceDays,
+                serviceStartTimeText,
+                serviceEndTimeText);
+        if (validationError != null) {
+            return ApiResponse.fail(validationError);
+        }
+
+        LocalTime serviceStartTime = parseServiceTime(serviceStartTimeText);
+        LocalTime serviceEndTime = parseServiceTime(serviceEndTimeText);
+
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("organizerName", organizerName);
+        profile.put("contactName", contactName);
+        profile.put("contactPhone", contactPhone);
+        profile.put("contactEmail", contactEmail);
+        profile.put("companyName", companyName);
+        profile.put("taxId", taxId);
+        profile.put("city", city);
+        profile.put("district", district);
+        profile.put("address", address);
+        profile.put("serviceDays", serviceDays);
+        profile.put("serviceStartTime", serviceStartTime);
+        profile.put("serviceEndTime", serviceEndTime);
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        organizerRepository.saveOrganizerProfile(organizerUserId, profile);
+        ApiResponse<OrganizerAccountResponse> loaded = loadOrganizerAccount(authorizationHeader, "Organizer profile loaded successfully");
+        if (!loaded.isSuccessStatus()) {
+            return loaded;
+        }
+        return ApiResponse.success("Organizer profile saved successfully", loaded.getData());
     }
 
     public ApiResponse<OrganizerAccountingSearchResponse> searchOrganizerAccounts(
@@ -406,6 +477,7 @@ public class OrganizerService {
 
         return orderedMap(
                 "event", toEquipmentDetailEventResponse(withDisplayEquipmentEventStatus(event)),
+                "equipmentOverview", toEquipmentOverview(rentalStats, vehicleManagementRows),
                 "eventEquipments", toEventEquipmentRows(equipments),
                 "basicPowers", toBasicPowerRows(equipments),
                 "extraPowers", toExtraPowerRows(equipments),
@@ -446,6 +518,7 @@ public class OrganizerService {
                 new OrganizerApplicationDetailResponse(response));
     }
 
+    @Transactional
     public ApiResponse<MapBackedResponse> approveOrganizerApplication(
             String authorizationHeader,
             Long applicationId) {
@@ -457,6 +530,7 @@ public class OrganizerService {
                 null);
     }
 
+    @Transactional
     public ApiResponse<MapBackedResponse> rejectOrganizerApplication(
             String authorizationHeader,
             Long applicationId,
@@ -487,11 +561,12 @@ public class OrganizerService {
         }
         String reviewNote = null;
         String reviewNoteDetail = null;
-        String reviewNotePayload = null;
         if ("REJECTED".equals(reviewStatus)) {
             reviewNote = normalizeText(rawReviewNote);
             reviewNoteDetail = normalizeText(rawReviewNoteDetail);
-            reviewNotePayload = reviewNotePayload(reviewNote, reviewNoteDetail);
+            if (reviewNote == null) {
+                return ApiResponse.fail("Review note is required");
+            }
         }
 
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
@@ -511,10 +586,15 @@ public class OrganizerService {
         int updatedRows = organizerRepository.updateApplicationReviewStatus(
                 organizerUserId,
                 applicationId,
-                reviewStatus,
-                reviewNotePayload);
+                reviewStatus);
         if (updatedRows == 0) {
             return ApiResponse.fail("Application review failed");
+        }
+        if ("REJECTED".equals(reviewStatus)) {
+            organizerRepository.insertApplicationReviewNote(
+                    applicationId,
+                    reviewNote,
+                    reviewNoteDetail);
         }
 
         return ApiResponse.success(
@@ -723,6 +803,8 @@ public class OrganizerService {
                         event.get("district"),
                         event.get("locationName")),
                 "totalStallCount", event.get("totalStallCount"),
+                "availableStallCount", event.get("availableStallCount"),
+                "selectedStallCount", event.get("selectedStallCount"),
                 "status", event.get("status"),
                 "statusNote", event.get("statusNote"));
     }
@@ -755,6 +837,28 @@ public class OrganizerService {
                         event.get("city"),
                         event.get("district"),
                         event.get("address")));
+    }
+
+    private Map<String, Object> toEquipmentOverview(
+            List<Map<String, Object>> rentalStats,
+            List<Map<String, Object>> applicationRows) {
+        return orderedMap(
+                "registeredStallCount", applicationRows.size(),
+                "basicEquipmentCount", sumRentedQuantity(rentalStats, "EQUIPMENT", "FREE"),
+                "basicPowerCount", sumRentedQuantity(rentalStats, "POWER", "FREE"),
+                "equipmentRentalCount", sumRentedQuantity(rentalStats, "EQUIPMENT", "PAID"),
+                "extraPowerCount", sumRentedQuantity(rentalStats, "POWER", "PAID"),
+                "vehicleRegistrationCount", applicationRows.stream()
+                        .filter(row -> normalizeText(row.get("vehicleNo")) != null)
+                        .count());
+    }
+
+    private int sumRentedQuantity(List<Map<String, Object>> rows, String itemType, String chargeType) {
+        return rows.stream()
+                .filter(row -> itemType.equals(statusText(row.get("itemType"))))
+                .filter(row -> chargeType.equals(statusText(row.get("chargeType"))))
+                .mapToInt(row -> intValue(row.get("rentedQuantity")))
+                .sum();
     }
 
     private List<Map<String, Object>> toEquipmentColumns(List<Map<String, Object>> equipments) {
@@ -1063,7 +1167,6 @@ public class OrganizerService {
             List<Map<String, Object>> applicationDateRows,
             List<Map<String, Object>> equipmentRentalRows) {
         Map<String, Object> response = new LinkedHashMap<>();
-        Map<String, Object> reviewNote = parseReviewNote(application.get("reviewNote"));
         response.put("application", orderedMap(
                 "applicationId", application.get("applicationId"),
                 "applicationNo", application.get("applicationNo"),
@@ -1100,8 +1203,8 @@ public class OrganizerService {
                 "stallCategory", application.get("categoryName"),
                 "vehicleNo", application.get("vehicleNo"),
                 "applicantNote", application.get("applicantNote"),
-                "reviewNote", reviewNote.get("reviewNote"),
-                "reviewNoteDetail", reviewNote.get("reviewNoteDetail")));
+                "reviewNote", application.get("reviewNote"),
+                "reviewNoteDetail", application.get("reviewNoteDetail")));
 
         response.put("stall", toStallResponses(applicationDateRows));
 
@@ -1134,41 +1237,6 @@ public class OrganizerService {
                 applicationDays));
 
         return response;
-    }
-
-    private String reviewNotePayload(String reviewNote, String reviewNoteDetail) {
-        if (reviewNote == null && reviewNoteDetail == null) {
-            return null;
-        }
-        try {
-            return objectMapper.writeValueAsString(orderedMap(
-                    "reviewNote", reviewNote,
-                    "reviewNoteDetail", reviewNoteDetail));
-        } catch (JsonProcessingException e) {
-            return reviewNote;
-        }
-    }
-
-    private Map<String, Object> parseReviewNote(Object value) {
-        String text = normalizeText(value);
-        if (text == null) {
-            return orderedMap(
-                    "reviewNote", null,
-                    "reviewNoteDetail", null);
-        }
-        if (text.startsWith("{")) {
-            try {
-                Map<String, Object> parsed = objectMapper.readValue(text, STRING_OBJECT_MAP);
-                return orderedMap(
-                        "reviewNote", normalizeText(parsed.get("reviewNote")),
-                        "reviewNoteDetail", normalizeText(parsed.get("reviewNoteDetail")));
-            } catch (JsonProcessingException ignored) {
-                // Fall through to legacy plain-text handling.
-            }
-        }
-        return orderedMap(
-                "reviewNote", text,
-                "reviewNoteDetail", null);
     }
 
     private String displayEventStatus(Map<String, Object> application) {
@@ -1802,11 +1870,138 @@ public class OrganizerService {
         return organizer;
     }
 
-    private String formatServiceTime(Object startTime, Object endTime) {
-        if (!(startTime instanceof LocalTime start) || !(endTime instanceof LocalTime end)) {
+    private String formatServiceTime(Object time) {
+        if (!(time instanceof LocalTime localTime)) {
             return null;
         }
-        return start.format(SERVICE_TIME_FORMATTER) + "-" + end.format(SERVICE_TIME_FORMATTER);
+        return localTime.format(SERVICE_TIME_FORMATTER);
+    }
+
+    private String validateOrganizerProfile(
+            String organizerName,
+            String contactName,
+            String contactPhone,
+            String contactEmail,
+            String companyName,
+            String taxId,
+            String city,
+            String district,
+            String address,
+            String serviceDays,
+            String serviceStartTimeText,
+            String serviceEndTimeText) {
+        if (organizerName == null) {
+            return "Organizer name is required";
+        }
+        if (organizerName.length() > 150) {
+            return "Organizer name must not exceed 150 characters";
+        }
+        if (contactName == null) {
+            return "Contact name is required";
+        }
+        if (contactName.length() > 100) {
+            return "Contact name must not exceed 100 characters";
+        }
+        if (contactPhone == null) {
+            return "Contact phone is required";
+        }
+        if (!TAIWAN_MOBILE_PATTERN.matcher(contactPhone).matches()) {
+            return "Contact phone must be 10 digits and start with 09";
+        }
+        if (contactEmail == null) {
+            return "Contact email is required";
+        }
+        if (contactEmail.length() > 255 || !EMAIL_PATTERN.matcher(contactEmail).matches()) {
+            return "Invalid contact email format";
+        }
+        if (companyName == null) {
+            return "Company name is required";
+        }
+        if (companyName.length() > 150) {
+            return "Company name must not exceed 150 characters";
+        }
+        if (taxId == null) {
+            return "Tax id is required";
+        }
+        if (!TAX_ID_PATTERN.matcher(taxId).matches()) {
+            return "Tax id must be 8 digits";
+        }
+        if (city == null) {
+            return "City is required";
+        }
+        if (city.length() > 50) {
+            return "City must not exceed 50 characters";
+        }
+        if (!taiwanAddressService.isValidCity(city)) {
+            return "City is invalid";
+        }
+        if (district == null) {
+            return "District is required";
+        }
+        if (district.length() > 50) {
+            return "District must not exceed 50 characters";
+        }
+        if (!taiwanAddressService.isValidDistrict(city, district)) {
+            return "District is invalid for city";
+        }
+        if (address == null) {
+            return "Address is required";
+        }
+        if (address.length() > 255) {
+            return "Address must not exceed 255 characters";
+        }
+        if (serviceDays == null) {
+            return "Service days are required";
+        }
+        if (!isValidServiceDays(serviceDays)) {
+            return "Service days are invalid";
+        }
+        if (serviceStartTimeText == null) {
+            return "Service start time is required";
+        }
+        LocalTime serviceStartTime = parseServiceTime(serviceStartTimeText);
+        if (serviceStartTime == null) {
+            return "Service start time format is invalid";
+        }
+        if (serviceEndTimeText == null) {
+            return "Service end time is required";
+        }
+        LocalTime serviceEndTime = parseServiceTime(serviceEndTimeText);
+        if (serviceEndTime == null) {
+            return "Service end time format is invalid";
+        }
+        if (!serviceEndTime.isAfter(serviceStartTime)) {
+            return "Service end time must be after start time";
+        }
+        return null;
+    }
+
+    private boolean isValidServiceDays(String value) {
+        String[] days = value.split(",");
+        if (days.length == 0) {
+            return false;
+        }
+
+        Set<String> usedDays = new java.util.HashSet<>();
+        for (String day : days) {
+            String normalizedDay = normalizeText(day);
+            if (normalizedDay == null || !SERVICE_DAY_CODES.contains(normalizedDay) || !usedDays.add(normalizedDay)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private LocalTime parseServiceTime(String value) {
+        String text = normalizeText(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(text, SERVICE_TIME_FORMATTER);
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 
     private String formatEventDate(Map<String, Object> application) {

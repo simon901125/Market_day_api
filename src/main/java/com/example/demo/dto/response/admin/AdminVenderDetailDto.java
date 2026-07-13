@@ -50,7 +50,7 @@ public class AdminVenderDetailDto {
 
     /**活動報名紀錄項目 */
     @Data
-    private class EventRegistrationItem {
+    public class EventRegistrationItem {
         /** 活動名稱 */
         private String eventName;
         /** 報名日期 */
