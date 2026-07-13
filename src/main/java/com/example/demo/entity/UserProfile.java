@@ -38,19 +38,15 @@ public class UserProfile {
 
     /** 使用者類型 */
     @Enumerated(EnumType.STRING)
-    @Column(name = "profile_type", length = 30, nullable = false)
+    @Column(name = "profile_type", length = 30)
     private ProfileType profileType;
 
-    /** 名稱 */
-    @Column(name = "name", length = 150, nullable = false)
-    private String name;
-
     /** 聯絡人姓名 */
-    @Column(name = "contact_name", length = 100, nullable = false)
+    @Column(name = "contact_name", length = 100)
     private String contactName;
 
     /** 聯絡電話 */
-    @Column(name = "contact_phone", length = 30, nullable = false)
+    @Column(name = "contact_phone", length = 30)
     private String contactPhone;
 
     /** 聯絡信箱 */

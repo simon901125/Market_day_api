@@ -7,10 +7,10 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.example.demo.Repository.projection.admin.AdminVenderDetailProjection;
 import com.example.demo.entity.User;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.type.Role;
-import com.example.demo.projection.admin.AdminVenderDetailProjection;
 
 
 

@@ -1,4 +1,4 @@
-package com.example.demo.projection.admin;
+package com.example.demo.Repository.projection.admin;
 
 import java.time.LocalDateTime;
 
