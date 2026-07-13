@@ -306,7 +306,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             cq.where(predicate);
         }
         Expression<String> targetEmail = AdminLogSpecification.targetEmailSubquery(root, cq, cb);
-        Expression<AdminTargetTypeForFront> targetTypeForFront = AdminLogSpecification.targetTypeForFrontExpression(root, cq, cb);
+        Expression<AdminTargetTypeForFront> targetTypeForFront = AdminLogSpecification
+                .targetTypeForFrontExpression(root, cq, cb);
         // 組裝select欄位
         cq.multiselect(
                 root.get("operationType").alias("operationType"),
@@ -314,8 +315,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 root.get("createdAt").alias("createdAt"),
                 root.get("content").alias("content"),
                 targetEmail.alias("email"),
-                targetTypeForFront.alias("targetType")
-            );
+                targetTypeForFront.alias("targetType"));
         // 設定orderBy: 操作時間:由新到舊(desc)
         cq.orderBy(cb.desc(root.get("createdAt")));
         // 查詢結果(有設定limit)
@@ -327,7 +327,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         List<AdminLogDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
             AdminLogDto dtoItem = new AdminLogDto(
-                    null, //TODO:確認資料庫
+                    null, // TODO:確認資料庫
                     row.get("operationType", AdminOperationType.class),
                     row.get("targetType", AdminTargetTypeForFront.class),
                     row.get("targetName", String.class),

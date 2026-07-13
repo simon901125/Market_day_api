@@ -868,28 +868,30 @@ public class StallService {
     /**
      * 驗證目前登入者是否為攤主，並回傳攤主帳號與品牌資料。
      */
-    private Map<String, Object> authenticatedVendor(String authorizationHeader) {
-        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
-        if (token == null || token.isBlank()) {
-            return Map.of("message", "Authorization token is required");
-        }
-        if (!jwtService.isTokenValid(token)) {
-            return Map.of("message", "Invalid or expired token");
-        }
-        if (!"VENDOR".equals(jwtService.getRole(token))) {
-            return Map.of("message", "This account is not a vendor");
-        }
+    // private Map<String, Object> authenticatedVendor(String authorizationHeader) {
+    // String token =
+    // jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+    // if (token == null || token.isBlank()) {
+    // return Map.of("message", "Authorization token is required");
+    // }
+    // if (!jwtService.isTokenValid(token)) {
+    // return Map.of("message", "Invalid or expired token");
+    // }
+    // if (!"VENDOR".equals(jwtService.getRole(token))) {
+    // return Map.of("message", "This account is not a vendor");
+    // }
 
-        Map<String, Object> vendor = stallRepository.findVendorAccountByEmail(jwtService.getEmail(token))
-                .orElse(null);
-        if (vendor == null) {
-            return Map.of("message", "Vendor profile not found");
-        }
-        if (!"VENDOR".equals(vendor.get("role"))) {
-            return Map.of("message", "This account is not a vendor");
-        }
-        return vendor;
-    }
+    // Map<String, Object> vendor =
+    // stallRepository.findVendorAccountByEmail(jwtService.getEmail(token))
+    // .orElse(null);
+    // if (vendor == null) {
+    // return Map.of("message", "Vendor profile not found");
+    // }
+    // if (!"VENDOR".equals(vendor.get("role"))) {
+    // return Map.of("message", "This account is not a vendor");
+    // }
+    // return vendor;
+    // }
 
     /**
      * 將 DB 狀態欄位轉成前台顯示用的報名狀態。

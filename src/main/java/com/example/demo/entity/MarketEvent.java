@@ -2,9 +2,7 @@ package com.example.demo.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import com.example.demo.enums.status.WorkflowStatus;
 
@@ -17,7 +15,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
@@ -51,15 +48,10 @@ public class MarketEvent {
     private User user;
 
     /** 活動類型 */
-    @ManyToMany
+    @ManyToOne
     @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_categories"))
-    private Set<Category> categories = new HashSet<>();
+    private Category category;
 
-    public void addCategory(Category category){
-        if (categories.add(category)) {
-            category.getMarketEvents().add(this);
-        }
-    }
 
     /** 活動名稱 */
     @Column(name = "title", length = 200, nullable = false)
@@ -89,12 +81,12 @@ public class MarketEvent {
     @Column(name = "address", length = 255, nullable = false)
     private String address;
 
-    //TODO:要再確認資料庫 :AdminService:getEventDetail()
-    //----------我是分隔線----------
+    // TODO:要再確認資料庫 :AdminService:getEventDetail()
+    // ----------我是分隔線----------
     /** 交通方式 */
     @Column(name = "traffic_info", columnDefinition = "nvarchar(max)")
     private String trafficInfo;
-    //----------我是分隔線----------
+    // ----------我是分隔線----------
 
     /** 活動注意事項 */
     @Column(name = "notice", columnDefinition = "nvarchar(max)")
