@@ -1,5 +1,7 @@
 package com.example.demo.dto.request;
 
+import java.util.List;
+
 public class VendorStallSaveRequest {
 
     private String brandName;
@@ -17,6 +19,7 @@ public class VendorStallSaveRequest {
     private String brandSummary;
     private String brandDescription;
     private String brandType;
+    private List<VendorProductSaveRequest> products;
 
     public String getBrandName() {
         return brandName;
@@ -136,6 +139,14 @@ public class VendorStallSaveRequest {
 
     public void setBrandType(String brandType) {
         this.brandType = brandType;
+    }
+
+    public List<VendorProductSaveRequest> getProducts() {
+        return products;
+    }
+
+    public void setProducts(List<VendorProductSaveRequest> products) {
+        this.products = products;
     }
 
 }

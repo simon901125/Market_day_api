@@ -43,10 +43,10 @@ public class BrandService {
 
         List<Map<String, Object>> rows = brandRepository.searchBrands(request, offset, pageSize);
         long totalItems = rows.isEmpty() ? 0 : numberValue(rows.get(0).get("totalRows")).longValue();
-        Map<Long, List<Map<String, Object>>> featuredProductsByBrandId = featuredProductsByBrandId(rows);
+        Map<Long, List<Map<String, Object>>> productsByBrandId = productsByBrandId(rows);
         List<BrandSummaryResponse> brands = rows.stream()
                 .map(this::withoutTotalRows)
-                .map(row -> withRepresentativeProducts(row, featuredProductsByBrandId))
+                .map(row -> withRepresentativeProducts(row, productsByBrandId))
                 .map(BrandSummaryResponse::new)
                 .toList();
 
@@ -75,7 +75,7 @@ public class BrandService {
                 "brandSummary", brand.get("brandSummary"),
                 "participatedMarketCount", brand.get("participatedMarketCount"),
                 "brandDescription", brand.get("brandDescription"),
-                "representativeProducts", brandRepository.findRepresentativeProducts(brandId),
+                "representativeProducts", brandRepository.findBrandProducts(brandId),
                 "participatedMarkets", brandRepository.findParticipatedMarkets(brandId),
                 "links", orderedMap(
                         "instagramUrl", brand.get("instagramUrl"),
@@ -93,21 +93,21 @@ public class BrandService {
 
     private Map<String, Object> withRepresentativeProducts(
             Map<String, Object> brand,
-            Map<Long, List<Map<String, Object>>> featuredProductsByBrandId) {
+            Map<Long, List<Map<String, Object>>> productsByBrandId) {
         Map<String, Object> values = new LinkedHashMap<>(brand);
         Long brandId = longValue(values.get("brandId"));
-        values.put("representativeProducts", featuredProductsByBrandId.getOrDefault(brandId, List.of()));
+        values.put("representativeProducts", productsByBrandId.getOrDefault(brandId, List.of()));
         return values;
     }
 
-    private Map<Long, List<Map<String, Object>>> featuredProductsByBrandId(List<Map<String, Object>> brands) {
+    private Map<Long, List<Map<String, Object>>> productsByBrandId(List<Map<String, Object>> brands) {
         List<Long> brandIds = brands.stream()
                 .map(row -> longValue(row.get("brandId")))
                 .filter(id -> id != null)
                 .toList();
 
         Map<Long, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
-        for (Map<String, Object> product : brandRepository.findFeaturedProductSummaries(brandIds)) {
+        for (Map<String, Object> product : brandRepository.findProductSummaries(brandIds)) {
             Long brandId = longValue(product.get("brandId"));
             if (brandId == null) {
                 continue;

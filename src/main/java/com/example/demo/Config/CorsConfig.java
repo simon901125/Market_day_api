@@ -13,5 +13,8 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOrigins("http://localhost:4200","https://ccore.newebpay.com")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("Content-Type", "Authorization", "Accept");
+        registry.addMapping("/images/**")
+                .allowedOrigins("http://localhost:4200")
+                .allowedMethods("GET", "OPTIONS");
     }
 }
