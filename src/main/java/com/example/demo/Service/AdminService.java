@@ -20,6 +20,7 @@ import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventApplicationRepo;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.EventStallZoneRepo;
+import com.example.demo.Repository.RequestLogRepo;
 import com.example.demo.Repository.StatusLogRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
@@ -27,6 +28,7 @@ import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
 import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
 import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
 import com.example.demo.Repository.projection.admin.RefundProjection;
+import com.example.demo.Repository.projection.admin.UserLoginLogProjection;
 import com.example.demo.Repository.projection.admin.VenderRegApplicationProjection;
 import com.example.demo.Repository.specification.AdminLogSpecification;
 import com.example.demo.Repository.specification.EventSpecification;
@@ -83,6 +85,9 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     EventApplicationRepo eventApplicationRepo;
 
     @Autowired
+    RequestLogRepo requestLogRepo;
+
+    @Autowired
     StatusLogRepo statusLogRepo;
 
     @Autowired
@@ -94,6 +99,15 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     /** HH:mm */
     DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+    /** 主辦方登入API路徑 */
+    static final List<String> ORGANIZER_LOGIN_PATHS = List.of(
+            "/api/organizer/google-login",
+            "/api/organizer/local-login");
+    /** 攤主登入API路徑 */
+    static final List<String> VENDOR_LOGIN_PATHS = List.of(
+            "/api/vender/google-login",
+            "/api/vender/local-login");
 
     // 設定管理員後台: 首頁資料統計部分
     @Override
@@ -410,10 +424,37 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         return new PageResponse<>(dtoList, pageNumber, pageSize, total);
     }
 
+    // 設定管理員後台: 使用者詳細 :使用者登入紀錄
     @Override
-    public PageResponse<AdminUserLoginDto> getUserLoginLogs(Long userId, int pageNumber, int pageSize) {
-        // TODO 設定管理員後台: 使用者詳細 :使用者登入紀錄
-        throw new UnsupportedOperationException("Unimplemented method 'getUserLoginLogs'");
+    public PageResponse<AdminUserLoginDto> getUserLoginLogs(Long userId, int pageNumber, int pageSize) throws IllegalArgumentException{
+        // ----------撈資料----------
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+
+        // 管理員沒有登入紀錄頁面
+        if (user.getRole() == Role.ADMIN) {
+            return null;
+        }
+
+        List<String> loginPaths = user.getRole() == Role.ORGANIZER ? ORGANIZER_LOGIN_PATHS : VENDOR_LOGIN_PATHS;
+
+        PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
+        List<UserLoginLogProjection> logs = requestLogRepo.findUserLoginLogs(userId, loginPaths, pageRequest);
+        long total = requestLogRepo.countUserLoginLogs(userId, loginPaths);
+
+        // ----------設定回傳資料----------
+        List<AdminUserLoginDto> dtoList = new ArrayList<>();
+        for (UserLoginLogProjection log : logs) {
+            String loginMethod = log.path().contains("google") ? "google" : "Email";
+            String loginStatus = log.statusCode() != null && log.statusCode() == 200 ? "成功" : "失敗";
+
+            dtoList.add(new AdminUserLoginDto(
+                    log.loginTime() == null ? null : log.loginTime().format(dateTimeFormatter),
+                    loginMethod,
+                    loginStatus));
+        }
+
+        return new PageResponse<>(dtoList, pageNumber, pageSize, total);
     }
 
     // 設定管理員後台: 操作紀錄搜尋
