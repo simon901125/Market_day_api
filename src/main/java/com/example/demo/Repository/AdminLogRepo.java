@@ -5,6 +5,6 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import com.example.demo.entity.AdminOperationLog;
 
-public interface AdminLogRepo extends JpaRepository<AdminOperationLog, Long>,  JpaSpecificationExecutor<AdminOperationLog>{
+public interface AdminLogRepo extends JpaRepository<AdminOperationLog, Long>,  JpaSpecificationExecutor<AdminOperationLog>, AdminLogRepoCustom {
 
 }

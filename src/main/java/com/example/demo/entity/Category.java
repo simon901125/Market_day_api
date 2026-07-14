@@ -11,6 +11,8 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 /**
  * 活動分類的Entity。<br>
@@ -39,6 +41,8 @@ public class Category {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "category")
     private Set<MarketEvent> marketEvents;
 }

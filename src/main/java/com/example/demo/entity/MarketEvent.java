@@ -10,6 +10,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -19,13 +20,15 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 /**
  * 市集活動的Entity。<br>
- * 包含名稱、摘要、詳細介紹、注意事項、交通方式、活動流程狀態、補件原因/審核備註<br>
+ * 包含名稱、摘要、詳細介紹、注意事項、交通方式(開車、公車、捷運)、活動流程狀態、補件原因/審核備註<br>
  * <b>地點資訊</b>:縣市、地區、地址、地點名稱<br>
  * <b>時間資訊</b>:建立時間、公開資訊時間、報名開始時間、報名結束時間、參與活動的品牌名單公開時間、開始日期、結束日期<br>
- * <b>攤位共用資訊</b>:攤位總數、基本攤位費用<br>
+ * <b>攤位共用資訊</b>:攤位總數、基本攤位費用、攤位寬度、攤位長度<br>
  * <b>圖片</b>:活動封面url、活動攤位地圖底圖url<br>
  * <b>FK</b>:活動主辦方{@link User}、活動類型{@link Category}
  * 
@@ -43,12 +46,16 @@ public class MarketEvent {
     private Long id;
 
     /** 活動主辦方 */
-    @ManyToOne
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_users"))
     private User user;
 
     /** 活動類型 */
-    @ManyToOne
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_categories"))
     private Category category;
 
@@ -100,11 +107,7 @@ public class MarketEvent {
     @Column(name = "notice", columnDefinition = "nvarchar(max)")
     private String notice;
 
-    /** 活動開始日期時間 */
-    @Column(name = "create_at", nullable = false)
-    private LocalDateTime createAt;
-
-    /** 活動建立時間 */
+    /**活動開始日期時間 */
     @Column(name = "start_at", nullable = false)
     private LocalDateTime startAt;
 
@@ -136,42 +139,64 @@ public class MarketEvent {
     @Column(name = "base_fee", precision = 10, scale = 2, nullable = false)
     private BigDecimal baseFee;
 
+    /** 開車交通資訊 */
+    @Column(name = "traffic_info_driving", columnDefinition = "nvarchar(max)")
+    private String driving; 
+
+    /** 公車交通資訊 */
+    @Column(name = "traffic_info_bus", columnDefinition = "nvarchar(max)")
+    private String bus;   
+
+    /** 捷運交通資訊 */
+    @Column(name = "traffic_info_metro", columnDefinition = "nvarchar(max)")
+    private String metro;
+    
     /** 活動封面url */
     @Column(name = "cover_image_url", length = 500)
     private String coverImageUrl;
-
+    
     /** 活動攤位地圖底圖url */
     @Column(name = "map_image_url", length = 500)
     private String mapImageUrl;
-
+    
     /** 公開資訊時間 */
     @Column(name = "public_info_at")
     private LocalDateTime publicInfoAt;
-
+    
     /** 參與活動的品牌名單公開時間 */
     @Column(name = "brands_public_at")
     private LocalDateTime brandPublicAt;
-
+    
     /** 活動流程狀態 */
     @Enumerated(EnumType.STRING)
     @Column(name = "workflow_status", length = 30, nullable = false)
-    private WorkflowStatus workflowStatus;
-
+    private WorkflowStatus workflowStatus = WorkflowStatus.DRAFT;
+    
     /** 補件原因/審核備註 */
     @Column(name = "review_note", columnDefinition = "nvarchar(max)")
     private String reviewNote;
-
+    
+    /** 活動建立時間 */
+    @CreationTimestamp
+    @Column(name = "create_at", nullable = false, updatable = false)
+    private LocalDateTime createAt;
     // ----------其他Entity的FK----------
-
+    
     /** 活動的攤位報名清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "event")
     private List<EventApplication> eventApplications;
 
     /** 活動攤位分區清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "marketEvent")
     private List<EventStallZone> eventStallZones;
 
     /** 活動攤位資訊 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "marketEvent")
     private List<EventStall> eventStalls;
 

@@ -3,7 +3,6 @@ package com.example.demo.Repository.specification;
 import org.springframework.data.jpa.domain.Specification;
 
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
-import com.example.demo.entity.RequestLog;
 import com.example.demo.entity.User;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.type.Role;
@@ -64,5 +63,4 @@ public class UserSpecification {
             return cb.equal(root.get("status"), status);
         };
     }
-    //TODO:子查詢->用userId查最後登入時間，select requestLog.createdAt from RequestLog，where use.id = :id, requestLog.statusCode = 200, path =''
 }

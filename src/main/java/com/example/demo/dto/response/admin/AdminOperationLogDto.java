@@ -17,7 +17,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param content 操作說明
  */
 @Schema(description = "管理員:系統操作紀錄")
-public record AdminLogDto(
+public record AdminOperationLogDto(
     String operator, 
     AdminOperationType operationType, 
     AdminTargetTypeForFront targetType,

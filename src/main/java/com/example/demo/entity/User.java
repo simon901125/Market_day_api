@@ -9,6 +9,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -17,6 +18,8 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.type.Role;
@@ -28,6 +31,7 @@ import com.example.demo.enums.type.Role;
  * @see MarketEvent#user
  * @see EventApplication#user
  * @see UserProfile#user
+ * @see AdminProfile#user
  */
 @Entity
 @Data
@@ -87,17 +91,11 @@ public class User {
     private LocalDateTime updatedAt;
 
     //----------我是分隔線----------
-
-    /** 使用者舉辦的活動清單 */
-    @OneToMany(mappedBy = "user")
-    private List<MarketEvent> marketEvents;
-
-    /** 使用者的攤位報名清單 */
-    @OneToMany(mappedBy = "user")
-    private List<EventApplication> eventApplications;
-
+    
     /** 使用者的主辦方/攤主資料清單 */
-    @OneToOne(mappedBy = "user")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY)
     private UserProfile userProfile;
 
     public void setUserProfile(UserProfile userProfile) {
@@ -107,11 +105,40 @@ public class User {
         }
     }
 
+    /** 使用者的管理員資料 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY)
+    private AdminProfile adminProfile;
+
+    public void setAdminProfile(AdminProfile adminProfile) {
+        this.adminProfile = adminProfile;
+        if (adminProfile != null) {
+            adminProfile.setUser(this);
+        }
+    }
+
+    /** 使用者舉辦的活動清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "user")
+    private List<MarketEvent> marketEvents;
+
+    /** 使用者的攤位報名清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "user")
+    private List<EventApplication> eventApplications;
+
     /**管理員操作紀錄 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "user")
     private List<AdminOperationLog> adminOperationLogs;
 
     /**API請求紀錄 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "user")
     private List<RequestLog> requestLogs;
 
