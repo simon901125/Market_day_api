@@ -32,15 +32,6 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
         """)
     int countByEventInPlatform(@Param("now") LocalDateTime now);
 
-    /** 計算活動目前報名攤位(不計入被拒絕的攤位) */
-    @Query("""
-        select count(a.id) 
-        from EventApplication a 
-        where a.event.id = :eventId 
-            and a.reviewStatus != 'REJECTED'      
-        """)
-    int countRegBoothsByEventId(@Param("eventId") Long eventId);
-
     /** 管理員後台: 主辦方詳細:活動管理紀錄列表 (只撈頁面需要用到的欄位，依活動開始時間新到舊) */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection(

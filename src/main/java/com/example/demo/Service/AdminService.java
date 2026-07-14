@@ -159,7 +159,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         AdminEventDetailProjection event = eventRepo.findEventDetailById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
         List<EventStallZone> zones = eventStallZoneRepo.findByMarketEventId(eventId);
-        int registeredBoothCount = eventRepo.countRegBoothsByEventId(eventId);
+        int registeredBoothCount = eventApplicationRepo.countRegBoothsByEventId(eventId);
 
         // ----------塞資料----------
         String eventTime = String.format(
@@ -235,7 +235,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         );
     }
 
-    //設定
+    //設定管理員後台: 活動詳細:活動狀態變動紀錄
     public PageResponse<StatusLog> getEventStatusLogs(@NonNull Long eventId, int pageNumber, int pageSize){
         return null;
     }
@@ -360,7 +360,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                             endAt.format(timeFormatter));
 
             int maxBooths = event.maxBooths() == null ? 0 : event.maxBooths();
-            int registeredBoothCount = eventRepo.countRegBoothsByEventId(event.eventId());
+            int registeredBoothCount = eventApplicationRepo.countRegBoothsByEventId(event.eventId());
             String registrationCount = String.format("%d/%d", registeredBoothCount, maxBooths);
 
             WorkflowStatus workflowStatus = event.workflowStatus();

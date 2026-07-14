@@ -34,6 +34,15 @@ public interface EventApplicationRepo extends JpaRepository<EventApplication, Lo
     @Query("select count(a.id) from EventApplication a where a.user.id = :userId")
     long countByUserId(@Param("userId") Long userId);
 
+    /** 計算活動目前報名攤位(不計入被拒絕的攤位) */
+    @Query("""
+        select count(a.id)
+        from EventApplication a
+        where a.event.id = :eventId
+            and a.reviewStatus != 'REJECTED'
+        """)
+    int countRegBoothsByEventId(@Param("eventId") Long eventId);
+
     /** 依報名編號清單查詢報名的參與日期與已選定攤位 */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.ApplicationDateProjection(
