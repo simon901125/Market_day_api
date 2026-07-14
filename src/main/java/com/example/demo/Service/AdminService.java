@@ -5,7 +5,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.NonNull;
@@ -76,14 +75,14 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
         // 塞資料
         return new AdminDashboardDto(
-            eventRepo.countByWorkflowStatus(WorkflowStatus.PENDING_REVIEW), 
-            eventRepo.countByWorkflowStatus(WorkflowStatus.MAP_BUILDING), 
-            eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED), 
-            0, // TODO:補完系統警告計數
-            userRepo.countByRoleAndStatus(Role.ORGANIZER, UserStatus.ACTIVE), 
-            userRepo.countByRoleAndStatus(Role.VENDOR, UserStatus.ACTIVE), 
-            eventRepo.countByEventInPlatform(now), 
-            eventRepo.countByEventStatusIsACTIVE(now));
+                eventRepo.countByWorkflowStatus(WorkflowStatus.PENDING_REVIEW),
+                eventRepo.countByWorkflowStatus(WorkflowStatus.MAP_BUILDING),
+                eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED),
+                0, // TODO:補完系統警告計數
+                userRepo.countByRoleAndStatus(Role.ORGANIZER, UserStatus.ACTIVE),
+                userRepo.countByRoleAndStatus(Role.VENDOR, UserStatus.ACTIVE),
+                eventRepo.countByEventInPlatform(now),
+                eventRepo.countByEventStatusIsACTIVE(now));
     }
 
     @Override
@@ -155,8 +154,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         String serviceHours = String.format(
                 "%s %s-%s",
                 event.serviceDays() == null ? "" : event.serviceDays(),
-                event.serviceStartTime() == null ? "" : event.serviceStartTime().format(timeFormatter),
-                event.serviceEndTime() == null ? "" : event.serviceEndTime().format(timeFormatter));
+                event.serviceStartTime() == null ? "營業開始時間" : event.serviceStartTime().format(timeFormatter),
+                event.serviceEndTime() == null ? "營業結束時間" : event.serviceEndTime().format(timeFormatter));
         String addr = String.format(
                 "%s%s%s",
                 event.city(),
@@ -228,14 +227,20 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         // ----------設定回傳資料----------
         List<AdminUserListDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
+            //null處理
+            LocalDateTime loginTime = row.get("loginTime", LocalDateTime.class);
+            String userName =row.get("name", String.class) == null? "使用者尚未填寫" : row.get("name", String.class); 
+            String loginTimeStr = loginTime == null ? null : loginTime.format(dateTimeFormatter);
+
             AdminUserListDto dtoItem = new AdminUserListDto(
                     row.get("id", Long.class),
                     row.get("role", Role.class).getRole(),
-                    row.get("name", String.class),
+                    userName,
                     row.get("status", UserStatus.class).getStatus(),
                     row.get("email", String.class),
                     row.get("regAt", LocalDateTime.class).format(dateTimeFormatter),
-                    null);// TODO:另外查詢
+                    loginTimeStr);
+                    
 
             dtoList.add(dtoItem);
         }
@@ -262,7 +267,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         throw new UnsupportedOperationException("Unimplemented method 'setOrganizerDetail'");
     }
 
-        @Override
+    @Override
     public PageResponse<AdminOrgEventManagementDto> getOrgEventLogs(Long userId, int pageNumber, int pageSize) {
         // TODO 設定管理員後台: 主辦方詳細 :活動管理紀錄
         throw new UnsupportedOperationException("Unimplemented method 'getOrgEventLogs'");
@@ -286,7 +291,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         List<AdminOperationLogDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
             AdminOperationLogDto dtoItem = new AdminOperationLogDto(
-                    row.get("adminName", String.class), 
+                    row.get("adminName", String.class),
                     row.get("operationType", AdminOperationType.class),
                     row.get("targetType", AdminTargetTypeForFront.class),
                     row.get("targetName", String.class),
