@@ -7,10 +7,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.demo.Service.BrandService;
+import com.example.demo.Service.ImageStorageService;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.BrandSearchRequest;
 import com.example.demo.dto.response.ApiResponse;
@@ -18,13 +22,14 @@ import com.example.demo.dto.response.BrandDetailResponse;
 import com.example.demo.dto.response.BrandSearchResponse;
 import com.example.demo.dto.response.EventStallStatusResponse;
 import com.example.demo.dto.response.MapBackedResponse;
+import com.example.demo.dto.response.StoredImageResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
-@Tag(name = "一般使用者 API", description = "提供一般使用者不需登入即可查詢的公開 API")
+@Tag(name = "共用 API", description = "提供公開查詢與登入後共用功能")
 public class AllController {
 
     @Autowired
@@ -32,6 +37,22 @@ public class AllController {
 
     @Autowired
     private BrandService brandService;
+
+    @Autowired
+    private ImageStorageService imageStorageService;
+
+    @Operation(
+            summary = "正式儲存圖片",
+            description = "共用圖片 API：將攤主大頭照、攤主封面、商品圖片、活動封面或活動地圖存入 images，並綁定對應 DB 欄位。")
+    @PostMapping(value = "/api/images", consumes = "multipart/form-data")
+    public ApiResponse<StoredImageResponse> storeImage(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestParam(value = "purpose", required = false) String purpose,
+            @RequestParam(value = "productId", required = false) Long productId,
+            @RequestParam(value = "eventId", required = false) Long eventId,
+            @RequestParam(value = "file", required = false) MultipartFile file) {
+        return imageStorageService.store(authorizationHeader, purpose, productId, eventId, file);
+    }
 
     @Operation(summary = "查詢活動攤位狀態", description = "依活動 ID 與可選日期查詢公開攤位狀態")
     @GetMapping("/api/eventsMap/{eventId}/stallsStatus")

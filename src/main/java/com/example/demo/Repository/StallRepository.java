@@ -184,38 +184,15 @@ public class StallRepository {
                     name AS productName,
                     price AS productPrice,
                     short_description AS productSummary,
-                    image_url AS productImageUrl,
-                    status
+                    image_url AS productImageUrl
                 FROM dbo.vendor_products
                 WHERE vendor_profile_id = :vendorProfileId
-                  AND status = N'ACTIVE'
                 ORDER BY id ASC
                 """;
 
         Map<String, Object> map = new HashMap<>();
         map.put("vendorProfileId", vendorProfileId);
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
-    }
-
-    public Optional<Map<String, Object>> findVendorProduct(Long vendorProfileId, Long productId) {
-        String sql = """
-                SELECT
-                    id,
-                    vendor_profile_id AS vendorProfileId,
-                    name AS productName,
-                    price AS productPrice,
-                    short_description AS productSummary,
-                    image_url AS productImageUrl,
-                    status
-                FROM dbo.vendor_products
-                WHERE id = :productId
-                  AND vendor_profile_id = :vendorProfileId
-                """;
-
-        Map<String, Object> map = new HashMap<>();
-        map.put("vendorProfileId", vendorProfileId);
-        map.put("productId", productId);
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public Optional<Long> findActiveCategoryIdByName(String categoryName) {
@@ -250,8 +227,6 @@ public class StallRepository {
                 UPDATE dbo.vendor_profiles
                 SET category_id = :categoryId,
                     brand_name = :brandName,
-                    avatar_image_url = :avatarImageUrl,
-                    cover_image_url = :coverImageUrl,
                     instagram_url = :instagramUrl,
                     facebook_url = :facebookUrl,
                     website_url = :websiteUrl,
@@ -266,67 +241,67 @@ public class StallRepository {
         return namedParameterJdbcTemplate.update(sql, map);
     }
 
-    public Long createVendorProduct(Long vendorProfileId, Map<String, Object> product) {
-        String sql = """
+    public int replaceVendorProducts(Long vendorProfileId, List<Map<String, Object>> products) {
+        List<Long> retainedProductIds = products.stream()
+                .map(product -> product.get("id"))
+                .filter(Number.class::isInstance)
+                .map(Number.class::cast)
+                .map(Number::longValue)
+                .toList();
+
+        if (retainedProductIds.isEmpty()) {
+            namedParameterJdbcTemplate.update(
+                    "DELETE FROM dbo.vendor_products WHERE vendor_profile_id = :vendorProfileId",
+                    Map.of("vendorProfileId", vendorProfileId));
+        } else {
+            namedParameterJdbcTemplate.update(
+                    """
+                    DELETE FROM dbo.vendor_products
+                    WHERE vendor_profile_id = :vendorProfileId
+                      AND id NOT IN (:productIds)
+                    """,
+                    Map.of("vendorProfileId", vendorProfileId, "productIds", retainedProductIds));
+        }
+
+        String updateSql = """
+                UPDATE dbo.vendor_products
+                SET name = :productName,
+                    short_description = :productSummary,
+                    price = :productPrice,
+                    image_url = COALESCE(:productImageUrl, image_url)
+                WHERE id = :id
+                  AND vendor_profile_id = :vendorProfileId
+                """;
+
+        String insertSql = """
                 INSERT INTO dbo.vendor_products (
                     vendor_profile_id,
                     name,
                     short_description,
                     description,
                     price,
-                    image_url,
-                    is_featured,
-                    status
+                    image_url
                 )
-                OUTPUT INSERTED.id
                 VALUES (
                     :vendorProfileId,
                     :productName,
                     :productSummary,
                     NULL,
                     :productPrice,
-                    :productImageUrl,
-                    0,
-                    N'ACTIVE'
+                    :productImageUrl
                 )
                 """;
-
-        Map<String, Object> map = new HashMap<>(product);
-        map.put("vendorProfileId", vendorProfileId);
-        return namedParameterJdbcTemplate.queryForObject(sql, map, Long.class);
-    }
-
-    public int updateVendorProduct(Long vendorProfileId, Long productId, Map<String, Object> product) {
-        String sql = """
-                UPDATE dbo.vendor_products
-                SET name = :productName,
-                    short_description = :productSummary,
-                    price = :productPrice,
-                    image_url = :productImageUrl,
-                    status = N'ACTIVE'
-                WHERE id = :productId
-                  AND vendor_profile_id = :vendorProfileId
-                """;
-
-        Map<String, Object> map = new HashMap<>(product);
-        map.put("vendorProfileId", vendorProfileId);
-        map.put("productId", productId);
-        return namedParameterJdbcTemplate.update(sql, map);
-    }
-
-    public int hideVendorProduct(Long vendorProfileId, Long productId) {
-        String sql = """
-                UPDATE dbo.vendor_products
-                SET status = N'HIDDEN'
-                WHERE id = :productId
-                  AND vendor_profile_id = :vendorProfileId
-                  AND status = N'ACTIVE'
-                """;
-
-        Map<String, Object> map = new HashMap<>();
-        map.put("vendorProfileId", vendorProfileId);
-        map.put("productId", productId);
-        return namedParameterJdbcTemplate.update(sql, map);
+        int savedRows = 0;
+        for (Map<String, Object> product : products) {
+            Map<String, Object> parameters = new HashMap<>(product);
+            parameters.put("vendorProfileId", vendorProfileId);
+            if (product.get("id") == null) {
+                savedRows += namedParameterJdbcTemplate.update(insertSql, parameters);
+            } else {
+                savedRows += namedParameterJdbcTemplate.update(updateSql, parameters);
+            }
+        }
+        return savedRows;
     }
 
     public int bindApplicationDateSelectedStall(Long applicationId, LocalDate applyDate, Long stallId) {

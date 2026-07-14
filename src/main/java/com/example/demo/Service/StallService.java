@@ -3,10 +3,13 @@ package com.example.demo.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -303,6 +306,25 @@ public class StallService {
             return ApiResponse.fail(validationError);
         }
 
+        if (body.getProducts() == null) {
+            return ApiResponse.fail("Vendor products are required");
+        }
+        if (body.getProducts().size() > 3) {
+            return ApiResponse.fail("Vendor products must not exceed 3 items");
+        }
+        List<Map<String, Object>> productSnapshots = new ArrayList<>();
+        Set<Long> submittedProductIds = new HashSet<>();
+        for (VendorProductSaveRequest product : body.getProducts()) {
+            String productValidationError = validateVendorProduct(product);
+            if (productValidationError != null) {
+                return ApiResponse.fail(productValidationError);
+            }
+            if (product.getId() != null && !submittedProductIds.add(product.getId())) {
+                return ApiResponse.fail("Duplicate product id");
+            }
+            productSnapshots.add(productMap(product));
+        }
+
         Long categoryId = stallRepository.findActiveCategoryIdByName(normalizeText(body.getBrandType()))
                 .orElse(null);
         if (categoryId == null) {
@@ -311,6 +333,8 @@ public class StallService {
 
         Long userId = toLong(vendor.get("userId"));
         Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        String email = normalizeText(vendor.get("email"));
+
         Map<String, Object> profile = orderedMap(
                 "brandName", normalizeText(body.getBrandName()),
                 "contactName", normalizeText(body.getContactName()),
@@ -320,119 +344,32 @@ public class StallService {
                 "district", normalizeText(body.getDistrict()),
                 "address", normalizeText(body.getAddress()),
                 "categoryId", categoryId,
-                "avatarImageUrl", nullIfBlank(body.getAvatarImageUrl()),
-                "coverImageUrl", nullIfBlank(body.getCoverImageUrl()),
                 "instagramUrl", nullIfBlank(body.getInstagramUrl()),
                 "facebookUrl", nullIfBlank(body.getFacebookUrl()),
                 "websiteUrl", nullIfBlank(body.getWebsiteUrl()),
                 "brandSummary", normalizeText(body.getBrandSummary()),
                 "brandDescription", normalizeText(body.getBrandDescription()));
 
-        int updatedRows = stallRepository.updateVendorProfile(userId, vendorProfileId, profile);
-        if (updatedRows == 0) {
+        try {
+            int updatedRows = stallRepository.updateVendorProfile(userId, vendorProfileId, profile);
+            if (updatedRows == 0) {
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                return ApiResponse.fail("Vendor profile save failed");
+            }
+            int savedProducts = stallRepository.replaceVendorProducts(vendorProfileId, productSnapshots);
+            if (savedProducts != productSnapshots.size()) {
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                return ApiResponse.fail("Vendor product snapshot save failed");
+            }
+            Map<String, Object> refreshedVendor = stallRepository.findVendorAccountByEmail(email)
+                    .orElse(vendor);
+            return ApiResponse.success(
+                    "Vendor stall profile saved successfully",
+                    new MapBackedResponse(toVendorStallProfile(refreshedVendor)));
+        } catch (RuntimeException exception) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             return ApiResponse.fail("Vendor profile save failed");
         }
-        Map<String, Object> refreshedVendor = stallRepository.findVendorAccountByEmail(normalizeText(vendor.get("email")))
-                .orElse(vendor);
-        return ApiResponse.success(
-                "Vendor stall profile saved successfully",
-                new MapBackedResponse(toVendorStallProfile(refreshedVendor)));
-    }
-
-    @Transactional
-    public ApiResponse<MapBackedResponse> addVendorProduct(
-            String authorizationHeader,
-            VendorProductSaveRequest body) {
-        if (body == null) {
-            return ApiResponse.fail("Vendor product request is required");
-        }
-        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
-        if (vendor.containsKey("message")) {
-            return ApiResponse.fail(vendor.get("message").toString());
-        }
-        String validationError = validateVendorProduct(body);
-        if (validationError != null) {
-            return ApiResponse.fail(validationError);
-        }
-
-        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
-        Long productId = stallRepository.createVendorProduct(vendorProfileId, productMap(body));
-        if (productId == null) {
-            return ApiResponse.fail("Vendor product save failed");
-        }
-        Map<String, Object> product = stallRepository.findVendorProduct(vendorProfileId, productId).orElse(null);
-        return ApiResponse.success(
-                "Vendor product saved successfully",
-                new MapBackedResponse(orderedMap("product", product)));
-    }
-
-    @Transactional
-    public ApiResponse<MapBackedResponse> deleteVendorProduct(
-            String authorizationHeader,
-            Long productId) {
-        if (productId == null) {
-            return ApiResponse.fail("Product id is required");
-        }
-        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
-        if (vendor.containsKey("message")) {
-            return ApiResponse.fail(vendor.get("message").toString());
-        }
-
-        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
-        Map<String, Object> existingProduct = stallRepository.findVendorProduct(vendorProfileId, productId)
-                .orElse(null);
-        if (existingProduct == null || !"ACTIVE".equals(stringValue(existingProduct.get("status")))) {
-            return ApiResponse.fail("Vendor product not found");
-        }
-
-        int updatedRows = stallRepository.hideVendorProduct(vendorProfileId, productId);
-        if (updatedRows == 0) {
-            return ApiResponse.fail("Vendor product delete failed");
-        }
-
-        return ApiResponse.success(
-                "Vendor product deleted successfully",
-                new MapBackedResponse(orderedMap(
-                        "productId", productId,
-                        "status", "HIDDEN")));
-    }
-
-    @Transactional
-    public ApiResponse<MapBackedResponse> editVendorProduct(
-            String authorizationHeader,
-            Long productId,
-            VendorProductSaveRequest body) {
-        if (productId == null) {
-            return ApiResponse.fail("Product id is required");
-        }
-        if (body == null) {
-            return ApiResponse.fail("Vendor product request is required");
-        }
-        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
-        if (vendor.containsKey("message")) {
-            return ApiResponse.fail(vendor.get("message").toString());
-        }
-
-        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
-        Map<String, Object> existingProduct = stallRepository.findVendorProduct(vendorProfileId, productId)
-                .orElse(null);
-        if (existingProduct == null) {
-            return ApiResponse.fail("Vendor product not found");
-        }
-
-        String validationError = validateVendorProduct(body);
-        if (validationError != null) {
-            return ApiResponse.fail(validationError);
-        }
-        int updatedRows = stallRepository.updateVendorProduct(vendorProfileId, productId, productMap(body));
-        if (updatedRows == 0) {
-            return ApiResponse.fail("Vendor product save failed");
-        }
-
-        Map<String, Object> product = stallRepository.findVendorProduct(vendorProfileId, productId).orElse(existingProduct);
-        return ApiResponse.success(
-                "Vendor product saved successfully",
-                new MapBackedResponse(orderedMap("product", product)));
     }
 
     public ApiResponse<VendorStallMapResponse> getVendorStallMap(
@@ -783,6 +720,9 @@ public class StallService {
         if (product == null) {
             return "Vendor product request is required";
         }
+        if (product.getId() != null && product.getId() <= 0) {
+            return "Product id is invalid";
+        }
         if (normalizeText(product.getProductName()).isEmpty()) {
             return "Product name is required";
         }
@@ -807,6 +747,7 @@ public class StallService {
 
     private Map<String, Object> productMap(VendorProductSaveRequest product) {
         return orderedMap(
+                "id", product.getId(),
                 "productName", normalizeText(product.getProductName()),
                 "productSummary", normalizeText(product.getProductSummary()),
                 "productPrice", product.getProductPrice(),

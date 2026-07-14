@@ -447,7 +447,8 @@ Request body:
 }
 ```
 
-`representativeProducts` 為陣列，來源為該品牌 `vendor_products.status = ACTIVE` 且 `is_featured = 1` 的商品。
+`representativeProducts` 為陣列，來源為該品牌目前保存於 `vendor_products` 的商品。
+品牌搜尋與品牌詳情都會回傳該品牌全部已刊登商品，不限制商品筆數。
 
 `GET /api/brands/{id}` response 重點：
 
