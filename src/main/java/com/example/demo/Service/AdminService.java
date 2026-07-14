@@ -107,6 +107,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             LocalDateTime startAt = row.get("startAt", LocalDateTime.class);
             LocalDateTime endAt = row.get("endAt", LocalDateTime.class);
             String eventDate = String.format("%s - %s", startAt.format(dateFormatter), endAt.format(dateFormatter));
+            LocalDateTime submittedAt = row.get("submittedAt", LocalDateTime.class);
+            String submittedAtStr = submittedAt == null? "活動尚未送審" : submittedAt.format(dateTimeFormatter);
 
             EventStatus status = checkEventStatus(
                     row.get("workflowStatus", WorkflowStatus.class),
@@ -125,8 +127,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     eventDate,
                     status,
                     row.get("organizerName", String.class),
-                    null// TODO:審核時間
-            );
+                    submittedAtStr);
+                    
             dtoList.add(dtoItem);
         }
 
@@ -217,6 +219,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         );
     }
 
+    // 設定管理員後台: 使用者搜尋
     @Override
     public PageResponse<AdminUserListDto> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
         // ----------撈資料----------
