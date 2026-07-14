@@ -29,15 +29,15 @@ public class Category {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**分類名稱 */
+    /** 分類名稱 */
     @Column(name = "name", length = 100, nullable = false)
     private String name;
 
-    /**分類代碼 */
+    /** 分類代碼 */
     @Column(name = "slug", length = 100, nullable = false)
     private String slug;
 
-    /**分類是否啟用*/
+    /** 分類是否啟用 */
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 

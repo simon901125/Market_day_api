@@ -7,9 +7,19 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+/**
+ * (狀態)轉換成前端需要的格式
+ * ApplicationStatusService
+ */
 @Service
 public class ApplicationStatusService {
 
+    /**
+     * (狀態)轉換成前端需要的格式
+     * 
+     * @param application
+     * @return
+     */
     public String resolveApplicationStatus(Map<String, Object> application) {
         if (isTrue(application.get("isCancelled"))) {
             return "已取消";
