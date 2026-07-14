@@ -128,7 +128,7 @@ public class BrandRepository {
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, params));
     }
 
-    public List<Map<String, Object>> findFeaturedProductSummaries(List<Long> brandIds) {
+    public List<Map<String, Object>> findProductSummaries(List<Long> brandIds) {
         if (brandIds == null || brandIds.isEmpty()) {
             return List.of();
         }
@@ -140,8 +140,6 @@ public class BrandRepository {
                     p.name AS productName
                 FROM dbo.vendor_products p
                 WHERE p.vendor_profile_id IN (:brandIds)
-                  AND p.status = N'ACTIVE'
-                  AND p.is_featured = 1
                 ORDER BY p.vendor_profile_id ASC, p.id ASC
                 """;
 
@@ -189,7 +187,7 @@ public class BrandRepository {
                 namedParameterJdbcTemplate.queryForList(sql, params).stream().findFirst());
     }
 
-    public List<Map<String, Object>> findRepresentativeProducts(Long brandId) {
+    public List<Map<String, Object>> findBrandProducts(Long brandId) {
         String sql = """
                 SELECT
                     p.id AS productId,
@@ -199,9 +197,7 @@ public class BrandRepository {
                     p.short_description AS productShortDescription
                 FROM dbo.vendor_products p
                 WHERE p.vendor_profile_id = :brandId
-                  AND p.status = N'ACTIVE'
-                ORDER BY p.is_featured DESC, p.id ASC
-                OFFSET 0 ROWS FETCH NEXT 3 ROWS ONLY
+                ORDER BY p.id ASC
                 """;
 
         Map<String, Object> params = new HashMap<>();
