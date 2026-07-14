@@ -93,18 +93,6 @@ public class MarketEvent {
     @Column(name = "address", length = 255, nullable = false)
     private String address;
 
-    /** 開車交通資訊 */
-    @Column(name = "traffic_info_driving", columnDefinition = "nvarchar(max)")
-    private String trafficInfoDriving;
-
-    /** 公車交通資訊 */
-    @Column(name = "traffic_info_bus", columnDefinition = "nvarchar(max)")
-    private String trafficInfoBus;
-
-    /** 捷運交通資訊 */
-    @Column(name = "traffic_info_metro", columnDefinition = "nvarchar(max)")
-    private String trafficInfoMetro;
-
     /** 活動注意事項 */
     @Column(name = "notice", columnDefinition = "nvarchar(max)")
     private String notice;

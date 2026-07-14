@@ -74,7 +74,7 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
         subquery.where(
                 cb.equal(requestLog.get("user"), correlatedEvent.get("user")),
                 cb.equal(requestLog.get("statusCode"), 200),
-                cb.equal(requestLog.get("path"), "/api/organizer"));//TODO:要再問
+                cb.like(requestLog.get("path"), "/api/organizer/events%submit-review"));
 
         return subquery;
     }

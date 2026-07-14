@@ -3,18 +3,26 @@ package com.example.demo.Service;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import com.example.demo.Repository.AdminLogRepo;
+import com.example.demo.Repository.EventApplicationRepo;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.EventStallZoneRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
+import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
+import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
+import com.example.demo.Repository.projection.admin.RefundProjection;
+import com.example.demo.Repository.projection.admin.VenderRegApplicationProjection;
 import com.example.demo.Repository.specification.AdminLogSpecification;
 import com.example.demo.Repository.specification.EventSpecification;
 import com.example.demo.Repository.specification.UserSpecification;
@@ -33,11 +41,16 @@ import com.example.demo.dto.response.admin.AdminUserLoginDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
 import com.example.demo.dto.response.admin.AdminVenderRegDto;
 import com.example.demo.dto.response.admin.BoothZone;
+import com.example.demo.dto.response.admin.RegBooth;
+import com.example.demo.dto.response.admin.StatusLog;
 import com.example.demo.entity.AdminOperationLog;
 import com.example.demo.entity.EventStallZone;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.User;
 import com.example.demo.enums.status.EventStatus;
+import com.example.demo.enums.status.PaymentStatus;
+import com.example.demo.enums.status.RefundStatus;
+import com.example.demo.enums.status.ReviewStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
@@ -60,6 +73,9 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     @Autowired
     AdminLogRepo logRepo;
+
+    @Autowired
+    EventApplicationRepo eventApplicationRepo;
 
     /** yyyy/MM/dd HH:mm */
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
@@ -108,7 +124,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             LocalDateTime endAt = row.get("endAt", LocalDateTime.class);
             String eventDate = String.format("%s - %s", startAt.format(dateFormatter), endAt.format(dateFormatter));
             LocalDateTime submittedAt = row.get("submittedAt", LocalDateTime.class);
-            String submittedAtStr = submittedAt == null? "活動尚未送審" : submittedAt.format(dateTimeFormatter);
+            String submittedAtStr = submittedAt == null ? "活動尚未送審" : submittedAt.format(dateTimeFormatter);
 
             EventStatus status = checkEventStatus(
                     row.get("workflowStatus", WorkflowStatus.class),
@@ -128,7 +144,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     status,
                     row.get("organizerName", String.class),
                     submittedAtStr);
-                    
+
             dtoList.add(dtoItem);
         }
 
@@ -138,7 +154,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // 設定管理員後台: 活動詳細
     @Override
-    public AdminEventDetailDto getEventDetail(@NonNull Long eventId) throws IllegalArgumentException {
+    public AdminEventDetailDto getEventDetail(@NonNull Long eventId, int pageSize) throws IllegalArgumentException {
         // ----------撈資料----------
         AdminEventDetailProjection event = eventRepo.findEventDetailById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
@@ -219,6 +235,11 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         );
     }
 
+    //設定
+    public PageResponse<StatusLog> getEventStatusLogs(@NonNull Long eventId, int pageNumber, int pageSize){
+        return null;
+    }
+
     // 設定管理員後台: 使用者搜尋
     @Override
     public PageResponse<AdminUserListDto> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize) {
@@ -230,9 +251,9 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         // ----------設定回傳資料----------
         List<AdminUserListDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
-            //null處理
+            // null處理
             LocalDateTime loginTime = row.get("loginTime", LocalDateTime.class);
-            String userName =row.get("name", String.class) == null? "使用者尚未填寫" : row.get("name", String.class); 
+            String userName = row.get("name", String.class) == null ? "使用者尚未填寫" : row.get("name", String.class);
             String loginTimeStr = loginTime == null ? null : loginTime.format(dateTimeFormatter);
 
             AdminUserListDto dtoItem = new AdminUserListDto(
@@ -243,7 +264,6 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     row.get("email", String.class),
                     row.get("regAt", LocalDateTime.class).format(dateTimeFormatter),
                     loginTimeStr);
-                    
 
             dtoList.add(dtoItem);
         }
@@ -253,27 +273,118 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // for 管理員後台使用者詳細
     @Override
-    public AdminVenderDetailDto getVenderDetail(@NonNull Long userId) {
+    public AdminVenderDetailDto getVenderDetail(@NonNull Long userId, int pageSize) {
         // TODO: 設定管理員後台: 攤主詳細
         throw new UnsupportedOperationException("Unimplemented method 'setVenderDetail'");
     }
 
-    //設定管理員後台: 攤主詳細: 活動報名紀錄
+    // 設定管理員後台: 攤主詳細: 活動報名紀錄
     @Override
     public PageResponse<AdminVenderRegDto> getVenderRegLogs(@Nonnull Long userId, int pageNumber, int pageSize) {
-        return null;
+        // ----------撈資料----------
+        PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
+        List<VenderRegApplicationProjection> applications = eventApplicationRepo.findVenderRegApplications(userId, pageRequest);
+        long total = eventApplicationRepo.countByUserId(userId);
+
+        List<Long> applicationIds = applications.stream()
+                .map(VenderRegApplicationProjection::applicationId)
+                .toList();
+
+        // 依報名編號查詢報名攤位(參與日期+已選定攤位)與退款紀錄
+        List<ApplicationDateProjection> dates = eventApplicationRepo.findApplicationDates(applicationIds);
+        List<RefundProjection> refunds = eventApplicationRepo.findRefunds(applicationIds);
+
+        // ----------依報名編號分組: 報名攤位----------
+        Map<Long, List<RegBooth>> regBoothsByApplication = new HashMap<>();
+        for (ApplicationDateProjection date : dates) {
+            String regDate = date.applyDate() == null ? "" : date.applyDate().format(dateFormatter);
+            String boothNo = (date.stallNo() == null || date.zoneName() == null)
+                    ? "尚未選攤位"
+                    : date.zoneName() + date.stallNo();
+
+            regBoothsByApplication
+                    .computeIfAbsent(date.applicationId(), key -> new ArrayList<>())
+                    .add(new RegBooth(regDate, boothNo));
+        }
+
+        // ----------依報名編號分組: 是否已有退款(以及是否已完成退款)----------
+        Map<Long, Boolean> hasRefundByApplication = new HashMap<>();
+        Map<Long, Boolean> hasRefundedAtByApplication = new HashMap<>();
+        for (RefundProjection refund : refunds) {
+            hasRefundByApplication.put(refund.applicationId(), true);
+            if (refund.refundedAt() != null) {
+                hasRefundedAtByApplication.put(refund.applicationId(), true);
+            }
+        }
+
+        // ----------設定回傳資料----------
+        List<AdminVenderRegDto> dtoList = new ArrayList<>();
+        for (VenderRegApplicationProjection application : applications) {
+            String regStatus = resolveRegStatus(
+                    application.isCancelled(), application.reviewStatus(), application.paymentStatus());
+            String paymentStatusStr = resolvePaymentStatus(
+                    application.applicationId(), application.paymentStatus(),
+                    hasRefundByApplication, hasRefundedAtByApplication);
+            List<RegBooth> regBooths = regBoothsByApplication.getOrDefault(application.applicationId(), List.of());
+
+            dtoList.add(new AdminVenderRegDto(application.eventName(), regStatus, paymentStatusStr, regBooths));
+        }
+
+        return new PageResponse<>(dtoList, pageNumber, pageSize, total);
     }
 
     @Override
-    public AdminOrgDetailDto getOrganizerDetail(Long userId) {
+    public AdminOrgDetailDto getOrganizerDetail(Long userId, int pageSize) {
         // TODO: 設定管理員後台: 主辦方詳細
         throw new UnsupportedOperationException("Unimplemented method 'setOrganizerDetail'");
     }
 
+    // 設定管理員後台: 主辦方詳細: 活動管理紀錄
     @Override
-    public PageResponse<AdminOrgEventManagementDto> getOrgEventLogs(Long userId, int pageNumber, int pageSize) {
-        // TODO 設定管理員後台: 主辦方詳細 :活動管理紀錄
-        throw new UnsupportedOperationException("Unimplemented method 'getOrgEventLogs'");
+    public PageResponse<AdminOrgEventManagementDto> getOrgEventLogs(@Nonnull Long userId, int pageNumber, int pageSize) {
+        // ----------撈資料----------
+        PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
+        List<AdminOrgEventLogProjection> events = eventRepo.findOrgEventLogs(userId, pageRequest);
+        long total = eventRepo.countByUserId(userId);
+
+        // ----------設定回傳資料----------
+        List<AdminOrgEventManagementDto> dtoList = new ArrayList<>();
+        for (AdminOrgEventLogProjection event : events) {
+            LocalDateTime startAt = event.startAt();
+            LocalDateTime endAt = event.endAt();
+            String eventDate = String.format(
+                            "%s - %s %s-%s",
+                            startAt.format(dateFormatter),
+                            endAt.format(dateFormatter),
+                            startAt.format(timeFormatter),
+                            endAt.format(timeFormatter));
+
+            int maxBooths = event.maxBooths() == null ? 0 : event.maxBooths();
+            int registeredBoothCount = eventRepo.countRegBoothsByEventId(event.eventId());
+            String registrationCount = String.format("%d/%d", registeredBoothCount, maxBooths);
+
+            WorkflowStatus workflowStatus = event.workflowStatus();
+            EventStatus status = workflowStatus == null
+                    ? null
+                    : checkEventStatus(
+                            workflowStatus,
+                            event.registrationStartAt(),
+                            event.registrationEndAt(),
+                            event.brandPublicAt(),
+                            startAt,
+                            endAt,
+                            maxBooths,
+                            registeredBoothCount);
+            String eventStatus = status != null
+                    ? status.getStatus()
+                    : (workflowStatus == null ? "" : workflowStatus.getDescription());
+
+            String eventName = event.title() == null ? "" : event.title();
+
+            dtoList.add(new AdminOrgEventManagementDto(eventName, eventDate, eventStatus, registrationCount));
+        }
+
+        return new PageResponse<>(dtoList, pageNumber, pageSize, total);
     }
 
     @Override
@@ -282,6 +393,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         throw new UnsupportedOperationException("Unimplemented method 'getUserLoginLogs'");
     }
 
+
+    //設定管理員後台: 操作紀錄搜尋
     @Override
     public PageResponse<AdminOperationLogDto> getLogs(AdminLogSearchDto request, int pageNumber, int pageSize) {
         // ----------撈資料----------
@@ -310,8 +423,9 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     }
 
     /**
+     * 將MarketEvent轉換成EventStatus
      * @param data :MarketEvent
-     * @return 轉換後顯示在前端的活動狀態
+     * @return EventStatus
      * @throws IllegalArgumentException 型別不符時拋出
      */
     @Override
@@ -330,5 +444,48 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     entity.getEventApplications() == null ? 0 : entity.getEventApplications().size());
         }
         throw new IllegalArgumentException("data須符合型別類型MarketEvent");
+    }
+
+    /** 依審核狀態、付款狀態、是否取消，轉換為前端顯示的報名狀態文字 */
+    private String resolveRegStatus(Boolean isCancelled, ReviewStatus reviewStatus, PaymentStatus paymentStatus) {
+        if (Boolean.TRUE.equals(isCancelled)) {
+            return "已取消";
+        }
+        if (reviewStatus == null) {
+            return "";
+        }
+        switch (reviewStatus) {
+            case PENDING:
+                return "待審核";
+            case APPROVED:
+                if (paymentStatus == PaymentStatus.PENDING || paymentStatus == PaymentStatus.FAILED) {
+                    return "待付款";
+                }
+                if (paymentStatus == PaymentStatus.PAID) {
+                    return "報名完成";
+                }
+                if (paymentStatus == PaymentStatus.EXPIRED) {
+                    return "報名失敗";
+                }
+                return "";
+            case REJECTED:
+                return "報名失敗";
+            default:
+                return "";
+        }
+    }
+
+    /** 若該報名有退款紀錄，依是否已有退款完成時間判斷為已退款/退款中，否則沿用原本的付款狀態 */
+    private String resolvePaymentStatus(
+            Long applicationId,
+            PaymentStatus paymentStatus,
+            Map<Long, Boolean> hasRefundByApplication,
+            Map<Long, Boolean> hasRefundedAtByApplication) {
+        boolean hasRefund = hasRefundByApplication.getOrDefault(applicationId, false);
+        if (hasRefund) {
+            boolean hasRefundedAt = hasRefundedAtByApplication.getOrDefault(applicationId, false);
+            return hasRefundedAt ? RefundStatus.REFUNDED.getStatus() : RefundStatus.REFUNDING.getStatus();
+        }
+        return paymentStatus == null ? null : paymentStatus.getStatus();
     }
 }

@@ -2,6 +2,7 @@ package com.example.demo.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -16,6 +17,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
@@ -32,8 +34,10 @@ import com.example.demo.enums.status.ReviewStatus;
  * <b>金流相關</b>: 總金額、付款狀態{@link PaymentStatus}、保證金金額、保證金狀態{@link DepositStatus}、付款截止時間<br>
  * <b>審核相關</b>: 審核狀態{@link }、審核備註<br>
  * <b>FK</b>: 市集活動{@link MarketEvent#eventApplications}、使用者{@link User#eventApplications}、攤主資料(尚未實作)
- * 
- * 
+ *
+ * @see ApplicationDate#application
+ * @see Payment#application
+ * @see Refund#application
  */
 @Entity
 @Data
@@ -114,5 +118,25 @@ public class EventApplication {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    // ----------其他Entity的FK----------
+
+    /**報名的參與日期清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "application")
+    private List<ApplicationDate> applicationDates;
+
+    /**報名的付款紀錄清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "application")
+    private List<Payment> payments;
+
+    /**報名的退款紀錄清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "application")
+    private List<Refund> refunds;
 
 }

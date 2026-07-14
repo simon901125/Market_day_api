@@ -1,15 +1,18 @@
 package com.example.demo.Repository;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
+import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.enums.status.WorkflowStatus;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecificationExecutor<MarketEvent>, EventRepoCustom {
@@ -37,6 +40,30 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             and a.reviewStatus != 'REJECTED'      
         """)
     int countRegBoothsByEventId(@Param("eventId") Long eventId);
+
+    /** 管理員後台: 主辦方詳細:活動管理紀錄列表 (只撈頁面需要用到的欄位，依活動開始時間新到舊) */
+    @Query("""
+            SELECT new com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection(
+                e.id,
+                e.title,
+                e.startAt,
+                e.endAt,
+                e.workflowStatus,
+                e.registrationStartAt,
+                e.registrationEndAt,
+                e.brandPublicAt,
+                e.maxBooths
+            )
+            FROM MarketEvent e
+            WHERE e.user.id = :userId
+            ORDER BY e.startAt DESC
+            """)
+    List<AdminOrgEventLogProjection> findOrgEventLogs(@Param("userId") Long userId, Pageable pageable);
+
+    /** 計算指定主辦方的活動總筆數 */
+    @Query("select count(e.id) from MarketEvent e where e.user.id = :userId")
+    long countByUserId(@Param("userId") Long userId);
+
     /** 管理員後台: 活動詳細 (不含攤位分區清單，需另外查詢) */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.AdminEventDetailProjection(
