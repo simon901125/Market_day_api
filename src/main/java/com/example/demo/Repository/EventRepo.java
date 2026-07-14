@@ -55,6 +55,37 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
     @Query("select count(e.id) from MarketEvent e where e.user.id = :userId")
     long countByUserId(@Param("userId") Long userId);
 
+    /** 管理員後台: 主辦方詳細:主辦方建立活動總數(不含草稿、已取消、已下架) */
+    @Query("""
+            select count(e.id)
+            from MarketEvent e
+            where e.user.id = :userId
+                and e.workflowStatus not in ('CANCELLED', 'UNPUBLISHED', 'DRAFT')
+            """)
+    int countCreatedEventsByUserId(@Param("userId") Long userId);
+
+    /** 管理員後台: 主辦方詳細:主辦方尚未結束的活動數(FINAL_REVIEW狀態需活動尚未結束) */
+    @Query("""
+            select count(e.id)
+            from MarketEvent e
+            where e.user.id = :userId
+                and (
+                    e.workflowStatus not in ('CANCELLED', 'UNPUBLISHED', 'DRAFT', 'FINAL_REVIEW')
+                    or (e.workflowStatus = 'FINAL_REVIEW' and e.endAt >= :now)
+                )
+            """)
+    int countOngoingEventsByUserId(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+    /** 管理員後台: 主辦方詳細:主辦方已結束的活動數(FINAL_REVIEW狀態且活動已結束) */
+    @Query("""
+            select count(e.id)
+            from MarketEvent e
+            where e.user.id = :userId
+                and e.workflowStatus = 'FINAL_REVIEW'
+                and e.endAt <= :now
+            """)
+    int countEndedEventsByUserId(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
     /** 管理員後台: 活動詳細 (不含攤位分區清單，需另外查詢) */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.AdminEventDetailProjection(

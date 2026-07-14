@@ -25,6 +25,7 @@ import com.example.demo.Repository.StatusLogRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
+import com.example.demo.Repository.projection.admin.AdminOrganizerDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminVenderDetailProjection;
 import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
 import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
@@ -407,10 +408,57 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         return new PageResponse<>(dtoList, pageNumber, pageSize, total);
     }
 
+    //設定管理員後台: 主辦方詳細
     @Override
     public AdminOrgDetailDto getOrganizerDetail(Long userId, int pageSize) {
-        // TODO: 設定管理員後台: 主辦方詳細
-        throw new UnsupportedOperationException("Unimplemented method 'setOrganizerDetail'");
+        // ----------撈資料----------
+        AdminOrganizerDetailProjection profile = userRepo.findOrganizerDetailById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的主辦方"));
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime lastLoginAt = requestLogRepo.findLastLoginAt(userId, ORGANIZER_LOGIN_PATHS);
+        int createdEventCount = eventRepo.countCreatedEventsByUserId(userId);
+        int ongoingEventCount = eventRepo.countOngoingEventsByUserId(userId, now);
+        int endedEventCount = eventRepo.countEndedEventsByUserId(userId, now);
+
+        PageResponse<AdminOrgEventManagementDto> eventLogs = getOrgEventLogs(userId, 1, pageSize);
+        PageResponse<AdminUserLoginDto> loginLogs = getUserLoginLogs(userId, 1, pageSize);
+
+        // ----------塞資料----------
+        String userName = profile.userName() == null ? "使用者尚未填寫" : profile.userName();
+        boolean isGoogleBound = profile.provider() != User.Provider.LOCAL;
+        String serviceHours = String.format(
+                "%s %s-%s",
+                profile.serviceDays() == null ? "" : profile.serviceDays(),
+                profile.serviceStartTime() == null ? "營業開始時間" : profile.serviceStartTime().format(timeFormatter),
+                profile.serviceEndTime() == null ? "營業結束時間" : profile.serviceEndTime().format(timeFormatter));
+        String contactAddress = String.format(
+                "%s%s%s",
+                profile.city() == null ? "" : profile.city(),
+                profile.district() == null ? "" : profile.district(),
+                profile.address() == null ? "" : profile.address());
+
+        return new AdminOrgDetailDto(
+                profile.userId(),
+                userName,
+                profile.role().getRole(),
+                profile.accountStatus().getStatus(),
+                isGoogleBound,
+                profile.regAt().format(dateTimeFormatter),
+                lastLoginAt == null ? null : lastLoginAt.format(dateTimeFormatter),
+                createdEventCount,
+                ongoingEventCount,
+                endedEventCount,
+                profile.organizerName(),
+                serviceHours,
+                profile.companyName(),
+                userName,
+                profile.contactPhone(),
+                profile.contactEmail(),
+                contactAddress,
+                profile.taxId(),
+                eventLogs,
+                loginLogs);
     }
 
     // 設定管理員後台: 主辦方詳細: 活動管理紀錄
