@@ -2,6 +2,7 @@ package com.example.demo.Controller;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.example.demo.Service.BrandService;
 import com.example.demo.Service.ImageStorageService;
 import com.example.demo.Service.StallService;
+import com.example.demo.Service.TaiwanAddressService;
 import com.example.demo.dto.request.BrandSearchRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.BrandDetailResponse;
@@ -40,6 +42,27 @@ public class AllController {
 
     @Autowired
     private ImageStorageService imageStorageService;
+
+    @Autowired
+    private TaiwanAddressService taiwanAddressService;
+
+    @Operation(summary = "取得台灣縣市清單", description = "提供縣市下拉式選單使用")
+    @GetMapping("/api/addresses/cities")
+    public ApiResponse<Set<String>> getCities() {
+        return ApiResponse.success("縣市清單取得成功", taiwanAddressService.cities());
+    }
+
+    @Operation(summary = "取得縣市所屬地區清單", description = "依照選擇的縣市，提供地區下拉式選單使用")
+    @GetMapping("/api/addresses/districts")
+    public ApiResponse<Set<String>> getDistricts(
+            @Parameter(description = "縣市名稱", example = "台北市", required = true)
+            @RequestParam String city) {
+        if (!taiwanAddressService.isValidCity(city)) {
+            return ApiResponse.fail("City is invalid");
+        }
+
+        return ApiResponse.success("地區清單取得成功", taiwanAddressService.districts(city));
+    }
 
     @Operation(
             summary = "正式儲存圖片",

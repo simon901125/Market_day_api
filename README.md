@@ -10,6 +10,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 #### simon branch
 
+- 新增台灣地址下拉選單 API：`GET /api/addresses/cities` 回傳台灣縣市清單，`GET /api/addresses/districts?city={縣市}` 依所選縣市回傳所屬地區；資料由 `TaiwanAddressService` 提供，無效縣市會回傳驗證錯誤。
 - 新增共用正式圖片儲存 API：`POST /api/images`，支援攤主大頭照、攤主封面、商品圖片、活動封面與活動地圖五種用途。
 - 圖片 API 依用途使用 `productId` 或 `eventId` 綁定目標資料，並驗證 JWT、帳號角色及資料所有權；攤主大頭照與封面不需提供目標 ID。
 - 圖片檔案儲存於可設定的 `images` 目錄，透過 `/images/**` 提供前端存取；新增圖片目錄、公開網址、5 MB 上傳限制與 CORS 設定。
