@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.hibernate.annotations.CreationTimestamp;
+
 import com.example.demo.enums.status.WorkflowStatus;
 
 import jakarta.persistence.Column;

@@ -258,10 +258,10 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         throw new UnsupportedOperationException("Unimplemented method 'setVenderDetail'");
     }
 
+    //設定管理員後台: 攤主詳細: 活動報名紀錄
     @Override
     public PageResponse<AdminVenderRegDto> getVenderRegLogs(@Nonnull Long userId, int pageNumber, int pageSize) {
-        // TODO 設定管理員後台: 攤主詳細: 活動報名紀錄
-        throw new UnsupportedOperationException("Unimplemented method 'getVenderRegLogs'");
+        return null;
     }
 
     @Override
