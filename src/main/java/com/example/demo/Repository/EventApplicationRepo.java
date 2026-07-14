@@ -1,5 +1,6 @@
 package com.example.demo.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
@@ -69,4 +70,32 @@ public interface EventApplicationRepo extends JpaRepository<EventApplication, Lo
             WHERE r.application.id IN :applicationIds
             """)
     List<RefundProjection> findRefunds(@Param("applicationIds") List<Long> applicationIds);
+
+    /** 管理員後台: 攤主詳細:攤主報名且尚未結束的活動數量 */
+    @Query("""
+            select count(a.id)
+            from EventApplication a
+            join a.event e
+            where a.user.id = :userId
+                and a.isCancelled = false
+                and a.reviewStatus <> 'REJECTED'
+                and a.paymentStatus <> 'EXPIRED'
+                and e.endAt > :now
+                and e.workflowStatus in ('PUBLISHED', 'FINAL_REVIEW', 'UNPUBLISH_REQUESTED')
+            """)
+    int countOngoingEvents(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+    /** 管理員後台: 攤主詳細:攤主已完成(已結束且已付款)的活動數量 */
+    @Query("""
+            select count(a.id)
+            from EventApplication a
+            join a.event e
+            where a.user.id = :userId
+                and a.isCancelled = false
+                and a.reviewStatus = 'APPROVED'
+                and a.paymentStatus = 'PAID'
+                and e.endAt <= :now
+                and e.workflowStatus = 'FINAL_REVIEW'
+            """)
+    int countEndedEvents(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 }

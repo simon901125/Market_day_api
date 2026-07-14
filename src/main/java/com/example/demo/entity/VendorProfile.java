@@ -36,7 +36,7 @@ public class VendorProfile {
     @JoinColumn(name = "user_profile_id", nullable = false, unique = true, foreignKey = @ForeignKey(name = "FK_vendor_profiles_user_profiles"))
     private UserProfile userProfile;
 
-    /** 攤位分類 */
+    /** 品牌分類 */
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @ManyToOne(fetch = FetchType.LAZY)

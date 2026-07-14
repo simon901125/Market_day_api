@@ -25,6 +25,7 @@ import com.example.demo.Repository.StatusLogRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
+import com.example.demo.Repository.projection.admin.AdminVenderDetailProjection;
 import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
 import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
 import com.example.demo.Repository.projection.admin.RefundProjection;
@@ -309,8 +310,45 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     // for 管理員後台使用者詳細
     @Override
     public AdminVenderDetailDto getVenderDetail(@NonNull Long userId, int pageSize) {
-        // TODO: 設定管理員後台: 攤主詳細
-        throw new UnsupportedOperationException("Unimplemented method 'setVenderDetail'");
+        // ----------撈資料----------
+        AdminVenderDetailProjection profile = userRepo.findVenderDetailById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的攤主"));
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime lastLoginAt = requestLogRepo.findLastLoginAt(userId, VENDOR_LOGIN_PATHS);
+        int ongoingEventCount = eventApplicationRepo.countOngoingEvents(userId, now);
+        int endedEventCount = eventApplicationRepo.countEndedEvents(userId, now);
+
+        PageResponse<AdminVenderRegDto> eventRegLogs = getVenderRegLogs(userId, 1, pageSize);
+        PageResponse<AdminUserLoginDto> loginLogs = getUserLoginLogs(userId, 1, pageSize);
+
+        // ----------塞資料----------
+        String userName = profile.userName() == null ? "使用者尚未填寫" : profile.userName();
+        boolean isGoogleBound = profile.provider() != User.Provider.LOCAL;
+        String contactAddress = String.format(
+                "%s%s%s",
+                profile.city() == null ? "" : profile.city(),
+                profile.district() == null ? "" : profile.district(),
+                profile.address() == null ? "" : profile.address());
+
+        return new AdminVenderDetailDto(
+                profile.userId(),
+                userName,
+                profile.role().getRole(),
+                profile.accountStatus().getStatus(),
+                isGoogleBound,
+                profile.regAt().format(dateTimeFormatter),
+                lastLoginAt == null ? null : lastLoginAt.format(dateTimeFormatter),
+                ongoingEventCount,
+                endedEventCount,
+                profile.brandName(),
+                profile.brandType(),
+                userName,
+                profile.contactPhone(),
+                profile.contactEmail(),
+                contactAddress,
+                eventRegLogs,
+                loginLogs);
     }
 
     // 設定管理員後台: 攤主詳細: 活動報名紀錄
