@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.StallSelectionRequest;
-import com.example.demo.dto.request.VendorProductSaveRequest;
 import com.example.demo.dto.request.VendorStallSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
@@ -68,99 +67,52 @@ public class StallController {
     return stallService.getVendorAccount(authorizationHeader);
   }
 
-  @Operation(summary = "取得攤主申請單選位地圖", description = "依報名編號取得攤主自己的選位地圖；applyDate 用於切換要查看或選位的日期。")
-  @GetMapping("/api/vendor/stall-map/{applicationNo}")
+  @Operation(summary = "讀取攤主品牌資料", description = "取得目前登入攤主的品牌、聯絡資料、圖片、分類與商品資料。")
+  @GetMapping("/api/vendor/stall/load")
+  public ApiResponse<MapBackedResponse> loadVendorStallProfile(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+    return stallService.loadVendorStallProfile(authorizationHeader);
+  }
 
-  /***
-   * 取得攤主指定報名單的選位地圖。
-   * 
-   * @param authorizationHeader
-   * @param applicationNo
-   * @param applyDate
-   * @return
-   */
+  @Operation(summary = "儲存攤主品牌資料", description = "更新目前登入攤主的品牌、聯絡資料、圖片、分類與商品資料。")
+  @PostMapping("/api/vendor/stall/save")
+  public ApiResponse<MapBackedResponse> saveVendorStallProfile(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @RequestBody(required = false) VendorStallSaveRequest body) {
+    return stallService.saveVendorStallProfile(authorizationHeader, body);
+  }
+
+  @Operation(summary = "新增攤主商品", description = "新增目前登入攤主的商品資料。")
+  @PostMapping("/api/vendor/stall/addproduct")
+  public ApiResponse<MapBackedResponse> addVendorProduct(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @RequestBody(required = false) VendorProductSaveRequest body) {
+    return stallService.addVendorProduct(authorizationHeader, body);
+  }
+
+  @Operation(summary = "編輯攤主商品", description = "依商品 ID 讀取目前登入攤主原商品資料後，用新資料儲存變更。")
+  @PostMapping("/api/vendor/stall/edituct/{id}")
+  public ApiResponse<MapBackedResponse> editVendorProduct(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @PathVariable Long id,
+      @RequestBody(required = false) VendorProductSaveRequest body) {
+    return stallService.editVendorProduct(authorizationHeader, id, body);
+  }
+
+  @Operation(summary = "刪除攤主商品", description = "依商品 ID 將目前登入攤主的商品狀態改為隱藏。")
+  @PostMapping("/api/vendor/stall/deleteproduct/{id}")
+  public ApiResponse<MapBackedResponse> deleteVendorProduct(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @PathVariable Long id) {
+    return stallService.deleteVendorProduct(authorizationHeader, id);
+  }
+
+  @Operation(summary = "取得攤主申請單選位地圖", description = "依申請編號取得攤主自己的選位地圖；applyDate 用於切換要查看或選位的日期。")
+  @GetMapping("/api/vendor/stall-map/{applicationNo}")
   public ApiResponse<VendorStallMapResponse> getVendorStallMap(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable String applicationNo,
       @RequestParam(value = "applyDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate applyDate) {
     return stallService.getVendorStallMap(authorizationHeader, applicationNo, applyDate);
   }
-
-  /**
-   * 取得當前活動列表，攤主可依活動名稱、報名編號、報名狀態、活動日期區間進行查詢。
-   * 
-   * @param eventTitle    活動名稱
-   * @param applicationNo 報名編號
-   * @param status        報名狀態
-   * @param eventStartAt  活動開始日期
-   * @param eventEndAt    活動結束日期
-   * @param page          頁碼
-   * @param pageSize      每頁筆數
-   * @return
-   */
-  @Operation(summary = "取得我的報名紀錄", description = "取得我的報名紀錄")
-  @PostMapping("/api/vendor/applications/search")
-  public ApiResponse<VendorMarketSearchResponse> searchVendorMarkets(
-      // 接收前端放在 Header 裡面的 JWT
-      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-      @RequestParam(value = "eventTitle", required = false) String eventTitle,
-      @RequestParam(value = "applicationNo", required = false) String applicationNo,
-      @RequestParam(value = "status", required = false) String status,
-      @RequestParam(value = "event_start_at", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventStartAt,
-      @RequestParam(value = "event_end_at", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventEndAt,
-      @RequestParam(value = "page", required = false, defaultValue = "1") Integer page,
-      @RequestParam(value = "pageSize", required = false, defaultValue = "10") Integer pageSize) {
-    return stallService.searchVendorMarkets(
-        authorizationHeader,
-        eventTitle,
-        applicationNo,
-        status,
-        eventStartAt,
-        eventEndAt,
-        page,
-        pageSize);
-  }
-
 }
-
-  
-  
-  
-      
-    
-  
-
-  
-  
-  
-      
-      
-    
-  
-
-  
-  
-  
-      
-      
-    
-  
-
-  
-  
-  
-      
-      
-      
-    
-  
-
-  
-  
-  
-      
-      
-    
-  
-
-  

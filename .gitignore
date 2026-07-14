@@ -3,9 +3,11 @@ src/main/resources/application.properties
 run-local.ps1
 run-local.cmd
 target/
+images/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+.env
 
 ### STS ###
 .apt_generated
@@ -34,5 +36,6 @@ build/
 
 ### VS Code ###
 .vscode/
-test.html
-test_2.html
+
+### Local static test pages ###
+src/main/resources/static/**/*.html

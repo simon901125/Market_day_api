@@ -2,9 +2,24 @@
 
 Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登入註冊、攤主資料、主辦資料、活動查詢、攤位選位、主辦後台管理、設備統計與帳務匯出等功能。
 
-最後更新：2026-07-11
+最後更新：2026-07-14
 
 ## 更新紀錄
+
+### 2026-07-14
+
+#### simon branch
+
+- 新增台灣地址下拉選單 API：`GET /api/addresses/cities` 回傳台灣縣市清單，`GET /api/addresses/districts?city={縣市}` 依所選縣市回傳所屬地區；資料由 `TaiwanAddressService` 提供，無效縣市會回傳驗證錯誤。
+- 新增共用正式圖片儲存 API：`POST /api/images`，支援攤主大頭照、攤主封面、商品圖片、活動封面與活動地圖五種用途。
+- 圖片 API 依用途使用 `productId` 或 `eventId` 綁定目標資料，並驗證 JWT、帳號角色及資料所有權；攤主大頭照與封面不需提供目標 ID。
+- 圖片檔案儲存於可設定的 `images` 目錄，透過 `/images/**` 提供前端存取；新增圖片目錄、公開網址、5 MB 上傳限制與 CORS 設定。
+- 圖片上傳會檢查實際檔案內容；一般圖片僅接受 JPG、PNG，活動地圖另接受 PDF，儲存或資料綁定失敗時不會更新圖片 URL。
+- `POST /api/vendor/stall/save` 改為一次接收品牌資料與完整商品清單，商品最多 3 筆；既有商品依 ID 更新、新商品新增、未送出的既有商品刪除。
+- 攤主品牌資料儲存不再修改大頭照與封面 URL，避免未重新上傳圖片時將原圖片覆蓋為空值；圖片統一由 `POST /api/images` 更新。
+- 移除獨立的攤主商品新增、編輯及刪除 API：`/api/vendor/stall/addproduct`、`/api/vendor/stall/edituct/{id}`、`/api/vendor/stall/deleteproduct/{id}`。
+- `GET /api/brands/search` 與 `GET /api/brands/{id}` 改為回傳品牌目前刊登的全部商品，不再限制特色商品、商品狀態或最多 3 筆。
+- 補上圖片上傳大小超限及圖片／商品儲存驗證的統一錯誤回應，並同步更新 Swagger 說明。
 
 ### 2026-07-11
 

@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -315,6 +318,25 @@ public class StallService {
             return ApiResponse.fail(validationError);
         }
 
+        if (body.getProducts() == null) {
+            return ApiResponse.fail("Vendor products are required");
+        }
+        if (body.getProducts().size() > 3) {
+            return ApiResponse.fail("Vendor products must not exceed 3 items");
+        }
+        List<Map<String, Object>> productSnapshots = new ArrayList<>();
+        Set<Long> submittedProductIds = new HashSet<>();
+        for (VendorProductSaveRequest product : body.getProducts()) {
+            String productValidationError = validateVendorProduct(product);
+            if (productValidationError != null) {
+                return ApiResponse.fail(productValidationError);
+            }
+            if (product.getId() != null && !submittedProductIds.add(product.getId())) {
+                return ApiResponse.fail("Duplicate product id");
+            }
+            productSnapshots.add(productMap(product));
+        }
+
         Long categoryId = stallRepository.findActiveCategoryIdByName(normalizeText(body.getBrandType()))
                 .orElse(null);
         if (categoryId == null) {
@@ -323,6 +345,8 @@ public class StallService {
 
         Long userId = toLong(vendor.get("userId"));
         Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        String email = normalizeText(vendor.get("email"));
+
         Map<String, Object> profile = orderedMap(
                 "brandName", normalizeText(body.getBrandName()),
                 "contactName", normalizeText(body.getContactName()),
@@ -1273,7 +1297,6 @@ public class StallService {
         stall.put("zoneName", detail.get("zoneName"));
         stall.put("width", detail.get("width"));
         stall.put("length", detail.get("length"));
-        stall.put("height", detail.get("height"));
         stall.put("status", displayBoothStatus(detail.get("stallStatus")));
         stall.put("applyDate", targetDate);
         stall.put("selectedAt", detail.get("selectedAt"));
@@ -1407,6 +1430,9 @@ public class StallService {
         if (product == null) {
             return "Vendor product request is required";
         }
+        if (product.getId() != null && product.getId() <= 0) {
+            return "Product id is invalid";
+        }
         if (normalizeText(product.getProductName()).isEmpty()) {
             return "Product name is required";
         }
@@ -1431,6 +1457,7 @@ public class StallService {
 
     private Map<String, Object> productMap(VendorProductSaveRequest product) {
         return orderedMap(
+                "id", product.getId(),
                 "productName", normalizeText(product.getProductName()),
                 "productSummary", normalizeText(product.getProductSummary()),
                 "productPrice", product.getProductPrice(),

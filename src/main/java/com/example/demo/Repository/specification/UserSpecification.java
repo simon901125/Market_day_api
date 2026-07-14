@@ -63,5 +63,4 @@ public class UserSpecification {
             return cb.equal(root.get("status"), status);
         };
     }
-
 }

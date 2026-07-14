@@ -56,8 +56,8 @@ public class BrandRepository {
                 WITH brand_rows AS (
                     SELECT
                         vp.id AS brandId,
-                        cover.image_url AS mainImageUrl,
-                        avatar.image_url AS avatarImageUrl,
+                        vp.cover_image_url AS mainImageUrl,
+                        vp.avatar_image_url AS avatarImageUrl,
                         vp.brand_name AS brandName,
                         c.id AS categoryId,
                         c.name AS categoryName,
@@ -68,20 +68,6 @@ public class BrandRepository {
                         AND up.profile_type = N'VENDOR'
                     INNER JOIN dbo.users u ON u.id = up.user_id
                     INNER JOIN dbo.categories c ON c.id = vp.category_id
-                    OUTER APPLY (
-                        SELECT TOP 1 vi.image_url
-                        FROM dbo.vendor_images vi
-                        WHERE vi.vendor_profile_id = vp.id
-                          AND vi.image_type = N'COVER'
-                        ORDER BY vi.id DESC
-                    ) cover
-                    OUTER APPLY (
-                        SELECT TOP 1 vi.image_url
-                        FROM dbo.vendor_images vi
-                        WHERE vi.vendor_profile_id = vp.id
-                          AND vi.image_type = N'AVATAR'
-                        ORDER BY vi.id DESC
-                    ) avatar
                     OUTER APPLY (
                         SELECT COUNT(DISTINCT ea.event_id) AS participatedMarketCount
                         FROM dbo.event_applications ea
@@ -142,7 +128,7 @@ public class BrandRepository {
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, params));
     }
 
-    public List<Map<String, Object>> findFeaturedProductSummaries(List<Long> brandIds) {
+    public List<Map<String, Object>> findProductSummaries(List<Long> brandIds) {
         if (brandIds == null || brandIds.isEmpty()) {
             return List.of();
         }
@@ -154,8 +140,6 @@ public class BrandRepository {
                     p.name AS productName
                 FROM dbo.vendor_products p
                 WHERE p.vendor_profile_id IN (:brandIds)
-                  AND p.status = N'ACTIVE'
-                  AND p.is_featured = 1
                 ORDER BY p.vendor_profile_id ASC, p.id ASC
                 """;
 
@@ -168,8 +152,8 @@ public class BrandRepository {
         String sql = """
                 SELECT
                     vp.id AS brandId,
-                    cover.image_url AS mainImageUrl,
-                    avatar.image_url AS avatarImageUrl,
+                    vp.cover_image_url AS mainImageUrl,
+                    vp.avatar_image_url AS avatarImageUrl,
                     vp.brand_name AS brandName,
                     c.id AS categoryId,
                     c.name AS categoryName,
@@ -184,20 +168,6 @@ public class BrandRepository {
                     AND up.profile_type = N'VENDOR'
                 INNER JOIN dbo.users u ON u.id = up.user_id
                 INNER JOIN dbo.categories c ON c.id = vp.category_id
-                OUTER APPLY (
-                    SELECT TOP 1 vi.image_url
-                    FROM dbo.vendor_images vi
-                    WHERE vi.vendor_profile_id = vp.id
-                      AND vi.image_type = N'COVER'
-                    ORDER BY vi.id DESC
-                ) cover
-                OUTER APPLY (
-                    SELECT TOP 1 vi.image_url
-                    FROM dbo.vendor_images vi
-                    WHERE vi.vendor_profile_id = vp.id
-                      AND vi.image_type = N'AVATAR'
-                    ORDER BY vi.id DESC
-                ) avatar
                 OUTER APPLY (
                     SELECT COUNT(DISTINCT ea.event_id) AS participatedMarketCount
                     FROM dbo.event_applications ea
@@ -217,7 +187,7 @@ public class BrandRepository {
                 namedParameterJdbcTemplate.queryForList(sql, params).stream().findFirst());
     }
 
-    public List<Map<String, Object>> findRepresentativeProducts(Long brandId) {
+    public List<Map<String, Object>> findBrandProducts(Long brandId) {
         String sql = """
                 SELECT
                     p.id AS productId,
@@ -227,9 +197,7 @@ public class BrandRepository {
                     p.short_description AS productShortDescription
                 FROM dbo.vendor_products p
                 WHERE p.vendor_profile_id = :brandId
-                  AND p.status = N'ACTIVE'
-                ORDER BY p.is_featured DESC, p.id ASC
-                OFFSET 0 ROWS FETCH NEXT 3 ROWS ONLY
+                ORDER BY p.id ASC
                 """;
 
         Map<String, Object> params = new HashMap<>();

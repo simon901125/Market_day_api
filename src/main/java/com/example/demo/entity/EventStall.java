@@ -1,13 +1,12 @@
 package com.example.demo.entity;
 
-import java.math.BigDecimal;
-
 import com.example.demo.enums.status.StallStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -17,6 +16,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 /**
  *
@@ -36,33 +37,22 @@ public class EventStall {
     private Long id;
 
     /**市集活動 */
-    @ManyToOne
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id", nullable = false, foreignKey = @ForeignKey(name = "FK_event_stalls_market_events"))
     private MarketEvent marketEvent;
 
     /**活動攤位分區 */
-    @ManyToOne
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "zone_id", nullable = false, foreignKey = @ForeignKey(name = "FK_event_stalls_event_stall_zones"))
     private EventStallZone zone;
 
     /**攤位編號 */
     @Column(name = "stall_no", length = 30, nullable = false)
     private String stallNo;
-
-    //TODO:要再確認資料庫 :AdminService:getEventDetail()
-    //----------要再確認資料庫----------
-    /**攤位寬度 */
-    @Column(name = "width", precision = 6, scale = 2)
-    private BigDecimal width;
-    
-    /**攤位長度 */
-    @Column(name = "length", precision = 6, scale = 2)
-    private BigDecimal length;
-    
-    /**攤位高度 */
-    @Column(name = "height", precision = 6, scale = 2)
-    private BigDecimal height;
-    //----------要再確認資料庫----------
 
     /**攤位狀態 */
     @Enumerated(EnumType.STRING)

@@ -26,18 +26,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UpdateActiveTimeService updateActiveTimeService;
     private final ObjectMapper objectMapper;
 
-    //api放置處
+    // api放置處
     private final Set<ProtectedApi> protectedApis = Set.of(
             new ProtectedApi(HttpMethod.POST.name(), "/api/auth/logout"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/auth/google-bind"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/auth/me"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/account/deactivate"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/images"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/account"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/stall/load"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/stall/save"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/stall/addproduct"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/stall/edituct/{id}"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/stall/deleteproduct/{id}"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/applications"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/stall-map/{applicationNo}"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/payments/newebpay"),
@@ -72,12 +70,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
-        //非目標apis直接放行
+        // 非目標apis直接放行
         if (!isProtectedApi(request)) {
             filterChain.doFilter(request, response);
             return;
         }
-        //目標api，做驗證
+        // 目標api，做驗證
         String token = jwtService.extractTokenFromAuthorizationHeader(request.getHeader("Authorization"));
         if (token == null || token.isBlank()) {
             writeUnauthorizedResponse(response, "Authorization token is required");
@@ -96,7 +94,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
-    //將目前的請求包裝成:ProtectedApi("GET", "/api/auth/me")，來做後續比對
+
+    // 將目前的請求包裝成:ProtectedApi("GET", "/api/auth/me")，來做後續比對
     private boolean isProtectedApi(HttpServletRequest request) {
         String method = request.getMethod();
         String path = request.getRequestURI();
@@ -114,7 +113,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String regex = "^" + pattern.replaceAll("\\{[^/]+\\}", "[^/]+") + "$";
         return path.matches(regex);
     }
-    //編寫錯誤回報
+
+    // 編寫錯誤回報
     private void writeUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -125,4 +125,3 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private record ProtectedApi(String method, String path) {
     }
 }
-

@@ -1,67 +1,50 @@
 package com.example.demo.dto.response.admin;
 
-import java.util.List;
+import com.example.demo.dto.response.PageResponse;
+import com.example.demo.enums.type.Role;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Data;
 
-/**管理員看到的攤主詳細資料 */
+/**
+ * 管理員:攤主詳細頁面回傳資料
+ * 
+ * @param userId                帳號id
+ * @param userName              帳號名稱
+ * @param role                  帳號登記角色
+ * @param accountStatus         帳號狀態
+ * @param isGoogleBound         Google 綁定
+ * @param regAt          帳號註冊時間
+ * @param lastLoginAt           帳號最後登入時間
+ * @param ongoingEventCount 攤主報名未結束活動數
+ * @param endedEventCount   攤主已完成活動數
+ * @param brandName             品牌名稱
+ * @param brandType             品牌類型
+ * @param owner                 負責人姓名
+ * @param contactPhone          品牌聯絡電話
+ * @param contactEmail          品牌聯絡電子信箱
+ * @param contactAddress        品牌聯絡地址
+ * @param eventRegLogs      活動報名紀錄
+ * @param loginLogs             登入紀錄
+ */
 @Schema(description = "管理員看到的攤主詳細資料")
-@Data
-public class AdminVenderDetailDto {
-    /**帳號id */
-    private Long userId;
-    /**帳號名稱 */
-    private String userName;
-    /**帳號登記角色 */
-    private String role;
-    /**帳號登記email */
-    private String email;
-    /**帳號狀態 */
-    private String accountStatus;
-    /**帳號註冊時間 */
-    private String registeredAt;
-    /**帳號最後登入時間 */
-    private String lastLoginAt;
-    /**攤主報名活動總次數 */
-    private int registrationCount;
-    /**攤主已完成活動數 */
-    private int completedEventCount;
-    /**品牌名稱 */
-    private String brandName;
-    /**品牌類型 */
-    private String brandType;
-    /**負責人姓名 */
-    private String owner;
-    /**品牌聯絡電話 */
-    private String contactPhone;
-    /**品牌聯絡電子信箱 */
-    private String contactEmail;
-    /**品牌聯絡地址 */
-    private String contactAddress;
-    /**活動報名紀錄總筆數 */
-    private int totalRegistration;
-    /**活動報名紀錄 */
-    private List<EventRegistrationItem> registrationList;
-    /**登入紀錄總筆數 */
-    private int totalLogin;
-    /**登入紀錄 */
-    private List<AdminLoginDto> loginList;
-
-    /**活動報名紀錄項目 */
-    @Data
-    public class EventRegistrationItem {
-        /** 活動名稱 */
-        private String eventName;
-        /** 報名日期 */
-        private String registrationDate;
-        /** 報名狀態 */
-        private String registrationStatus;
-        /** 付款狀態 */
-        private String paymentStatus;
-        /** 攤位（若為 null 顯示 "-"） */
-        private String booth; 
-    }
-
-    
-}
+public record AdminVenderDetailDto(
+        Long userId, // 用來呼叫API
+        // ----------帳號資訊----------
+        String userName,
+        String role,
+        String accountStatus,
+        boolean isGoogleBound,
+        String regAt,
+        String lastLoginAt,
+        int ongoingEventCount,
+        int endedEventCount,
+        // ----------攤主資料----------
+        String brandName,
+        String brandType,
+        String owner,
+        String contactPhone,
+        String contactEmail,
+        String contactAddress,
+        PageResponse<AdminVenderRegDto> eventRegLogs,
+        PageResponse<AdminUserLoginDto> loginLogs
+    ) {}

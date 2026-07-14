@@ -5,23 +5,84 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.enums.status.WorkflowStatus;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
-public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecificationExecutor<MarketEvent> {
+public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecificationExecutor<MarketEvent>, EventRepoCustom {
     int countByWorkflowStatus(WorkflowStatus workflowStatus);
 
     /** 計算(活動狀態=ACTIVE(前端:活動中))的數量 */
     @Query("select count(e.id) from MarketEvent e where e.workflowStatus = 'FINAL_REVIEW' and e.startAt <= :now and e.endAt >= :now")
-    int countByEventStatusIsACTIVE(LocalDateTime now);
+    int countByEventStatusIsACTIVE(@Param("now") LocalDateTime now);
 
     /** 計算(活動狀態=已經在平台發布並且沒有下架也沒有結束)的數量 */
-    @Query("select count(e.id) from MarketEvent e where (e.workflowStatus = 'PUBLISHED' or e.workflowStatus = 'FINAL_REVIEW') and e.publicInfoAt <= :now and e.endAt >= :now")
-    int countByEventInPlatform(LocalDateTime now);
+    @Query("""
+        select count(e.id) 
+        from MarketEvent e
+        where (e.workflowStatus = 'PUBLISHED' or e.workflowStatus = 'FINAL_REVIEW') 
+            and e.publicInfoAt is not null 
+            and e.publicInfoAt <= :now and e.endAt >= :now
+        """)
+    int countByEventInPlatform(@Param("now") LocalDateTime now);
 
     /** 計算活動目前報名攤位(不計入被拒絕的攤位) */
-    @Query("select count(a.id) from EventApplication a where a.event.id = :eventId and a.reviewStatus != 'REJECTED'")
+    @Query("""
+        select count(a.id) 
+        from EventApplication a 
+        where a.event.id = :eventId 
+            and a.reviewStatus != 'REJECTED'      
+        """)
     int countRegBoothsByEventId(@Param("eventId") Long eventId);
+    /** 管理員後台: 活動詳細 (不含攤位分區清單，需另外查詢) */
+    @Query("""
+            SELECT new com.example.demo.Repository.projection.admin.AdminEventDetailProjection(
+                market.id,
+                market.title,
+                category.name,
+                market.startAt,
+                market.endAt,
+                market.brandPublicAt,
+                market.locationName,
+                market.city,
+                market.district,
+                market.address,
+                market.workflowStatus,
+                market.coverImageUrl,
+                market.description,
+                market.registrationStartAt,
+                market.registrationEndAt,
+                market.publicInfoAt,
+                market.maxBooths,
+                market.baseFee,
+                market.stallWidth,
+                market.stallLength,
+                market.mapImageUrl,
+                organizerProfile.organizerName,
+                userProfile.contactName,
+                userProfile.contactPhone,
+                userProfile.contactEmail,
+                userProfile.city,
+                userProfile.district,
+                userProfile.address,
+                organizerProfile.taxId,
+                organizerProfile.serviceDays,
+                organizerProfile.serviceStartTime,
+                organizerProfile.serviceEndTime,
+                market.metro,
+                market.bus,
+                market.driving
+            )
+            FROM MarketEvent market
+            JOIN market.category category
+            JOIN market.user user
+            LEFT JOIN user.userProfile userProfile
+            LEFT JOIN userProfile.organizerProfile organizerProfile
+            WHERE market.id = :id
+            """)
+    Optional<AdminEventDetailProjection> findEventDetailById(@Param("id") Long id);
+
 }

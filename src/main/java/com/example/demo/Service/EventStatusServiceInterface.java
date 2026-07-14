@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.WorkflowStatus;
 
+import jakarta.annotation.Nullable;
+
 public interface EventStatusServiceInterface<T> {
     
     /** 確定活動目前在資料庫的狀態對應後要傳給前端的狀態，要和 {@link com.example.demo.Repository.specification.EventSpecification#withStatus}保持一致，修改時要一起改 */
@@ -12,7 +14,7 @@ public interface EventStatusServiceInterface<T> {
         WorkflowStatus WorkflowStatus,
         LocalDateTime regStartTime,
         LocalDateTime regEndTime, 
-        LocalDateTime brandPublicTime, 
+        @Nullable LocalDateTime brandPublicTime, 
         LocalDateTime startTime,
         LocalDateTime endTime,
         int maxBooth,
@@ -40,7 +42,7 @@ public interface EventStatusServiceInterface<T> {
                 }
                 return EventStatus.FULL;
             case FINAL_REVIEW:
-                if (brandPublicTime.isAfter(now)) {
+                if (brandPublicTime == null || brandPublicTime.isAfter(now)) {
                     return EventStatus.FULL;
                 } else if (brandPublicTime.isBefore(now) && startTime.isAfter(now)) {
                     return EventStatus.PUBLISHED;
