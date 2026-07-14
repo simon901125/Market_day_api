@@ -7,7 +7,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.util.Locale;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.NonNull;
@@ -17,10 +20,12 @@ import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventApplicationRepo;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.EventStallZoneRepo;
+import com.example.demo.Repository.StatusLogRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
 import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
+import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
 import com.example.demo.Repository.projection.admin.RefundProjection;
 import com.example.demo.Repository.projection.admin.VenderRegApplicationProjection;
 import com.example.demo.Repository.specification.AdminLogSpecification;
@@ -76,6 +81,12 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     @Autowired
     EventApplicationRepo eventApplicationRepo;
+
+    @Autowired
+    StatusLogRepo statusLogRepo;
+
+    @Autowired
+    MessageSource messageSource;
 
     /** yyyy/MM/dd HH:mm */
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
@@ -202,6 +213,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         List<BoothZone> boothZones = zones.stream()
                 .map(zone -> new BoothZone(zone.getZoneName(), zone.getStallCount()))
                 .toList();
+                
 
         return new AdminEventDetailDto(
                 event.eventId(),
@@ -231,13 +243,22 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 event.boothFee(),
                 boothZones,
                 event.mapImg(),
-                null // TODO:活動狀態Logs ->需另外查詢status_logs並組裝
+                getEventStatusLogs(eventId, 1, pageSize)
         );
     }
 
-    //設定管理員後台: 活動詳細:活動狀態變動紀錄
-    public PageResponse<StatusLog> getEventStatusLogs(@NonNull Long eventId, int pageNumber, int pageSize){
-        return null;
+    // 設定管理員後台: 活動詳細:活動狀態變動紀錄
+    @Override
+    public PageResponse<StatusLog> getEventStatusLogs(@NonNull Long eventId, int pageNumber, int pageSize) {
+        PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
+        List<EventStatusLogProjection> logs = statusLogRepo.findEventStatusLogs(eventId, pageRequest);
+        long total = statusLogRepo.countEventStatusLogs(eventId);
+
+        List<StatusLog> items = logs.stream()
+                .map(this::toStatusLog)
+                .toList();
+
+        return new PageResponse<StatusLog>(items, pageNumber, pageSize, total);
     }
 
     // 設定管理員後台: 使用者搜尋
@@ -283,7 +304,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     public PageResponse<AdminVenderRegDto> getVenderRegLogs(@Nonnull Long userId, int pageNumber, int pageSize) {
         // ----------撈資料----------
         PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
-        List<VenderRegApplicationProjection> applications = eventApplicationRepo.findVenderRegApplications(userId, pageRequest);
+        List<VenderRegApplicationProjection> applications = eventApplicationRepo.findVenderRegApplications(userId,
+                pageRequest);
         long total = eventApplicationRepo.countByUserId(userId);
 
         List<Long> applicationIds = applications.stream()
@@ -341,7 +363,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // 設定管理員後台: 主辦方詳細: 活動管理紀錄
     @Override
-    public PageResponse<AdminOrgEventManagementDto> getOrgEventLogs(@Nonnull Long userId, int pageNumber, int pageSize) {
+    public PageResponse<AdminOrgEventManagementDto> getOrgEventLogs(@Nonnull Long userId, int pageNumber,
+            int pageSize) {
         // ----------撈資料----------
         PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
         List<AdminOrgEventLogProjection> events = eventRepo.findOrgEventLogs(userId, pageRequest);
@@ -353,11 +376,11 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             LocalDateTime startAt = event.startAt();
             LocalDateTime endAt = event.endAt();
             String eventDate = String.format(
-                            "%s - %s %s-%s",
-                            startAt.format(dateFormatter),
-                            endAt.format(dateFormatter),
-                            startAt.format(timeFormatter),
-                            endAt.format(timeFormatter));
+                    "%s - %s %s-%s",
+                    startAt.format(dateFormatter),
+                    endAt.format(dateFormatter),
+                    startAt.format(timeFormatter),
+                    endAt.format(timeFormatter));
 
             int maxBooths = event.maxBooths() == null ? 0 : event.maxBooths();
             int registeredBoothCount = eventApplicationRepo.countRegBoothsByEventId(event.eventId());
@@ -393,8 +416,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         throw new UnsupportedOperationException("Unimplemented method 'getUserLoginLogs'");
     }
 
-
-    //設定管理員後台: 操作紀錄搜尋
+    // 設定管理員後台: 操作紀錄搜尋
     @Override
     public PageResponse<AdminOperationLogDto> getLogs(AdminLogSearchDto request, int pageNumber, int pageSize) {
         // ----------撈資料----------
@@ -424,6 +446,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     /**
      * 將MarketEvent轉換成EventStatus
+     * 
      * @param data :MarketEvent
      * @return EventStatus
      * @throws IllegalArgumentException 型別不符時拋出
@@ -444,6 +467,18 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     entity.getEventApplications() == null ? 0 : entity.getEventApplications().size());
         }
         throw new IllegalArgumentException("data須符合型別類型MarketEvent");
+    }
+
+    //處理活動狀態變動紀錄:說明的文字映射
+    private StatusLog toStatusLog(EventStatusLogProjection log) {
+        String dateTime = log.reqAt() == null ? null : log.reqAt().format(dateTimeFormatter);
+        WorkflowStatus status = log.newStatus() == null ? null : WorkflowStatus.valueOf(log.newStatus());
+        String description = log.newStatus() == null
+                ? null
+                : messageSource.getMessage("workflow-status." + log.newStatus(), null, Locale.TAIWAN);
+        String operator = log.role() == Role.ADMIN ? log.adminName() : log.orgName();
+
+        return new StatusLog(dateTime, status, description, operator);
     }
 
     /** 依審核狀態、付款狀態、是否取消，轉換為前端顯示的報名狀態文字 */
