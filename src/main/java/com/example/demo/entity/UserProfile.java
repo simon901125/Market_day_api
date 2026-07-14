@@ -24,6 +24,7 @@ import lombok.ToString;
  * <b>FK</b>: 使用者{@link User}
  * 
  * @see OrganizerProfile#userProfile
+ * @see VendorProfile#userProfile
  */
 @Entity
 @Data
@@ -82,6 +83,19 @@ public class UserProfile {
         this.organizerProfile = organizerProfile;
         if (organizerProfile != null) {
             organizerProfile.setUserProfile(this);
+        }
+    }
+
+    /**攤主專用詳細資料 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToOne(mappedBy = "userProfile", fetch = FetchType.LAZY)
+    private VendorProfile vendorProfile;
+
+    public void setVendorProfile(VendorProfile vendorProfile) {
+        this.vendorProfile = vendorProfile;
+        if (vendorProfile != null) {
+            vendorProfile.setUserProfile(this);
         }
     }
 

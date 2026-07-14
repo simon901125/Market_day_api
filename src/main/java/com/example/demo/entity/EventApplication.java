@@ -110,7 +110,7 @@ public class EventApplication {
     @Column(name = "payment_status", length = 30, nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
-    /**是否已取消 */
+    /**報名是否取消 */
     @Column(name = "is_cancelled", nullable = false)
     private Boolean isCancelled = false;
 
