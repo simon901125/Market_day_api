@@ -2,11 +2,13 @@ package com.example.demo.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,13 +23,19 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.Repository.StallRepository;
 import com.example.demo.dto.request.StallSelectionRequest;
+import com.example.demo.dto.request.VendorApplicationSubmitRequest;
 import com.example.demo.dto.request.VendorProductSaveRequest;
 import com.example.demo.dto.request.VendorStallSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.EventStallStatusResponse;
 import com.example.demo.dto.response.MapBackedResponse;
+import com.example.demo.dto.response.MarketSearchResponse;
+import com.example.demo.dto.response.MarketSummaryResponse;
+import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorAccountResponse;
+import com.example.demo.dto.response.VendorApplicationSubmitResponse;
+import com.example.demo.dto.response.VendorMarketDetailResponse;
 import com.example.demo.dto.response.VendorStallMapResponse;
 
 @Service
@@ -35,6 +43,40 @@ public class StallService {
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     private static final Pattern TAIWAN_MOBILE_PATTERN = Pattern.compile("^09\\d{8}$");
+
+    /**
+     * PreparedEquipmentRental：提交活動報名時預先計算並封裝的設備租借資料。
+     *
+     * 此紀錄在建立報名與設備租借相關 DB 紀錄前使用，包含：
+     * <ul>
+     * <li>活動設備 ID（用於建立 equipment_rentals 關聯）</li>
+     * <li>設備名稱與計價資訊（rentalFee、pricingUnit、unit）</li>
+     * <li>租借數量與租借單位數（quantity、rentalUnits）</li>
+     * <li>小計（subtotal），等於 {@code rentalFee * quantity * rentalUnits}</li>
+     * <li>若該租借項目包含電器，則以 {@code appliances} 列表描述</li>
+     * </ul>
+     *
+     * @param eventEquipmentId 活動設備在資料庫中的 ID（不可為 null）
+     * @param equipmentName    設備名稱（顯示用）
+     * @param rentalFee        每單位租借費用（若免費則為 {@code BigDecimal.ZERO}）
+     * @param pricingUnit      租金計價單位（例如「每天」或其他文字說明）
+     * @param unit             設備的單位描述（例如「個」），可為 null
+     * @param quantity         租借數量（每次租借的件數）
+     * @param rentalUnits      租借單位數（例如租借天數）
+     * @param subtotal         該租借項目的小計（rentalFee * quantity * rentalUnits）
+     * @param appliances       與此租借項目相關的電器清單（若無則為空列表）
+     */
+    private record PreparedEquipmentRental(
+            Long eventEquipmentId,
+            String equipmentName,
+            BigDecimal rentalFee,
+            String pricingUnit,
+            String unit,
+            Integer quantity,
+            Integer rentalUnits,
+            BigDecimal subtotal,
+            List<VendorApplicationSubmitRequest.Appliance> appliances) {
+    }
 
     @Autowired
     private StallRepository stallRepository;
@@ -469,7 +511,8 @@ public class StallService {
                 applicationData.get("district"),
                 applicationData.get("address")));
 
-        return ApiResponse.success("Vendor stall map retrieved successfully", new VendorStallMapResponse(application, event, stalls));
+        return ApiResponse.success("Vendor stall map retrieved successfully",
+                new VendorStallMapResponse(application, event, stalls));
     }
 
     public ApiResponse<MapBackedResponse> getOrganizerStallMap(
@@ -594,14 +637,16 @@ public class StallService {
 
         Map<String, Object> response = orderedMap(
                 "stall", stall,
-                "application", applicationData == null ? null : orderedMap(
-                        "id", detail.get("applicationId")),
-                "vendor", applicationData == null ? null : orderedMap(
-                        "brandName", detail.get("brandName"),
-                        "brandType", detail.get("categoryName"),
-                        "vendorOwnerName", detail.get("vendorOwnerName"),
-                        "vendorPhone", detail.get("vendorPhone"),
-                        "vendorEmail", detail.get("vendorEmail")));
+                "application", applicationData == null ? null
+                        : orderedMap(
+                                "id", detail.get("applicationId")),
+                "vendor", applicationData == null ? null
+                        : orderedMap(
+                                "brandName", detail.get("brandName"),
+                                "brandType", detail.get("categoryName"),
+                                "vendorOwnerName", detail.get("vendorOwnerName"),
+                                "vendorPhone", detail.get("vendorPhone"),
+                                "vendorEmail", detail.get("vendorEmail")));
 
         return ApiResponse.success(
                 "Organizer stall detail retrieved successfully",
@@ -951,7 +996,8 @@ public class StallService {
 
     private boolean isSelectedStallApplication(Map<String, Object> applicationData) {
         return toLong(applicationData.get("selectedStallCount")) > 0
-                && toLong(applicationData.get("selectedStallCount")).equals(toLong(applicationData.get("applicationDateCount")))
+                && toLong(applicationData.get("selectedStallCount"))
+                        .equals(toLong(applicationData.get("applicationDateCount")))
                 && "PAID".equals(stringValue(applicationData.get("paymentStatus")))
                 && !isTrue(applicationData.get("isCancelled"))
                 && stringValue(applicationData.get("refundStatus")).isEmpty();
@@ -1072,5 +1118,353 @@ public class StallService {
             map.put(keyValues[i].toString(), keyValues[i + 1]);
         }
         return map;
+    }
+
+    // --------------------- 攤主專區 API -------------------
+
+    /**
+     * 查詢攤主專區可報名的市集；Repository 負責條件篩選，Service 負責 DTO 轉換與分頁。
+     */
+    public ApiResponse<MarketSearchResponse> searchMarkets(
+            String keyword,
+            String city,
+            String district,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
+
+        List<MarketSummaryResponse> markets = stallRepository
+                .findMarkets(
+                        keyword,
+                        city,
+                        district,
+                        status,
+                        eventStartAt,
+                        eventEndAt)
+                .stream()
+                .map(MarketSummaryResponse::new)
+                .toList();
+
+        return ApiResponse.success(
+                "Market list retrieved successfully",
+                new MarketSearchResponse(
+                        PageResponse.from(
+                                markets,
+                                page,
+                                pageSize)));
+    }
+
+    /**
+     * 取得攤主報名前看到的活動詳細資料，不需要登入。
+     * 活動主資料、每日剩餘攤位、設備與交通資訊分開查詢後再組成前端需要的區塊。
+     */
+    public ApiResponse<VendorMarketDetailResponse> getVendorMarketDetail(Long eventId) {
+        if (eventId == null) {
+            return ApiResponse.fail("Event id is required");
+        }
+
+        Map<String, Object> event = stallRepository.findPublishedMarketDetail(eventId).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail("Event not found");
+        }
+
+        // 使用 LinkedHashMap 固定 JSON 區塊順序，方便前端依畫面區塊直接取用。
+        Map<String, Object> response = new LinkedHashMap<>(event);
+        response.put("dailyAvailability", stallRepository.findMarketDailyAvailability(eventId));
+        response.put("equipments", stallRepository.findPublishedMarketEquipments(eventId));
+        response.put("trafficInfos", stallRepository.findPublishedMarketTrafficInfos(eventId));
+
+        return ApiResponse.success(
+                "Market event detail retrieved successfully",
+                new VendorMarketDetailResponse(response));
+    }
+
+    /**
+     * 攤主送出活動報名。
+     * 
+     * 流程：
+     * 1. 驗證 JWT 並確認登入者是攤主。
+     * 2. 確認活動已發布、目前仍在報名期間，且報名日期落在活動期間內。
+     * 3. 計算報名費與租借設備費用。
+     * 4. 寫入 event_applications、application_dates、equipment_rentals 與
+     * rental_appliances。
+     */
+    @Transactional
+    public ApiResponse<VendorApplicationSubmitResponse> submitVendorApplication(
+            String authorizationHeader,
+            VendorApplicationSubmitRequest body) {
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+        if (body == null || body.getEventId() == null) {
+            return ApiResponse.fail("Event id is required");
+        }
+
+        Map<String, Object> event = stallRepository.findMarketEventForApplication(body.getEventId()).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail("Event not found");
+        }
+        String workflowStatus = stringValue(event.get("workflowStatus"));
+        if (!"PUBLISHED".equals(workflowStatus)) {
+            return ApiResponse.fail("活動尚未開放報名");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+        if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+            return ApiResponse.fail("活動報名尚未開始");
+        }
+        if (registrationEndAt != null && now.isAfter(registrationEndAt)) {
+            return ApiResponse.fail("活動報名已結束");
+        }
+
+        List<LocalDate> applyDates = normalizedApplyDates(body.getApplyDates());
+        if (applyDates.isEmpty()) {
+            return ApiResponse.fail("Apply dates are required");
+        }
+        for (LocalDate applyDate : applyDates) {
+            if (!isDateInEventRange(applyDate, event)) {
+                return ApiResponse.fail("Apply date is not part of this event");
+            }
+        }
+
+        Long vendorUserId = ((Number) vendor.get("userId")).longValue();
+        Long vendorProfileId = ((Number) vendor.get("vendorProfileId")).longValue();
+        // 同一個品牌在同一活動只能建立一筆報名資料
+        if (stallRepository.existsVendorApplication(body.getEventId(), vendorProfileId)) {
+            return ApiResponse.fail("此活動已建立報名資料");
+        }
+
+        List<Map<String, Object>> rentalResponses = new ArrayList<>();
+        BigDecimal equipmentTotal = BigDecimal.ZERO;
+        List<PreparedEquipmentRental> preparedRentals = new ArrayList<>();
+        List<VendorApplicationSubmitRequest.EquipmentRental> requestedRentals = body.getEquipmentRentals() == null
+                ? List.of()
+                : body.getEquipmentRentals();
+        for (VendorApplicationSubmitRequest.EquipmentRental rental : requestedRentals) {
+            // 查詢活動可租借設備，限制設備必須屬於目前報名活動
+            if (rental == null || rental.getEventEquipmentId() == null) {
+                return ApiResponse.fail("請提供活動設備 ID");
+            }
+            Map<String, Object> equipment = stallRepository
+                    .findEventEquipmentForApplication(body.getEventId(), rental.getEventEquipmentId())
+                    .orElse(null);
+            if (equipment == null) {
+                return ApiResponse.fail("找不到活動設備資料");
+            }
+            if (!"ACTIVE".equals(stringValue(equipment.get("rentalStatus")))) {
+                return ApiResponse.fail("活動設備目前不可租借");
+            }
+
+            int quantity = rental.getQuantity() == null ? 1 : rental.getQuantity();
+            int rentalUnits = rental.getRentalUnits() == null ? applyDates.size() : rental.getRentalUnits();
+            if (quantity < 1 || rentalUnits < 1) {
+                return ApiResponse.fail("設備租借數量與租借單位數必須大於 0");
+            }
+
+            Integer stockQuantity = toInteger(equipment.get("stockQuantity"));
+            Integer perStallRentalLimit = toInteger(equipment.get("perStallRentalLimit"));
+            if (stockQuantity != null && quantity > stockQuantity) {
+                return ApiResponse.fail("設備租借數量超過可租借庫存");
+            }
+            if (perStallRentalLimit != null && quantity > perStallRentalLimit) {
+                return ApiResponse.fail("設備租借數量超過單攤租借上限");
+            }
+
+            BigDecimal rentalFee = toBigDecimal(equipment.get("rentalFee"));
+            if ("FREE".equals(stringValue(equipment.get("chargeType")))) {
+                rentalFee = BigDecimal.ZERO;
+            }
+            BigDecimal subtotal = rentalFee
+                    .multiply(BigDecimal.valueOf(quantity))
+                    .multiply(BigDecimal.valueOf(rentalUnits));
+            equipmentTotal = equipmentTotal.add(subtotal);
+
+            PreparedEquipmentRental preparedRental = new PreparedEquipmentRental(
+                    rental.getEventEquipmentId(),
+                    normalizeText(equipment.get("name")),
+                    rentalFee,
+                    normalizeText(equipment.get("pricingUnit")),
+                    blankToNull(normalizeText(equipment.get("unit"))),
+                    quantity,
+                    rentalUnits,
+                    subtotal,
+                    rental.getAppliances() == null ? List.of() : rental.getAppliances());
+            preparedRentals.add(preparedRental);
+            rentalResponses.add(orderedMap(
+                    "eventEquipmentId", preparedRental.eventEquipmentId(),
+                    "equipmentName", preparedRental.equipmentName(),
+                    "rentalFee", preparedRental.rentalFee(),
+                    "pricingUnit", preparedRental.pricingUnit(),
+                    "unit", preparedRental.unit(),
+                    "quantity", preparedRental.quantity(),
+                    "rentalUnits", preparedRental.rentalUnits(),
+                    "subtotal", preparedRental.subtotal()));
+        }
+
+        BigDecimal baseFee = toBigDecimal(event.get("baseFee"));
+        BigDecimal applicationFee = baseFee.multiply(BigDecimal.valueOf(applyDates.size()));
+        BigDecimal depositAmount = BigDecimal.ZERO;
+        BigDecimal totalAmount = applicationFee.add(equipmentTotal).add(depositAmount);
+        String applicationNo = nextApplicationNo(event);
+        LocalDateTime paymentDueAt = now.plusDays(3);
+
+        try {
+            Long applicationId = stallRepository.createEventApplication(
+                    applicationNo,
+                    body.getEventId(),
+                    vendorUserId,
+                    vendorProfileId,
+                    blankToNull(body.getVehicleNo()),
+                    blankToNull(body.getApplicantNote()),
+                    totalAmount,
+                    depositAmount,
+                    paymentDueAt);
+            for (LocalDate applyDate : applyDates) {
+                stallRepository.createApplicationDate(applicationId, applyDate);
+            }
+            for (PreparedEquipmentRental rental : preparedRentals) {
+                Long equipmentRentalId = stallRepository.createEquipmentRental(
+                        applicationId,
+                        rental.eventEquipmentId(),
+                        rental.equipmentName(),
+                        rental.rentalFee(),
+                        rental.pricingUnit(),
+                        rental.unit(),
+                        rental.quantity(),
+                        rental.rentalUnits(),
+                        rental.subtotal());
+                for (VendorApplicationSubmitRequest.Appliance appliance : rental.appliances()) {
+                    stallRepository.createRentalAppliance(
+                            equipmentRentalId,
+                            appliance.getApplianceName().trim(),
+                            appliance.getWattage());
+                }
+            }
+
+            Map<String, Object> response = orderedMap(
+                    "applicationId", applicationId,
+                    "applicationNo", applicationNo,
+                    "eventId", body.getEventId(),
+                    "eventTitle", event.get("eventTitle"),
+                    "applicationStatus", "待審核",
+                    "reviewStatus", "PENDING",
+                    "paymentStatus", "PENDING",
+                    "applyDates", applyDates,
+                    "applicationFee", applicationFee,
+                    "equipmentTotal", equipmentTotal,
+                    "depositAmount", depositAmount,
+                    "totalAmount", totalAmount,
+                    "paymentDueAt", paymentDueAt,
+                    "equipmentRentals", rentalResponses);
+            return ApiResponse.success(
+                    "活動報名送出成功",
+                    new VendorApplicationSubmitResponse(response));
+        } catch (DataIntegrityViolationException exception) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return ApiResponse.fail("此活動已建立報名資料");
+        }
+    }
+
+    /**
+     * 將使用者輸入的報名日期清理並標準化：
+     * <ul>
+     * <li>若輸入為 {@code null}，回傳空的 {@code List}。</li>
+     * <li>移除 {@code null} 元素。</li
+     * <li>移除重複日期（先去重再排序），以避免重複收費或重複寫入資料庫。</li>
+     * <li>以日期升冪排序（由小到大）。</li>
+     * </ul>
+     *
+     * @param applyDates 原始報名日期列表（可能包含 {@code null} 或重複項）
+     * @return 已去空、去重且升冪排序的 {@code List<LocalDate>}（若輸入為 {@code null}，回傳空列表）
+     */
+    private List<LocalDate> normalizedApplyDates(List<LocalDate> applyDates) {
+        if (applyDates == null) {
+            return List.of();
+        }
+        List<LocalDate> normalizedDates = new ArrayList<>(new LinkedHashSet<>(
+                applyDates.stream()
+                        .filter(date -> date != null)
+                        .toList()));
+        normalizedDates.sort(LocalDate::compareTo);
+        return normalizedDates;
+    }
+
+    /**
+     * 轉成int
+     */
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String string && !string.isBlank()) {
+            return Integer.valueOf(string);
+        }
+        return null;
+    }
+
+    /**
+     * 將 Object 安全轉換為 BigDecimal。
+     * 支援 BigDecimal、Number、String，其他型別或 null 則回傳 BigDecimal.ZERO
+     *
+     * @param value 要轉換的物件
+     * @return 轉換後的 BigDecimal
+     */
+    private BigDecimal toBigDecimal(Object value) {
+        if (value instanceof BigDecimal bigDecimal) {
+            return bigDecimal;
+        }
+        if (value instanceof Number number) {
+            return BigDecimal.valueOf(number.doubleValue());
+        }
+        if (value instanceof String string && !string.isBlank()) {
+            return new BigDecimal(string);
+        }
+        return BigDecimal.ZERO;
+    }
+
+    /**
+     * 依活動日期產生下一筆報名編號。
+     * 報名編號格式：MD + yyyyMMdd + 四位流水號，
+     * 並依目前最大的流水號自動遞增。
+     *
+     * @param event 活動資料
+     * @return 新的報名編號
+     */
+    private String nextApplicationNo(Map<String, Object> event) {
+        LocalDate eventStartDate = toLocalDate(event.get("startAt"));
+        LocalDate prefixDate = eventStartDate == null ? LocalDate.now() : eventStartDate;
+        String prefix = "MD" + prefixDate.format(DateTimeFormatter.BASIC_ISO_DATE);
+        String latestApplicationNo = stallRepository.findLatestApplicationNoByPrefix(prefix).orElse(null);
+        int nextSequence = 1;
+        if (latestApplicationNo != null && latestApplicationNo.length() > prefix.length()) {
+            String sequenceText = latestApplicationNo.substring(prefix.length());
+            try {
+                nextSequence = Integer.parseInt(sequenceText) + 1;
+            } catch (NumberFormatException ignored) {
+                nextSequence = 1;
+            }
+        }
+        return prefix + String.format("%04d", nextSequence);
+    }
+
+    /***
+     * 將空值轉成Null 有值則做trim()
+     * 
+     * @param value 任意值
+     * @return Null 或 已經trim的value
+     */
+    private String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }
