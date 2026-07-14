@@ -698,7 +698,8 @@ public class StallRepository {
         Map<String, Object> map = new HashMap<>();
         map.put("vendorProfileId", vendorProfileId);
         map.put("productId", productId);
-        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+        return RepositoryResultMapper
+                .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
     public Optional<Long> findActiveCategoryIdByName(String categoryName) {
@@ -1247,7 +1248,7 @@ public class StallRepository {
             LocalDate eventStartAt,
             LocalDate eventEndAt) {
         StringBuilder sql = new StringBuilder("""
-                SELECT
+                        SELECT
                     e.id AS eventId,
                     e.title AS eventTitle,
                     e.summary,
@@ -1255,26 +1256,61 @@ public class StallRepository {
                     e.city,
                     e.district,
                     e.address,
+                    e.max_booths AS maxBooths,
                     e.start_at AS startAt,
                     e.end_at AS endAt,
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
                     e.base_fee AS baseFee,
+
+                    t.traffic_title AS trafficTitle,
+                    t.traffic_details AS trafficDetail,
+
+                    c.name AS categoryName,
+                    op.organizer_name AS organizerName,
+
                     COALESCE(e.cover_image_url, first_image.image_url) AS imageUrl,
+
                     CASE
                         WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
                         WHEN GETDATE() <= e.registration_end_at THEN N'OPEN'
                         ELSE N'CLOSED'
                     END AS registrationStatus
-                FROM dbo.market_events e
-                OUTER APPLY (
-                    SELECT TOP 1 image_url
-                    FROM dbo.event_images
-                    WHERE event_id = e.id
-                    ORDER BY id
-                ) first_image
+
+                FROM dbo.market_events AS e
+
+                OUTER APPLY
+                (
+                    SELECT TOP (1)
+                        ti.traffic_title,
+                        ti.traffic_details
+                    FROM dbo.event_traffic_infos AS ti
+                    WHERE ti.event_id = e.id
+                    ORDER BY ti.id ASC
+                ) AS t
+
+                LEFT JOIN dbo.categories AS c
+                    ON c.id = e.category_id
+
+                LEFT JOIN dbo.user_profiles AS up
+                    ON up.user_id = e.user_id
+                   AND up.profile_type = N'ORGANIZER'
+
+                LEFT JOIN dbo.organizer_profiles AS op
+                    ON op.user_profile_id = up.id
+
+                OUTER APPLY
+                (
+                    SELECT TOP (1)
+                        ei.image_url
+                    FROM dbo.event_images AS ei
+                    WHERE ei.event_id = e.id
+                    ORDER BY ei.id ASC
+                ) AS first_image
+
                 WHERE e.workflow_status = N'PUBLISHED'
-                """);
+                        AND e.registration_end_at >= GETDATE()
+                        """);
 
         Map<String, Object> params = new HashMap<>();
         String normalizedKeyword = blankToNull(keyword);
