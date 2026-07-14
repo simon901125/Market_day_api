@@ -4,9 +4,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.Fetch;
-
 import com.example.demo.enums.status.WorkflowStatus;
 
 import jakarta.persistence.Column;
@@ -62,6 +59,10 @@ public class MarketEvent {
     @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_categories"))
     private Category category;
 
+    public void addCategory(Category category){
+        this.category = category;
+    }
+
     /** 活動名稱 */
     @Column(name = "title", length = 200, nullable = false)
     private String title;
@@ -90,6 +91,18 @@ public class MarketEvent {
     @Column(name = "address", length = 255, nullable = false)
     private String address;
 
+    /** 開車交通資訊 */
+    @Column(name = "traffic_info_driving", columnDefinition = "nvarchar(max)")
+    private String trafficInfoDriving;
+
+    /** 公車交通資訊 */
+    @Column(name = "traffic_info_bus", columnDefinition = "nvarchar(max)")
+    private String trafficInfoBus;
+
+    /** 捷運交通資訊 */
+    @Column(name = "traffic_info_metro", columnDefinition = "nvarchar(max)")
+    private String trafficInfoMetro;
+
     /** 活動注意事項 */
     @Column(name = "notice", columnDefinition = "nvarchar(max)")
     private String notice;
@@ -113,15 +126,15 @@ public class MarketEvent {
     /** 攤位總數 */
     @Column(name = "max_booths", nullable = false)
     private Integer maxBooths;
-    
-    /**攤位寬度 */
+
+    /** 本活動固定攤位寬度 */
     @Column(name = "stall_width", precision = 6, scale = 2)
     private BigDecimal stallWidth;
 
-    /**攤位長度 */
+    /** 本活動固定攤位長度 */
     @Column(name = "stall_length", precision = 6, scale = 2)
     private BigDecimal stallLength;
-    
+
     /** 基本攤位費用 */
     @Column(name = "base_fee", precision = 10, scale = 2, nullable = false)
     private BigDecimal baseFee;

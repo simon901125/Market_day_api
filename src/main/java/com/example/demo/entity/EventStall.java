@@ -1,7 +1,5 @@
 package com.example.demo.entity;
 
-import java.math.BigDecimal;
-
 import com.example.demo.enums.status.StallStatus;
 
 import jakarta.persistence.Column;

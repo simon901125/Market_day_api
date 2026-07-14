@@ -320,6 +320,8 @@ public class StallService {
                 "district", normalizeText(body.getDistrict()),
                 "address", normalizeText(body.getAddress()),
                 "categoryId", categoryId,
+                "avatarImageUrl", nullIfBlank(body.getAvatarImageUrl()),
+                "coverImageUrl", nullIfBlank(body.getCoverImageUrl()),
                 "instagramUrl", nullIfBlank(body.getInstagramUrl()),
                 "facebookUrl", nullIfBlank(body.getFacebookUrl()),
                 "websiteUrl", nullIfBlank(body.getWebsiteUrl()),
@@ -330,9 +332,6 @@ public class StallService {
         if (updatedRows == 0) {
             return ApiResponse.fail("Vendor profile save failed");
         }
-        stallRepository.saveVendorImage(vendorProfileId, "AVATAR", nullIfBlank(body.getAvatarImageUrl()));
-        stallRepository.saveVendorImage(vendorProfileId, "COVER", nullIfBlank(body.getCoverImageUrl()));
-
         Map<String, Object> refreshedVendor = stallRepository.findVendorAccountByEmail(normalizeText(vendor.get("email")))
                 .orElse(vendor);
         return ApiResponse.success(
@@ -652,7 +651,6 @@ public class StallService {
         stall.put("zoneName", detail.get("zoneName"));
         stall.put("width", detail.get("width"));
         stall.put("length", detail.get("length"));
-        stall.put("height", detail.get("height"));
         stall.put("status", displayBoothStatus(detail.get("stallStatus")));
         stall.put("applyDate", targetDate);
         stall.put("selectedAt", detail.get("selectedAt"));

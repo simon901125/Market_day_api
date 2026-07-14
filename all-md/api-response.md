@@ -89,39 +89,39 @@ Response data:
 
 若 `review_note` 是舊版純文字資料，API 會將純文字放在 `reviewNote`，並讓 `reviewNoteDetail` 為 `null`。
 
-| 欄位 | 型別 | 說明 |
-| --- | --- | --- |
-| `statusCode` | number | 成功通常為 `200`，一般錯誤為 `400`，JWT 驗證失敗為 `401`。 |
-| `message` | string | API 結果訊息。錯誤訊息會透過 `ApiResponse.fail(...)` 統一轉成中文。 |
-| `messageDetails` | string / null | 目前多數 Controller 直接回傳 `ApiResponse<T>`，因此通常為 `null`。 |
-| `data` | object / array / null | 成功時放 Response DTO；失敗時通常為 `null`。 |
+| 欄位               | 型別                  | 說明                                                                  |
+| ------------------ | --------------------- | --------------------------------------------------------------------- |
+| `statusCode`     | number                | 成功通常為`200`，一般錯誤為 `400`，JWT 驗證失敗為 `401`。       |
+| `message`        | string                | API 結果訊息。錯誤訊息會透過`ApiResponse.fail(...)` 統一轉成中文。  |
+| `messageDetails` | string / null         | 目前多數 Controller 直接回傳`ApiResponse<T>`，因此通常為 `null`。 |
+| `data`           | object / array / null | 成功時放 Response DTO；失敗時通常為`null`。                         |
 
 ## DTO 分區
 
-| 類型 | 位置 | 用途 |
-| --- | --- | --- |
-| Request DTO | `src/main/java/com/example/demo/dto/request` | 接收 request body，例如登入、註冊、驗證碼、重設密碼、攤位選擇。 |
-| Response DTO | `src/main/java/com/example/demo/dto/response` | API 成功時放入 `ApiResponse<T>.data` 的資料結構。 |
-| API wrapper | `src/main/java/com/example/demo/dto/response/ApiResponse.java` | 統一包裝 `statusCode`、`message`、`messageDetails`、`data`。 |
+| 類型         | 位置                                                             | 用途                                                                |
+| ------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Request DTO  | `src/main/java/com/example/demo/dto/request`                   | 接收 request body，例如登入、註冊、驗證碼、重設密碼、攤位選擇。     |
+| Response DTO | `src/main/java/com/example/demo/dto/response`                  | API 成功時放入`ApiResponse<T>.data` 的資料結構。                  |
+| API wrapper  | `src/main/java/com/example/demo/dto/response/ApiResponse.java` | 統一包裝`statusCode`、`message`、`messageDetails`、`data`。 |
 
 目前常用 Response DTO 包含：
 
-| Response DTO | 主要使用 API |
-| --- | --- |
-| `LoginResponse` | local / Google login |
-| `LoginUserResponse` | `LoginResponse.user` |
-| `UserProfileResponse` | `/api/auth/me` |
-| `UserResponse` | `/usersall` |
-| `VendorAccountResponse` | `/api/vendor/account` |
-| `VendorStallMapResponse` | `/api/vendor/stall-map/{applicationNo}` |
-| `OrganizerAccountResponse` | `/api/organizer/account` |
-| `OrganizerAccountingSearchResponse` | `/api/organizer/accounts/search` |
-| `MapBackedResponse` | `/api/organizer/accounts/{eventId}`、`/api/organizer/equipment/{eventId}` |
-| `OrganizerApplicationSummaryResponse` | `/api/organizer/applications/search` |
-| `OrganizerApplicationDetailResponse` | `/api/organizer/applications/{id}` |
-| `EventStallStatusResponse` | `/api/eventsMap/{eventId}/stallsStatus` |
-| `StallSelectionResponse` | `/api/stalls/select` |
-| `PasswordResetVerificationResponse` | `/api/auth/resetPassword/emailVerify` |
+| Response DTO                            | 主要使用 API                                                                  |
+| --------------------------------------- | ----------------------------------------------------------------------------- |
+| `LoginResponse`                       | local / Google login                                                          |
+| `LoginUserResponse`                   | `LoginResponse.user`                                                        |
+| `UserProfileResponse`                 | `/api/auth/me`                                                              |
+| `UserResponse`                        | `/usersall`                                                                 |
+| `VendorAccountResponse`               | `/api/vendor/account`                                                       |
+| `VendorStallMapResponse`              | `/api/vendor/stall-map/{applicationNo}`                                     |
+| `OrganizerAccountResponse`            | `/api/organizer/account`                                                    |
+| `OrganizerAccountingSearchResponse`   | `/api/organizer/accounts/search`                                            |
+| `MapBackedResponse`                   | `/api/organizer/accounts/{eventId}`、`/api/organizer/equipment/{eventId}` |
+| `OrganizerApplicationSummaryResponse` | `/api/organizer/applications/search`                                        |
+| `OrganizerApplicationDetailResponse`  | `/api/organizer/applications/{id}`                                          |
+| `EventStallStatusResponse`            | `/api/eventsMap/{eventId}/stallsStatus`                                     |
+| `StallSelectionResponse`              | `/api/stalls/select`                                                        |
+| `PasswordResetVerificationResponse`   | `/api/auth/resetPassword/emailVerify`                                       |
 
 ## 登入成功範例
 
@@ -303,18 +303,18 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
 需要 `Authorization` header。
 `data` 型別為 `OrganizerApplicationDetailResponse`，主要包含：
 
-| 區塊 | 說明 |
-| --- | --- |
-| `application` | 申請 ID、申請編號與後端計算後的申請狀態。 |
-| `event` | 活動名稱、活動狀態、活動日期與地址。 |
-| `vendor` | 攤主聯絡資料。 |
-| `brand` | 品牌資料。 |
+| 區塊                  | 說明                                                               |
+| --------------------- | ------------------------------------------------------------------ |
+| `application`       | 申請 ID、申請編號與後端計算後的申請狀態。                          |
+| `event`             | 活動名稱、活動狀態、活動日期與地址。                               |
+| `vendor`            | 攤主聯絡資料。                                                     |
+| `brand`             | 品牌資料。                                                         |
 | `applicationdetail` | 報名時段、攤位尺寸、攤位區域、攤位類別、車牌、申請備註與審核備註。 |
-| `stall` | 每個報名日期的攤位選擇列。 |
-| `fee` | 付款狀態、付款方式、付款編號與付款金額。 |
-| `feedetail` | 報名費、設備租借費、額外電費、保證金與總計。 |
-| `equipmentRentals` | 免費設備、免費基本用電、租借設備、額外申請用電四區。 |
-| `status` | 固定狀態流清單與各節點時間。 |
+| `stall`             | 每個報名日期的攤位選擇列。                                         |
+| `fee`               | 付款狀態、付款方式、付款編號與付款金額。                           |
+| `feedetail`         | 報名費、設備租借費、額外電費、保證金與總計。                       |
+| `equipmentRentals`  | 免費設備、免費基本用電、租借設備、額外申請用電四區。               |
+| `status`            | 固定狀態流清單與各節點時間。                                       |
 
 ```json
 {
@@ -383,38 +383,38 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
 
 `data` 主要包含：
 
-| 區塊 | 說明 |
-| --- | --- |
-| `event` | 活動圖片、名稱、活動狀態、活動日期、地點、攤位總數、已付款攤位數。 |
-| `summary` | 收款總額、退款總額、已退款保證金、未退款保證金、實收總額。 |
-| `statistics` | 付款、退款、保證金統計。 |
-| `payments` | 付款明細分頁物件。 |
+| 區塊           | 說明                                                               |
+| -------------- | ------------------------------------------------------------------ |
+| `event`      | 活動圖片、名稱、活動狀態、活動日期、地點、攤位總數、已付款攤位數。 |
+| `summary`    | 收款總額、退款總額、已退款保證金、未退款保證金、實收總額。         |
+| `statistics` | 付款、退款、保證金統計。                                           |
+| `payments`   | 付款明細分頁物件。                                                 |
 
 `payments` 分頁欄位：
 
-| 欄位 | 說明 |
-| --- | --- |
-| `totalCount` | 符合條件的付款明細總筆數。 |
-| `items` | 目前頁付款明細。 |
-| `page` | 目前頁碼，從 1 開始。 |
-| `pageSize` | 每頁筆數，最大 10。 |
-| `totalItems` | 符合條件的付款明細總筆數。 |
-| `totalPages` | 總頁數。 |
-| `hasPrevious` | 是否有上一頁。 |
-| `hasNext` | 是否有下一頁。 |
+| 欄位            | 說明                       |
+| --------------- | -------------------------- |
+| `totalCount`  | 符合條件的付款明細總筆數。 |
+| `items`       | 目前頁付款明細。           |
+| `page`        | 目前頁碼，從 1 開始。      |
+| `pageSize`    | 每頁筆數，最大 10。        |
+| `totalItems`  | 符合條件的付款明細總筆數。 |
+| `totalPages`  | 總頁數。                   |
+| `hasPrevious` | 是否有上一頁。             |
+| `hasNext`     | 是否有下一頁。             |
 
 `payments.items` 每列欄位：
 
-| 欄位 | 說明 |
-| --- | --- |
-| `paymentNo` | 付款編號。 |
-| `brandName` | 品牌名稱。 |
-| `contactName` | 攤主名稱。 |
-| `paidAt` | 付款時間。 |
-| `paymentAmount` | 付款金額。 |
-| `refundAmount` | 已完成退款金額；只有 `accountingStatus = 已退款` 時才會顯示實際退款金額，退款申請中與退款處理中回 `0`。 |
-| `depositStatus` | 保證金狀態。 |
-| `accountingStatus` | 帳務狀態。 |
+| 欄位                 | 說明                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `paymentNo`        | 付款編號。                                                                                                 |
+| `brandName`        | 品牌名稱。                                                                                                 |
+| `contactName`      | 攤主名稱。                                                                                                 |
+| `paidAt`           | 付款時間。                                                                                                 |
+| `paymentAmount`    | 付款金額。                                                                                                 |
+| `refundAmount`     | 已完成退款金額；只有`accountingStatus = 已退款` 時才會顯示實際退款金額，退款申請中與退款處理中回 `0`。 |
+| `depositStatus`    | 保證金狀態。                                                                                               |
+| `accountingStatus` | 帳務狀態。                                                                                                 |
 
 `payments` 不回傳攤位編號；帳務頁若需要攤位資訊，應由攤位管理相關 API 查詢。
 
@@ -502,11 +502,11 @@ Request body 需要 `applicationNo` 與 `selections[]`，每筆選位包含 `app
 
 需要 `Authorization` header。`equipmentRentalManagement`、`extraPowerManagement`、`vehicleManagement` 三個管理列表支援獨立分頁：
 
-| 清單 | Page 參數 | PageSize 參數 |
-| --- | --- | --- |
+| 清單                          | Page 參數               | PageSize 參數               |
+| ----------------------------- | ----------------------- | --------------------------- |
 | `equipmentRentalManagement` | `equipmentRentalPage` | `equipmentRentalPageSize` |
-| `extraPowerManagement` | `extraPowerPage` | `extraPowerPageSize` |
-| `vehicleManagement` | `vehiclePage` | `vehiclePageSize` |
+| `extraPowerManagement`      | `extraPowerPage`      | `extraPowerPageSize`      |
+| `vehicleManagement`         | `vehiclePage`         | `vehiclePageSize`         |
 
 三個管理列表皆回傳 `totalCount`、`items`、`page`、`pageSize`、`totalItems`、`totalPages`、`hasPrevious`、`hasNext`；`pageSize` 最大 10 筆。Excel 匯出 API 不套用這些分頁參數，仍輸出完整資料。
 
@@ -751,38 +751,38 @@ Service 或 Filter 即使傳入英文 key，也會透過 `ApiResponse.fail(...)`
 
 ### 輸入限制
 
-| 欄位 | 規範 |
-| --- | --- |
-| `organizerName` | 必填，最多 150 字 |
-| `contactName` | 必填，最多 100 字 |
-| `contactPhone` | 必填，台灣手機格式，需為 `09` 開頭共 10 碼 |
-| `contactEmail` | 必填，需符合 Email 格式，最多 255 字 |
-| `companyName` | 必填，最多 150 字 |
-| `taxId` | 必填，需為 8 碼數字 |
-| `city` | 必填，最多 50 字，需存在於 `TaiwanAddressService` 的台灣縣市清單 |
-| `district` | 必填，最多 50 字，需存在於該 `city` 對應的地區清單 |
-| `address` | 必填，最多 255 字，只填詳細地址，不含自動組合 |
-| `serviceDays` | 必填，逗號分隔且不可重複，只接受 `MON,TUE,WED,THU,FRI,SAT,SUN` |
-| `serviceStartTime` | 必填，格式 `HH:mm` |
-| `serviceEndTime` | 必填，格式 `HH:mm`，且必須晚於 `serviceStartTime` |
+| 欄位                 | 規範                                                              |
+| -------------------- | ----------------------------------------------------------------- |
+| `organizerName`    | 必填，最多 150 字                                                 |
+| `contactName`      | 必填，最多 100 字                                                 |
+| `contactPhone`     | 必填，台灣手機格式，需為`09` 開頭共 10 碼                       |
+| `contactEmail`     | 必填，需符合 Email 格式，最多 255 字                              |
+| `companyName`      | 必填，最多 150 字                                                 |
+| `taxId`            | 必填，需為 8 碼數字                                               |
+| `city`             | 必填，最多 50 字，需存在於`TaiwanAddressService` 的台灣縣市清單 |
+| `district`         | 必填，最多 50 字，需存在於該`city` 對應的地區清單               |
+| `address`          | 必填，最多 255 字，只填詳細地址，不含自動組合                     |
+| `serviceDays`      | 必填，逗號分隔且不可重複，只接受`MON,TUE,WED,THU,FRI,SAT,SUN`   |
+| `serviceStartTime` | 必填，格式`HH:mm`                                               |
+| `serviceEndTime`   | 必填，格式`HH:mm`，且必須晚於 `serviceStartTime`              |
 
 ### 錯誤訊息 key
 
-| Key | 中文訊息用途 |
-| --- | --- |
-| `Organizer profile request is required` | request body 不可為空 |
-| `Organizer name is required` / `Organizer name is too long` | 主辦方名稱必填 / 過長 |
-| `Contact name is required` / `Contact name is too long` | 聯絡人必填 / 過長 |
-| `Contact phone is required` / `Contact phone must be 10 digits and start with 09` | 聯絡電話必填 / 手機格式錯誤 |
-| `Contact email is required` / `Invalid contact email format` / `Contact email is too long` | 聯絡 Email 必填 / 格式錯誤 / 過長 |
-| `Company name is required` / `Company name is too long` | 公司或團體名稱必填 / 過長 |
-| `Tax id is required` / `Tax id must be 8 digits` | 統一編號必填 / 格式錯誤 |
-| `City is required` / `City is too long` / `Invalid city` | 縣市必填 / 過長 / 不在台灣縣市清單 |
-| `District is required` / `District is too long` / `Invalid district for city` | 地區必填 / 過長 / 不屬於該縣市 |
-| `Address is required` / `Address is too long` | 地址必填 / 過長 |
-| `Service days is required` / `Invalid service days` | 服務日期必填 / 格式或代碼錯誤 |
-| `Service start time is required` / `Invalid service start time` | 服務開始時間必填 / 格式錯誤 |
-| `Service end time is required` / `Invalid service end time` | 服務結束時間必填 / 格式錯誤 |
-| `Service end time must be after start time` | 服務結束時間必須晚於開始時間 |
+| Key                                                                                              | 中文訊息用途                       |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| `Organizer profile request is required`                                                        | request body 不可為空              |
+| `Organizer name is required` / `Organizer name is too long`                                  | 主辦方名稱必填 / 過長              |
+| `Contact name is required` / `Contact name is too long`                                      | 聯絡人必填 / 過長                  |
+| `Contact phone is required` / `Contact phone must be 10 digits and start with 09`            | 聯絡電話必填 / 手機格式錯誤        |
+| `Contact email is required` / `Invalid contact email format` / `Contact email is too long` | 聯絡 Email 必填 / 格式錯誤 / 過長  |
+| `Company name is required` / `Company name is too long`                                      | 公司或團體名稱必填 / 過長          |
+| `Tax id is required` / `Tax id must be 8 digits`                                             | 統一編號必填 / 格式錯誤            |
+| `City is required` / `City is too long` / `Invalid city`                                   | 縣市必填 / 過長 / 不在台灣縣市清單 |
+| `District is required` / `District is too long` / `Invalid district for city`              | 地區必填 / 過長 / 不屬於該縣市     |
+| `Address is required` / `Address is too long`                                                | 地址必填 / 過長                    |
+| `Service days is required` / `Invalid service days`                                          | 服務日期必填 / 格式或代碼錯誤      |
+| `Service start time is required` / `Invalid service start time`                              | 服務開始時間必填 / 格式錯誤        |
+| `Service end time is required` / `Invalid service end time`                                  | 服務結束時間必填 / 格式錯誤        |
+| `Service end time must be after start time`                                                    | 服務結束時間必須晚於開始時間       |
 
 縣市與地區驗證集中在 `TaiwanAddressService`，內部以程式碼保存台灣縣市與各縣市行政區清單，並提供 `isValidCity(...)`、`isValidDistrict(...)`。輸入會將 `臺` 正規化為 `台` 後再比對。

@@ -41,17 +41,11 @@ public class MarketEventRepository {
                     e.address,
                     e.start_date,
                     e.end_date,
-                    COALESCE(e.cover_image_url, first_image.image_url) AS cover_image_url,
+                    e.cover_image_url,
                     e.publish_status,
                     c.name AS category_name
                 FROM dbo.market_events e
                 INNER JOIN dbo.categories c ON c.id = e.category_id
-                OUTER APPLY (
-                    SELECT TOP 1 image_url
-                    FROM dbo.event_images
-                    WHERE event_id = e.id
-                    ORDER BY id
-                ) first_image
                 WHERE e.publish_status = N'PUBLISHED'
                   AND e.review_status = N'APPROVED'
                 """);
@@ -89,7 +83,7 @@ public class MarketEventRepository {
                     e.registration_end_at,
                     e.max_booths,
                     e.base_fee,
-                    COALESCE(e.cover_image_url, first_image.image_url) AS cover_image_url,
+                    e.cover_image_url,
                     e.map_image_url,
                     e.public_info_at,
                     e.review_status,
@@ -97,12 +91,6 @@ public class MarketEventRepository {
                     c.name AS category_name
                 FROM dbo.market_events e
                 INNER JOIN dbo.categories c ON c.id = e.category_id
-                OUTER APPLY (
-                    SELECT TOP 1 image_url
-                    FROM dbo.event_images
-                    WHERE event_id = e.id
-                    ORDER BY id
-                ) first_image
                 WHERE e.id = :id
                   AND e.publish_status = N'PUBLISHED'
                   AND e.review_status = N'APPROVED'
