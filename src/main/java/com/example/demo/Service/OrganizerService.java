@@ -506,6 +506,15 @@ public class OrganizerService {
             return ApiResponse.fail("Application not found");
         }
 
+        Map<String, Object> response = buildApplicationDetailResponse(applicationId, application);
+        return ApiResponse.success(
+                "Organizer application detail retrieved successfully",
+                new OrganizerApplicationDetailResponse(response));
+    }
+
+    public Map<String, Object> buildApplicationDetailResponse(
+            Long applicationId,
+            Map<String, Object> application) {
         List<Map<String, Object>> equipmentRentals = organizerRepository.findApplicationEquipmentRentals(applicationId);
         List<Map<String, Object>> applicationDates = organizerRepository.findApplicationDates(applicationId);
         Map<String, Object> response = toApplicationDetailResponse(
@@ -513,9 +522,7 @@ public class OrganizerService {
                 applicationDates,
                 equipmentRentals);
         response.put("status", toApplicationStatusFlow(application));
-        return ApiResponse.success(
-                "Organizer application detail retrieved successfully",
-                new OrganizerApplicationDetailResponse(response));
+        return response;
     }
 
     @Transactional
@@ -1173,10 +1180,18 @@ public class OrganizerService {
                 "applicationStatus", application.get("applicationStatus")));
 
         response.put("event", orderedMap(
+                "eventId", application.get("eventId"),
+                "eventCoverImageUrl", application.get("eventCoverImageUrl"),
                 "eventTitle", application.get("eventTitle"),
                 "eventStatus", displayEventStatus(application),
                 "statusNote", displayRegistrationProgress(application),
                 "eventTime", formatEventDate(application),
+                "eventStartAt", application.get("eventStartAt"),
+                "eventEndAt", application.get("eventEndAt"),
+                "locationName", joinAddress(
+                        application.get("eventCity"),
+                        application.get("eventDistrict"),
+                        application.get("locationName")),
                 "address", joinAddress(
                         application.get("eventCity"),
                         application.get("eventDistrict"),
@@ -1222,7 +1237,16 @@ public class OrganizerService {
                 "paymentStatus", displayPaymentStatus(application),
                 "paymentMethod", application.get("paymentProvider"),
                 "paymentNo", application.get("paymentNo"),
+                "providerTradeNo", application.get("paymentProviderTradeNo"),
+                "paidAt", application.get("paidAt"),
                 "paymentAmount", firstPresent(application.get("paymentAmount"), totalAmount)));
+        response.put("refund", orderedMap(
+                "refundStatus", application.get("refundStatus"),
+                "refundStatusText", displayRefundStatus(application.get("refundStatus")),
+                "refundMethod", application.get("paymentProvider"),
+                "refundNo", application.get("refundNo"),
+                "refundAmount", application.get("refundAmount"),
+                "refundedAt", application.get("refundedAt")));
         response.put("feedetail", toFeeDetail(
                 baseFee,
                 applicationDays,
@@ -1818,6 +1842,16 @@ public class OrganizerService {
         };
     }
 
+    private String displayRefundStatus(Object value) {
+        return switch (statusText(value) == null ? "" : statusText(value)) {
+            case "REFUND_REQUESTED" -> "\u9000\u6b3e\u7533\u8acb\u4e2d";
+            case "REFUNDING" -> "\u9000\u6b3e\u8655\u7406\u4e2d";
+            case "REFUND_FAILED" -> "\u9000\u6b3e\u5931\u6557";
+            case "REFUNDED" -> "\u5df2\u9000\u6b3e";
+            default -> null;
+        };
+    }
+
     private String displayPublishStatus(Object value) {
         return switch (statusText(value) == null ? "" : statusText(value)) {
             case "DRAFT" -> "\u8349\u7a3f";
@@ -2067,7 +2101,7 @@ public class OrganizerService {
     private boolean isAllApplicationDatesSelected(Map<String, Object> application) {
         Long applicationDateCount = toLong(application.get("applicationDateCount"));
         Long selectedStallCount = toLong(application.get("selectedStallCount"));
-        if (applicationDateCount > 0) {
+        if (applicationDateCount != null && applicationDateCount > 0) {
             return applicationDateCount.equals(selectedStallCount);
         }
         return application.get("selectedStallId") != null;

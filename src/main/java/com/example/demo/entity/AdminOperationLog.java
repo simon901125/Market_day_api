@@ -48,6 +48,7 @@ public class AdminOperationLog {
     private AdminOperationType operationType;
 
     /**操作對象類型 */
+    @Enumerated(EnumType.STRING)
     @Column(name = "target_type", nullable = false, length = 30)
     private AdminTargetType targetType;
 

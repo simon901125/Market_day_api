@@ -167,6 +167,14 @@ cd demo
 .\mvnw.cmd test
 ```
 
+Push 前不可只執行上述一般測試；還需要驗證 SQL Server schema 與 Repository 查詢。完整測試請執行：
+
+```cmd
+src\test\run-test.cmd
+```
+
+一般測試與 SQL Server 整合測試兩個階段都必須顯示 `BUILD SUCCESS`。完整準備方式、失敗排查與 push 前檢查清單請參考 [Push 前測試流程](all-md/pre-push-testing.md)。
+
 Swagger UI：
 
 ```text
