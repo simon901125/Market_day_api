@@ -15,6 +15,7 @@ import com.example.demo.dto.request.GoogleCredentialRequest;
 import com.example.demo.dto.request.LocalLoginRequest;
 import com.example.demo.dto.request.LocalRegisterRequest;
 import com.example.demo.dto.request.RequestPasswordResetRequest;
+import com.example.demo.dto.request.ResendRegistrationVerificationRequest;
 import com.example.demo.dto.request.ResetPasswordRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.LoginResponse;
@@ -125,6 +126,13 @@ public class UserController {
     @PostMapping("/api/auth/createAccount/emailVerify")
     public ApiResponse<Void> verifyCreateAccountEmail(@Valid @RequestBody EmailVerificationRequest body) {
         return userService.verifyCreateAccountEmail(body);
+    }
+
+    @Operation(summary = "重新寄送註冊驗證碼", description = "重新產生 6 位數註冊驗證碼，作廢舊驗證碼後寄送至尚未完成驗證的本地帳號信箱。")
+    @PostMapping("/api/auth/createAccount/resend")
+    public ApiResponse<Void> resendCreateAccountVerificationCode(
+            @Valid @RequestBody ResendRegistrationVerificationRequest body) {
+        return userService.resendCreateAccountVerificationCode(body);
     }
 
     @Operation(summary = "寄送重設密碼驗證碼", description = "若 email 屬於本地帳號，寄送 6 位數重設密碼驗證碼。")

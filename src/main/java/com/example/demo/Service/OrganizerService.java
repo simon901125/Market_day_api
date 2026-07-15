@@ -42,6 +42,7 @@ import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
 import com.example.demo.dto.response.OrganizerApplicationSummaryResponse;
 import com.example.demo.dto.response.OrganizerAccountingSearchResponse;
 import com.example.demo.dto.response.OrganizerAccountingSummaryResponse;
+import com.example.demo.dto.response.OrganizerDashboardInitResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
@@ -92,6 +93,18 @@ public class OrganizerService {
 
     @Autowired
     private TaiwanAddressService taiwanAddressService;
+
+    public ApiResponse<OrganizerDashboardInitResponse> initOrganizerDashboard(String authorizationHeader) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+
+        boolean needsProfile = isOrganizerProfileIncomplete(organizer);
+        return ApiResponse.success(
+                "Organizer dashboard initialized successfully",
+                new OrganizerDashboardInitResponse(needsProfile));
+    }
 
     private ApiResponse<OrganizerAccountResponse> loadOrganizerAccount(String authorizationHeader, String successMessage) {
         String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
@@ -1862,6 +1875,23 @@ public class OrganizerService {
         return organizer;
     }
 
+    private boolean isOrganizerProfileIncomplete(Map<String, Object> organizer) {
+        return isMissing(organizer.get("organizerName"))
+                || isMissing(organizer.get("contactName"))
+                || isMissing(organizer.get("contactPhone"))
+                || isMissing(organizer.get("contactEmail"))
+                || isMissing(organizer.get("city"))
+                || isMissing(organizer.get("district"))
+                || isMissing(organizer.get("address"))
+                || isMissing(organizer.get("serviceDays"))
+                || isMissing(organizer.get("serviceStartTime"))
+                || isMissing(organizer.get("serviceEndTime"));
+    }
+
+    private boolean isMissing(Object value) {
+        return value == null || value instanceof String text && text.isBlank();
+    }
+
     private String formatServiceTime(Object time) {
         if (!(time instanceof LocalTime localTime)) {
             return null;
@@ -1906,16 +1936,10 @@ public class OrganizerService {
         if (contactEmail.length() > 255 || !EMAIL_PATTERN.matcher(contactEmail).matches()) {
             return "Invalid contact email format";
         }
-        if (companyName == null) {
-            return "Company name is required";
-        }
-        if (companyName.length() > 150) {
+        if (companyName != null && companyName.length() > 150) {
             return "Company name must not exceed 150 characters";
         }
-        if (taxId == null) {
-            return "Tax id is required";
-        }
-        if (!TAX_ID_PATTERN.matcher(taxId).matches()) {
+        if (taxId != null && !TAX_ID_PATTERN.matcher(taxId).matches()) {
             return "Tax id must be 8 digits";
         }
         if (city == null) {
