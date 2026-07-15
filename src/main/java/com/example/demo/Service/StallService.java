@@ -36,6 +36,9 @@ import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorAccountResponse;
 import com.example.demo.dto.response.VendorApplicationSubmitResponse;
 import com.example.demo.dto.response.VendorMarketDetailResponse;
+import com.example.demo.dto.response.VendorApplicationDetailResponse;
+import com.example.demo.dto.response.VendorApplicationSearchResponse;
+import com.example.demo.dto.response.VendorApplicationSummaryResponse;
 import com.example.demo.dto.response.VendorStallMapResponse;
 
 @Service
@@ -83,6 +86,9 @@ public class StallService {
 
     @Autowired
     private OrganizerRepository organizerRepository;
+
+    @Autowired
+    private OrganizerService organizerService;
 
     @Autowired
     private JwtService jwtService;
@@ -414,6 +420,63 @@ public class StallService {
         }
     }
 
+    public ApiResponse<VendorApplicationSearchResponse> searchVendorApplications(
+            String authorizationHeader,
+            String eventTitle,
+            String status,
+            LocalDate eventStartAt,
+            LocalDate eventEndAt,
+            Integer page,
+            Integer pageSize) {
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+
+        Long vendorUserId = toLong(vendor.get("userId"));
+        LocalDateTime startAt = eventStartAt == null ? null : eventStartAt.atStartOfDay();
+        LocalDateTime endExclusive = eventEndAt == null ? null : eventEndAt.plusDays(1).atStartOfDay();
+
+        List<VendorApplicationSummaryResponse> applications = stallRepository
+                .findVendorApplications(vendorUserId, eventTitle, startAt, endExclusive)
+                .stream()
+                .map(this::withApplicationStatus)
+                .filter(application -> matchesApplicationStatus(application, status))
+                .map(this::toVendorApplicationSummary)
+                .map(VendorApplicationSummaryResponse::new)
+                .toList();
+
+        return ApiResponse.success(
+                "Vendor applications retrieved successfully",
+                new VendorApplicationSearchResponse(PageResponse.from(applications, page, pageSize)));
+    }
+
+    public ApiResponse<VendorApplicationDetailResponse> getVendorApplicationDetail(
+            String authorizationHeader,
+            Long applicationId) {
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+        if (applicationId == null) {
+            return ApiResponse.fail("Application id is required");
+        }
+
+        Long vendorUserId = ((Number) vendor.get("userId")).longValue();
+        Map<String, Object> application = organizerRepository
+                .findVendorApplicationDetail(vendorUserId, applicationId)
+                .orElse(null);
+        if (application == null) {
+            return ApiResponse.fail("Application not found");
+        }
+
+        Map<String, Object> response = organizerService
+                .buildApplicationDetailResponse(applicationId, application);
+        return ApiResponse.success(
+                "Vendor application detail retrieved successfully",
+                new VendorApplicationDetailResponse(response));
+    }
+
     public ApiResponse<VendorStallMapResponse> getVendorStallMap(
             String authorizationHeader,
             String applicationNo,
@@ -680,6 +743,48 @@ public class StallService {
             return Map.of("message", "This account is not a vendor");
         }
         return vendor;
+    }
+
+    private Map<String, Object> withApplicationStatus(Map<String, Object> application) {
+        Map<String, Object> result = new LinkedHashMap<>(application);
+        result.put("applicationStatus", applicationStatusService.resolveApplicationStatus(application));
+        return result;
+    }
+
+    private boolean matchesApplicationStatus(Map<String, Object> application, String requestedStatus) {
+        String status = normalizeText(requestedStatus);
+        if (status.isEmpty()
+                || "ALL".equalsIgnoreCase(status)
+                || "全部".equals(status)
+                || "全部狀態".equals(status)) {
+            return true;
+        }
+
+        if (status.equalsIgnoreCase(normalizeText(application.get("applicationStatus")))) {
+            return true;
+        }
+
+        String normalizedCode = status.toUpperCase();
+        return normalizedCode.equals(stringValue(application.get("reviewStatus")))
+                || normalizedCode.equals(stringValue(application.get("paymentStatus")))
+                || normalizedCode.equals(stringValue(application.get("refundStatus")))
+                || (("CANCELLED".equals(normalizedCode) || "已取消".equals(status))
+                        && isTrue(application.get("isCancelled")));
+    }
+
+    private Map<String, Object> toVendorApplicationSummary(Map<String, Object> application) {
+        return orderedMap(
+                "applicationId", application.get("applicationId"),
+                "applicationNo", application.get("applicationNo"),
+                "appliedAt", application.get("appliedAt"),
+                "applicationStatus", application.get("applicationStatus"),
+                "eventId", application.get("eventId"),
+                "eventImageUrl", application.get("eventImageUrl"),
+                "eventTitle", application.get("eventTitle"),
+                "eventDate", application.get("eventDate"),
+                "eventStartAt", application.get("eventStartAt"),
+                "eventEndAt", application.get("eventEndAt"),
+                "location", application.get("location"));
     }
 
     private Map<String, Object> toVendorStallProfile(Map<String, Object> vendor) {

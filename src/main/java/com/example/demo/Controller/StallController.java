@@ -19,6 +19,8 @@ import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorAccountResponse;
+import com.example.demo.dto.response.VendorApplicationDetailResponse;
+import com.example.demo.dto.response.VendorApplicationSearchResponse;
 import com.example.demo.dto.response.VendorStallMapResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -59,6 +61,40 @@ public class StallController {
     public ApiResponse<VendorAccountResponse> getVendorAccount(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         return stallService.getVendorAccount(authorizationHeader);
+    }
+
+    @Operation(
+            summary = "搜尋攤主報名紀錄",
+            description = "搜尋目前登入攤主送出的全部報名紀錄，支援活動名稱、報名狀態、活動日期與分頁篩選。")
+    @GetMapping("/api/vendor/applications/search")
+    public ApiResponse<VendorApplicationSearchResponse> searchVendorApplications(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestParam(value = "eventTitle", required = false) String eventTitle,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "event_start_at", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventStartAt,
+            @RequestParam(value = "event_end_at", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventEndAt,
+            @RequestParam(value = "page", required = false, defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", required = false, defaultValue = "10") Integer pageSize) {
+        return stallService.searchVendorApplications(
+                authorizationHeader,
+                eventTitle,
+                status,
+                eventStartAt,
+                eventEndAt,
+                page,
+                pageSize);
+    }
+
+    @Operation(
+            summary = "取得攤主報名詳情",
+            description = "取得目前登入攤主自己的報名、活動、狀態、付款、攤位、設備、用電與費用明細。")
+    @GetMapping("/api/vendor/applications/{id}")
+    public ApiResponse<VendorApplicationDetailResponse> getVendorApplicationDetail(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long id) {
+        return stallService.getVendorApplicationDetail(authorizationHeader, id);
     }
 
     @Operation(summary = "讀取攤主品牌資料", description = "取得目前登入攤主的品牌、聯絡資料、圖片、分類與商品資料。")
