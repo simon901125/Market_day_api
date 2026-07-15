@@ -108,22 +108,24 @@ public class UserRepository {
     public void createUserProfile(Long userId, String profileType, String name, String email) {
         String sql = """
                 INSERT INTO user_profiles (
-                    user_id, profile_type
+                    user_id, profile_type, contact_name, contact_email
                 )
                 VALUES (
-                    :userId, :profileType
+                    :userId, :profileType, :contactName, :contactEmail
                 )
                 """;
         Map<String, Object> map = new HashMap<>();
         map.put("userId", userId);
         map.put("profileType", profileType);
+        map.put("contactName", name);
+        map.put("contactEmail", email);
         namedParameterJdbcTemplate.update(sql, map);
     }
 
     public Optional<Map<String, Object>> findLocalUserByEmail(String email) {
         String sql = """
                 SELECT u.id, u.role, u.email, u.password_hash, u.provider, u.status, u.isLogin,
-                       COALESCE(vp.brand_name, op.organizer_name) AS name,
+                       COALESCE(vp.brand_name, op.organizer_name, up.contact_name) AS name,
                        up.contact_phone AS phone,
                        u.google_sub AS googleSub,
                        u.email_verified_at AS emailVerifiedAt,
@@ -146,7 +148,7 @@ public class UserRepository {
     public Optional<Map<String, Object>> findProfileByEmail(String email) {
         String sql = """
                 SELECT u.id, u.role, u.email, u.provider,
-                       COALESCE(vp.brand_name, op.organizer_name) AS name,
+                       COALESCE(vp.brand_name, op.organizer_name, up.contact_name) AS name,
                        up.contact_phone AS phone,
                        u.google_sub AS googleSub,
                        u.status, u.isLogin,
@@ -169,7 +171,7 @@ public class UserRepository {
     public Optional<Map<String, Object>> findGoogleUserBySub(String googleSub) {
         String sql = """
                 SELECT u.id, u.role, u.email, u.provider,
-                       COALESCE(vp.brand_name, op.organizer_name) AS name,
+                       COALESCE(vp.brand_name, op.organizer_name, up.contact_name) AS name,
                        up.contact_phone AS phone,
                        u.google_sub AS googleSub,
                        u.status, u.isLogin,

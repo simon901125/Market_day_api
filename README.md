@@ -2,6 +2,24 @@
 
 Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登入註冊、攤主資料、主辦資料、活動查詢、攤位選位、主辦後台管理、設備統計與帳務匯出等功能。
 
+最後更新：2026-07-15
+
+## 更新紀錄
+
+### 2026-07-15
+
+#### yingtung branch
+
+- 新增主辦方後台初始化 API：`GET /api/organizer/dashboard/init`，主辦方登入後可取得 `needsProfile`，判斷是否需要先完成主辦方資料。
+- 主辦方後台初始化會檢查主辦名稱、聯絡資訊、地址與服務時間等必填欄位；`companyName`、`taxId` 為選填欄位，不影響 `needsProfile` 判斷。
+- 新增 `OrganizerDashboardInitResponse`，統一回傳主辦方資料是否需要補填。
+- 將 `GET /api/organizer/dashboard/init` 加入 JWT 保護清單，需攜帶有效的 Bearer Token 才能呼叫。
+- 新增主辦方後台初始化單元測試，涵蓋必填欄位缺漏、公司資料未填及資料完整等情境。
+- `POST /api/organizer/profile/save` 的 `companyName`、`taxId` 改為選填；若有填寫，仍會驗證公司名稱長度與統一編號格式。
+- 新增重新寄送註冊驗證碼 API：`POST /api/auth/createAccount/resend`，限尚未完成信箱驗證的本地帳號使用，重新寄送前會作廢舊驗證碼並建立 10 分鐘有效的新驗證碼。
+- 新增 `ResendRegistrationVerificationRequest`，驗證重新寄送註冊驗證碼時的 Email 必填與格式。
+- 建立 `user_profiles` 時同步儲存註冊名稱與聯絡 Email；尚未建立攤主或主辦 profile 時，使用 `user_profiles.contact_name` 作為帳號顯示名稱。
+- 補充重新寄送驗證碼與本地帳號不存在的中文 API 訊息，並同步更新主辦方資料欄位文件。
 最後更新：2026-07-14
 
 ## 更新紀錄
@@ -166,6 +184,14 @@ cd demo
 cd demo
 .\mvnw.cmd test
 ```
+
+Push 前不可只執行上述一般測試；還需要驗證 SQL Server schema 與 Repository 查詢。完整測試請執行：
+
+```cmd
+src\test\run-test.cmd
+```
+
+一般測試與 SQL Server 整合測試兩個階段都必須顯示 `BUILD SUCCESS`。完整準備方式、失敗排查與 push 前檢查清單請參考 [Push 前測試流程](all-md/pre-push-testing.md)。
 
 Swagger UI：
 
@@ -404,7 +430,7 @@ POST /api/newebpay/return
 | `city` | 必填，需存在於 `TaiwanAddressService` 的台灣縣市清單 |
 | `district` | 必填，需存在於指定縣市的行政區清單 |
 | `address` | 必填 |
-| `companyName` | 必填 |
+| `companyName` | 選填，若填寫不得超過 150 字 |
 | `taxId` | 若填寫需符合統一編號格式 |
 | `serviceDays` | 必填 |
 | `serviceStartTime` | 必填，時間格式 |

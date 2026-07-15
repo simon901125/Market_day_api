@@ -140,6 +140,8 @@ public class ApiResponse<T> {
             case "Stall selection successful" -> "\u6524\u4f4d\u9078\u64c7\u6210\u529f";
             case "Event stalls status retrieved successfully" -> "\u6d3b\u52d5\u6524\u4f4d\u72c0\u614b\u53d6\u5f97\u6210\u529f";
             case "Vendor account retrieved successfully" -> "\u6524\u4e3b\u5e33\u865f\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
+            case "Vendor applications retrieved successfully" -> "\u6524\u4e3b\u5831\u540d\u7d00\u9304\u53d6\u5f97\u6210\u529f";
+            case "Vendor application detail retrieved successfully" -> "\u6524\u4e3b\u5831\u540d\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
             case "Vendor stall map retrieved successfully" -> "\u6524\u4e3b\u9078\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
             case "Organizer stall map retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
             case "Organizer stall detail retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
@@ -165,6 +167,8 @@ public class ApiResponse<T> {
             case "Admin accounts do not support Google login" -> "\u7ba1\u7406\u54e1\u5e33\u865f\u4e0d\u652f\u63f4 Google \u767b\u5165";
             case "Email already registered" -> "\u6b64 Email \u5df2\u88ab\u8a3b\u518a";
             case "Email already verified" -> "\u6b64 Email \u5df2\u5b8c\u6210\u9a57\u8b49";
+            case "Registration verification code has been sent" -> "\u8a3b\u518a\u9a57\u8b49\u78bc\u5df2\u91cd\u65b0\u5bc4\u9001";
+            case "Local account not found" -> "\u627e\u4e0d\u5230\u6b64\u672c\u5730\u5e33\u865f";
             case "Email is required" -> "\u8acb\u8f38\u5165 Email";
             case "Email is not verified" -> "Email \u5c1a\u672a\u5b8c\u6210\u9a57\u8b49";
             case "Invalid email format" -> "Email \u683c\u5f0f\u4e0d\u6b63\u78ba";
