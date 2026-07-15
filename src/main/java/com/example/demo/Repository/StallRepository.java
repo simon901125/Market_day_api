@@ -143,6 +143,9 @@ public class StallRepository {
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
     }
 
+    /**
+     *
+     */
     public Optional<Map<String, Object>> findVendorAccountByEmail(String email) {
         String sql = """
                 SELECT
@@ -745,13 +748,13 @@ public class StallRepository {
                     e.registration_end_at AS registrationEndAt,
                     e.base_fee AS baseFee,
 
-                    t.traffic_title AS trafficTitle,
-                    t.traffic_details AS trafficDetail,
+                    traffic.trafficTitle,
+                    traffic.trafficDetail,
 
                     c.name AS categoryName,
                     op.organizer_name AS organizerName,
 
-                    COALESCE(e.cover_image_url, first_image.image_url) AS imageUrl,
+                    e.cover_image_url AS imageUrl,
 
                     CASE
                         WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
@@ -764,12 +767,16 @@ public class StallRepository {
                 OUTER APPLY
                 (
                     SELECT TOP (1)
-                        ti.traffic_title,
-                        ti.traffic_details
-                    FROM dbo.event_traffic_infos AS ti
-                    WHERE ti.event_id = e.id
-                    ORDER BY ti.id ASC
-                ) AS t
+                        traffic_values.trafficTitle,
+                        traffic_values.trafficDetail
+                    FROM (VALUES
+                        (1, N'開車', e.traffic_info_driving),
+                        (2, N'公車', e.traffic_info_bus),
+                        (3, N'捷運', e.traffic_info_metro)
+                    ) AS traffic_values(sortOrder, trafficTitle, trafficDetail)
+                    WHERE NULLIF(LTRIM(RTRIM(traffic_values.trafficDetail)), N'') IS NOT NULL
+                    ORDER BY traffic_values.sortOrder
+                ) AS traffic
 
                 LEFT JOIN dbo.categories AS c
                     ON c.id = e.category_id
@@ -780,15 +787,6 @@ public class StallRepository {
 
                 LEFT JOIN dbo.organizer_profiles AS op
                     ON op.user_profile_id = up.id
-
-                OUTER APPLY
-                (
-                    SELECT TOP (1)
-                        ei.image_url
-                    FROM dbo.event_images AS ei
-                    WHERE ei.event_id = e.id
-                    ORDER BY ei.id ASC
-                ) AS first_image
 
                 WHERE e.workflow_status = N'PUBLISHED'
                         AND e.registration_end_at >= GETDATE()
@@ -858,7 +856,7 @@ public class StallRepository {
                     e.registration_end_at AS registrationEndAt,
                     e.max_booths AS maxBooths,
                     e.base_fee AS baseFee,
-                    COALESCE(e.cover_image_url, first_image.image_url) AS coverImageUrl,
+                    e.cover_image_url AS coverImageUrl,
                     e.map_image_url AS mapImageUrl,
                     c.name AS categoryName,
                     op.organizer_name AS organizerName,
@@ -869,9 +867,8 @@ public class StallRepository {
                     up.contact_name AS contactName,
                     up.contact_phone AS contactPhone,
                     up.contact_email AS contactEmail,
-                    stall_size.width AS stallWidth,
-                    stall_size.length AS stallLength,
-                    stall_size.height AS stallHeight,
+                    e.stall_width AS stallWidth,
+                    e.stall_length AS stallLength,
                     CASE
                         WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
                         WHEN GETDATE() <= e.registration_end_at THEN N'OPEN'
@@ -882,18 +879,6 @@ public class StallRepository {
                 LEFT JOIN dbo.user_profiles up
                     ON up.user_id = e.user_id AND up.profile_type = N'ORGANIZER'
                 LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
-                OUTER APPLY (
-                    SELECT TOP 1 image_url
-                    FROM dbo.event_images
-                    WHERE event_id = e.id
-                    ORDER BY id
-                ) first_image
-                OUTER APPLY (
-                    SELECT TOP 1 width, length, height
-                    FROM dbo.event_stalls
-                    WHERE event_id = e.id AND status <> N'DISABLED'
-                    ORDER BY id
-                ) stall_size
                 WHERE e.id = :eventId
                   AND e.workflow_status = N'PUBLISHED'
                 """;
@@ -978,10 +963,19 @@ public class StallRepository {
     /** 取得活動的交通方式說明。 */
     public List<Map<String, Object>> findPublishedMarketTrafficInfos(Long eventId) {
         String sql = """
-                SELECT id, traffic_title AS trafficTitle, traffic_details AS trafficDetails
-                FROM dbo.event_traffic_infos
-                WHERE event_id = :eventId
-                ORDER BY id
+                SELECT
+                    traffic_values.sortOrder AS id,
+                    traffic_values.trafficTitle,
+                    traffic_values.trafficDetails
+                FROM dbo.market_events e
+                CROSS APPLY (VALUES
+                    (1, N'開車', e.traffic_info_driving),
+                    (2, N'公車', e.traffic_info_bus),
+                    (3, N'捷運', e.traffic_info_metro)
+                ) AS traffic_values(sortOrder, trafficTitle, trafficDetails)
+                WHERE e.id = :eventId
+                  AND NULLIF(LTRIM(RTRIM(traffic_values.trafficDetails)), N'') IS NOT NULL
+                ORDER BY traffic_values.sortOrder
                 """;
         return RepositoryResultMapper.normalizeList(
                 namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)));
