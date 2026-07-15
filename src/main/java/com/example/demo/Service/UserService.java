@@ -27,6 +27,7 @@ import com.example.demo.dto.request.GoogleCredentialRequest;
 import com.example.demo.dto.request.LocalLoginRequest;
 import com.example.demo.dto.request.LocalRegisterRequest;
 import com.example.demo.dto.request.RequestPasswordResetRequest;
+import com.example.demo.dto.request.ResendRegistrationVerificationRequest;
 import com.example.demo.dto.request.ResetPasswordRequest;
 import com.example.demo.dto.response.GoogleTokenInfo;
 import com.example.demo.dto.response.LoginResponse;
@@ -391,6 +392,31 @@ public class UserService {
         userRepository.deleteUserToken(tokenId, UserRepository.TOKEN_TYPE_EMAIL_VERIFY);
 
         return ApiResponse.success("Email verified successfully");
+    }
+
+    @Transactional
+    public ApiResponse<Void> resendCreateAccountVerificationCode(
+            ResendRegistrationVerificationRequest body) {
+        Optional<Map<String, Object>> userData = userRepository.findLocalUserByEmail(body.getEmail());
+        if (userData.isEmpty()) {
+            return ApiResponse.fail("Local account not found");
+        }
+
+        Map<String, Object> user = userData.get();
+        if (user.get("emailVerifiedAt") != null) {
+            return ApiResponse.fail("Email already verified");
+        }
+
+        Long userId = ((Number) user.get("id")).longValue();
+        String verificationCode = generateVerificationCode();
+        userRepository.deleteEmailVerificationTokensByUserId(userId);
+        userRepository.createEmailVerificationToken(
+                userId,
+                verificationCode,
+                LocalDateTime.now().plusMinutes(10));
+        emailService.sendVerificationCode(body.getEmail(), verificationCode);
+
+        return ApiResponse.success("Registration verification code has been sent");
     }
 
     public ApiResponse<Void> requestPasswordReset(RequestPasswordResetRequest body) {

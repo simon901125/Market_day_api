@@ -43,6 +43,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/payments/{applicationNo}/status"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/payments/{applicationNo}/newebpay-query"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/stalls/select"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/dashboard/init"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/applications/search"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/applications/{id}"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/accounts/{eventId}"),

@@ -757,8 +757,8 @@ Service 或 Filter 即使傳入英文 key，也會透過 `ApiResponse.fail(...)`
 | `contactName`      | 必填，最多 100 字                                                 |
 | `contactPhone`     | 必填，台灣手機格式，需為`09` 開頭共 10 碼                       |
 | `contactEmail`     | 必填，需符合 Email 格式，最多 255 字                              |
-| `companyName`      | 必填，最多 150 字                                                 |
-| `taxId`            | 必填，需為 8 碼數字                                               |
+| `companyName`      | 選填，若填寫最多 150 字                                           |
+| `taxId`            | 選填，若填寫需為 8 碼數字                                        |
 | `city`             | 必填，最多 50 字，需存在於`TaiwanAddressService` 的台灣縣市清單 |
 | `district`         | 必填，最多 50 字，需存在於該`city` 對應的地區清單               |
 | `address`          | 必填，最多 255 字，只填詳細地址，不含自動組合                     |

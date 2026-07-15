@@ -167,6 +167,8 @@ public class ApiResponse<T> {
             case "Admin accounts do not support Google login" -> "\u7ba1\u7406\u54e1\u5e33\u865f\u4e0d\u652f\u63f4 Google \u767b\u5165";
             case "Email already registered" -> "\u6b64 Email \u5df2\u88ab\u8a3b\u518a";
             case "Email already verified" -> "\u6b64 Email \u5df2\u5b8c\u6210\u9a57\u8b49";
+            case "Registration verification code has been sent" -> "\u8a3b\u518a\u9a57\u8b49\u78bc\u5df2\u91cd\u65b0\u5bc4\u9001";
+            case "Local account not found" -> "\u627e\u4e0d\u5230\u6b64\u672c\u5730\u5e33\u865f";
             case "Email is required" -> "\u8acb\u8f38\u5165 Email";
             case "Email is not verified" -> "Email \u5c1a\u672a\u5b8c\u6210\u9a57\u8b49";
             case "Invalid email format" -> "Email \u683c\u5f0f\u4e0d\u6b63\u78ba";
