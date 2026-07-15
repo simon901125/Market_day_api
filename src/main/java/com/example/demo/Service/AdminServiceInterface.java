@@ -16,6 +16,7 @@ import com.example.demo.dto.response.admin.AdminUserListDto;
 import com.example.demo.dto.response.admin.AdminUserLoginDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
 import com.example.demo.dto.response.admin.AdminVenderRegDto;
+import com.example.demo.dto.response.admin.StatusLog;
 
 import jakarta.annotation.Nonnull;
 
@@ -37,19 +38,22 @@ public interface AdminServiceInterface {
     PageResponse<AdminEventListDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize);
 
     /** 設定管理員後台: 活動詳細 */
-    AdminEventDetailDto getEventDetail(@NonNull Long eventId);
+    AdminEventDetailDto getEventDetail(@NonNull Long eventId, int pageSize);
+
+    /** 設定管理員後台: 活動詳細:活動狀態變動紀錄 */
+    PageResponse<StatusLog> getEventStatusLogs(@NonNull Long eventId, int pageNumber, int pageSize);
 
     /** 設定管理員後台: 使用者搜尋 */
     PageResponse<AdminUserListDto> getUserList(AdminUserSearchDto request, int pageNumber, int pageSize);
 
     /** 設定管理員後台: 攤主詳細 */
-    AdminVenderDetailDto getVenderDetail(@NonNull Long userId);
+    AdminVenderDetailDto getVenderDetail(@NonNull Long userId, int pageSize);
 
     /** 設定管理員後台: 攤主詳細: 活動報名紀錄 */
     PageResponse<AdminVenderRegDto> getVenderRegLogs(@Nonnull Long userId, int pageNumber, int pageSize);
 
     /** 設定管理員後台: 主辦方詳細 */
-    AdminOrgDetailDto getOrganizerDetail(@Nonnull Long userId);
+    AdminOrgDetailDto getOrganizerDetail(@Nonnull Long userId, int pageSize);
 
     /** 設定管理員後台: 主辦方詳細 :活動管理紀錄 */
     PageResponse<AdminOrgEventManagementDto> getOrgEventLogs(@Nonnull Long userId, int pageNumber, int pageSize);

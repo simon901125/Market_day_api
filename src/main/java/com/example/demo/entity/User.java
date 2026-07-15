@@ -32,6 +32,7 @@ import com.example.demo.enums.type.Role;
  * @see EventApplication#user
  * @see UserProfile#user
  * @see AdminProfile#user
+ * @see Notification#user
  */
 @Entity
 @Data
@@ -141,6 +142,12 @@ public class User {
     @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "user")
     private List<RequestLog> requestLogs;
+
+    /** 使用者收到的通知清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "user")
+    private List<Notification> notifications;
 
     //----------我是分隔線----------
 

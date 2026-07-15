@@ -1,7 +1,6 @@
 package com.example.demo.dto.response.admin;
 
 import com.example.demo.dto.response.PageResponse;
-import com.example.demo.enums.type.Role;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
