@@ -1,7 +1,6 @@
 package com.example.demo.Filter;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.Set;
 
 import org.springframework.http.HttpMethod;
@@ -22,40 +21,37 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+
+    private static final Set<String> PROTECTED_API_PREFIXES = Set.of(
+            "/api/vendor/",
+            "/api/organizer/",
+            "/api/admin/",
+            "/api/auth/",
+            "/api/account/",
+            "/api/images",
+            "/api/stalls/");
+    //------------------------不過濾的端口(提供非登入使用者使用)------------------------
+    private static final Set<PublicApi> PUBLIC_APIS = Set.of(
+            new PublicApi(HttpMethod.POST.name(), "/api/vendor/local-register"),
+            new PublicApi(HttpMethod.POST.name(), "/api/vendor/google-register"),
+            new PublicApi(HttpMethod.POST.name(), "/api/vendor/local-login"),
+            new PublicApi(HttpMethod.POST.name(), "/api/vendor/google-login"),
+            new PublicApi(HttpMethod.POST.name(), "/api/vendor/markets/search"),
+            new PublicApi(HttpMethod.GET.name(), "/api/vendor/markets/{id}"),
+            new PublicApi(HttpMethod.POST.name(), "/api/organizer/local-register"),
+            new PublicApi(HttpMethod.POST.name(), "/api/organizer/google-register"),
+            new PublicApi(HttpMethod.POST.name(), "/api/organizer/local-login"),
+            new PublicApi(HttpMethod.POST.name(), "/api/organizer/google-login"),
+            new PublicApi(HttpMethod.POST.name(), "/api/admin/local-login"),
+            new PublicApi(HttpMethod.POST.name(), "/api/auth/createAccount/emailVerify"),
+            new PublicApi(HttpMethod.POST.name(), "/api/auth/createAccount/resend"),
+            new PublicApi(HttpMethod.POST.name(), "/api/auth/resetPassword/request"),
+            new PublicApi(HttpMethod.POST.name(), "/api/auth/resetPassword/emailVerify"),
+            new PublicApi(HttpMethod.POST.name(), "/api/auth/resetPassword/reset"));
+
     private final JwtService jwtService;
     private final UpdateActiveTimeService updateActiveTimeService;
     private final ObjectMapper objectMapper;
-
-    //api放置處
-    private final Set<ProtectedApi> protectedApis = Set.of(
-            new ProtectedApi(HttpMethod.POST.name(), "/api/auth/logout"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/auth/google-bind"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/auth/me"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/account/deactivate"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/images"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/account"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/applications/search"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/applications/{id}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/stall/load"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/stall/save"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/stall-map/{applicationNo}"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/payments/newebpay"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/vendor/payments/{applicationNo}/status"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/vendor/payments/{applicationNo}/newebpay-query"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/stalls/select"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/dashboard/init"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/applications/search"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/applications/{id}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/accounts/{eventId}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/accounts/{eventId}/export"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stalls/search"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/equipment/search"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/equipment/{eventId}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/equipment/{eventId}/export"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall/{eventId}"),
-            new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall/{eventId}/{stallNo}"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/approve"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject"));
 
     public JwtAuthenticationFilter(
             JwtService jwtService,
@@ -94,14 +90,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        if (isAdminProtectedApi(request) && !"ADMIN".equals(jwtService.getRole(token))) {
+            writeForbiddenResponse(response, "This account is not an admin");
+            return;
+        }
+
         filterChain.doFilter(request, response);
     }
-    //將目前的請求包裝成:ProtectedApi("GET", "/api/auth/me")，來做後續比對
     private boolean isProtectedApi(HttpServletRequest request) {
+        if (HttpMethod.OPTIONS.matches(request.getMethod()) || isPublicApi(request)) {
+            return false;
+        }
+
+        String path = request.getRequestURI();
+        return PROTECTED_API_PREFIXES.stream().anyMatch(prefix -> path.startsWith(prefix));
+    }
+
+    private boolean isPublicApi(HttpServletRequest request) {
         String method = request.getMethod();
         String path = request.getRequestURI();
-        return protectedApis.stream()
+        return PUBLIC_APIS.stream()
                 .anyMatch(api -> api.method().equals(method) && matchesPath(api.path(), path));
+    }
+
+    private boolean isAdminProtectedApi(HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/api/admin/") && !isPublicApi(request);
     }
 
     private boolean matchesPath(String pattern, String path) {
@@ -122,7 +135,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         objectMapper.writeValue(response.getWriter(), ApiResponse.fail(HttpServletResponse.SC_UNAUTHORIZED, message));
     }
 
-    private record ProtectedApi(String method, String path) {
+    private void writeForbiddenResponse(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        objectMapper.writeValue(response.getWriter(), ApiResponse.fail(HttpServletResponse.SC_FORBIDDEN, message));
+    }
+
+    private record PublicApi(String method, String path) {
     }
 }
 

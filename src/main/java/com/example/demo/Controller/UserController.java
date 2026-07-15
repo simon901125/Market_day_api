@@ -97,7 +97,15 @@ public class UserController {
 
     @Operation(summary = "管理員本地端登入", description = "使用 email 與密碼登入 ADMIN 帳號，成功後回傳 JWT token，並設定自動登出時間。")
     @PostMapping("/api/admin/local-login")
-    public ApiResponse<LoginResponse> adminLogin(@Valid @RequestBody LocalLoginRequest body) {
+    public ApiResponse<LoginResponse> adminLogin(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    content = @Content(examples = @ExampleObject(value = """
+                            {
+                              "email": "admin@marketday.local",
+                              "password": "a12345678"
+                            }
+                            """)))
+            @Valid @RequestBody LocalLoginRequest body) {
         return userService.loginLocal(body, "ADMIN");
     }
 

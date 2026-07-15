@@ -228,6 +228,7 @@ public class ApiResponse<T> {
             case "Duplicate product id" -> "\u5546\u54c1\u6e05\u55ae\u4e2d\u6709\u91cd\u8907\u7684\u5546\u54c1 ID";
             case "This account is not an organizer" -> "\u6b64\u5e33\u865f\u4e0d\u662f\u4e3b\u8fa6\u65b9\u5e33\u865f";
             case "This account is not a vendor" -> "\u6b64\u5e33\u865f\u4e0d\u662f\u6524\u4e3b\u5e33\u865f";
+            case "This account is not an admin" -> "\u6b64\u5e33\u865f\u4e0d\u662f\u7ba1\u7406\u54e1\u5e33\u865f";
             case "Application id is required" -> "\u8acb\u63d0\u4f9b\u7533\u8acb ID";
             case "Application number is required" -> "\u8acb\u63d0\u4f9b\u7533\u8acb\u7de8\u865f";
             case "Application not found" -> "\u627e\u4e0d\u5230\u7533\u8acb\u8cc7\u6599";

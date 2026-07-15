@@ -28,6 +28,10 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 通知篩選值統一為「全部、未讀、報名審核、付款相關、攤位分配、活動異動」；結果依未讀優先、建立時間新到舊、通知 ID 大到小排序。
 - 通知預設僅查詢最近一年，可透過 `notification.retention-years` 調整，且至少保留一年。
 - 補上攤主通知 Controller、Service 與查詢規則測試，包含中文篩選值與錯誤篩選值驗證。
+- 強化既有管理員登入端點 `POST /api/admin/local-login`：登入成功簽發包含 `role=ADMIN` 的 JWT，並在 Swagger 補上管理員帳密登入範例。
+- 管理員登入以外的全部 `/api/admin/**` 端點皆須攜帶有效 Bearer Token；無效或逾期工作階段回傳 401，VENDOR／ORGANIZER token 回傳 403。
+- `JwtAuthenticationFilter` 由逐支維護 `protectedApis` 改為「受保護路徑前綴＋明確公開端點白名單」；`/api/vendor/**`、`/api/organizer/**`、`/api/admin/**`、`/api/auth/**`、`/api/account/**`、`/api/images**` 與 `/api/stalls/**` 預設需要 JWT。
+- 登入、註冊、信箱驗證、密碼重設、公開市集查詢與藍新回呼維持公開；所有 CORS `OPTIONS` 預檢請求亦直接放行。新增前綴保護、公開白名單、管理員角色及 CORS 測試。
 
 最後更新：2026-07-15
 
