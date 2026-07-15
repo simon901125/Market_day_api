@@ -58,6 +58,9 @@ public class NewebPayService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private NotificationService notificationService;
+
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @Transactional
@@ -251,7 +254,14 @@ public class NewebPayService {
                 localStatus.getPaymentNo(),
                 stringValue(result.get("TradeNo")),
                 parsePayTime(stringValue(result.get("PayTime"))));
-        paymentRepository.updateApplicationPaymentStatus(applicationId, "PAID");
+        int updatedApplications = paymentRepository.updateApplicationPaymentStatus(applicationId, "PAID");
+        if (updatedApplications > 0) {
+            notificationService.notifyPaymentStatusChanged(
+                    toLong(payment.get("userId")),
+                    applicationId,
+                    stringValue(payment.get("eventTitle")),
+                    true);
+        }
     }
 
     private boolean isSuccessfulTradeQuery(Map<String, Object> rawResponse) {
@@ -289,10 +299,24 @@ public class NewebPayService {
         if ("SUCCESS".equalsIgnoreCase(status)) {
             assertCallbackAmount(payment, result);
             paymentRepository.markPaymentPaid(paymentNo, providerTradeNo, parsePayTime(result.get("PayTime")));
-            paymentRepository.updateApplicationPaymentStatus(applicationId, "PAID");
+            int updatedApplications = paymentRepository.updateApplicationPaymentStatus(applicationId, "PAID");
+            if (updatedApplications > 0) {
+                notificationService.notifyPaymentStatusChanged(
+                        toLong(payment.get("userId")),
+                        applicationId,
+                        stringValue(payment.get("eventTitle")),
+                        true);
+            }
         } else if (!"PAID".equals(currentPaymentStatus)) {
             paymentRepository.markPaymentFailed(paymentNo, providerTradeNo);
-            paymentRepository.updateApplicationPaymentStatus(applicationId, "FAILED");
+            int updatedApplications = paymentRepository.updateApplicationPaymentStatus(applicationId, "FAILED");
+            if (updatedApplications > 0) {
+                notificationService.notifyPaymentStatusChanged(
+                        toLong(payment.get("userId")),
+                        applicationId,
+                        stringValue(payment.get("eventTitle")),
+                        false);
+            }
         }
 
         return "1|OK";
