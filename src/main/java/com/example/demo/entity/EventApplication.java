@@ -67,6 +67,9 @@ public class EventApplication {
     private User user;
     
     /**報名的攤主資料id */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vendor_profile_id", nullable = false, foreignKey = @ForeignKey(name = "FK_event_applications_vendor_profiles"))
     private VendorProfile vendorProfile;
     

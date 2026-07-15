@@ -1,5 +1,7 @@
 package com.example.demo.entity;
 
+import java.util.List;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -9,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
@@ -66,5 +69,11 @@ public class VendorProfile {
     /**品牌詳細介紹 */
     @Column(name = "brand_description", columnDefinition = "nvarchar(max)")
     private String brandDescription;
+
+    /**此攤主的攤位報名清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "vendorProfile")
+    private List<EventApplication> eventApplications;
 
 }
