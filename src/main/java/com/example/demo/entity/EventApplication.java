@@ -66,10 +66,9 @@ public class EventApplication {
     @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "FK_event_applications_users"))
     private User user;
     
-    //TODO:建立攤主資料Entity後要連上去
     /**報名的攤主資料id */
-    @Column(name = "vendor_profile_id", nullable = false)
-    private Long vendorProfileId;
+    @JoinColumn(name = "vendor_profile_id", nullable = false, foreignKey = @ForeignKey(name = "FK_event_applications_vendor_profiles"))
+    private VendorProfile vendorProfile;
     
     /**報名單編號 */
     @Column(name = "application_no", length = 30, nullable = false)
