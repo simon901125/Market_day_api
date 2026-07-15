@@ -149,19 +149,27 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         for (Tuple row : rows) {
             LocalDateTime startAt = row.get("startAt", LocalDateTime.class);
             LocalDateTime endAt = row.get("endAt", LocalDateTime.class);
-            String eventDate = String.format("%s - %s", startAt.format(dateFormatter), endAt.format(dateFormatter));
+            String eventDate = String.format(
+                    "%s - %s",
+                    startAt == null ? "" : startAt.format(dateFormatter),
+                    endAt == null ? "" : endAt.format(dateFormatter));
             LocalDateTime submittedAt = row.get("submittedAt", LocalDateTime.class);
             String submittedAtStr = submittedAt == null ? "活動尚未送審" : submittedAt.format(dateTimeFormatter);
 
-            EventStatus status = checkEventStatus(
-                    row.get("workflowStatus", WorkflowStatus.class),
-                    row.get("registrationStartAt", LocalDateTime.class),
-                    row.get("registrationEndAt", LocalDateTime.class),
-                    row.get("brandPublicAt", LocalDateTime.class),
-                    startAt,
-                    endAt,
-                    row.get("maxBooths", Integer.class),
-                    row.get("registeredBoothCount", Long.class).intValue());
+            WorkflowStatus workflowStatus = row.get("workflowStatus", WorkflowStatus.class);
+            Integer maxBooths = row.get("maxBooths", Integer.class);
+            Long registeredBoothCount = row.get("registeredBoothCount", Long.class);
+            EventStatus status = workflowStatus == null
+                    ? null
+                    : checkEventStatus(
+                            workflowStatus,
+                            row.get("registrationStartAt", LocalDateTime.class),
+                            row.get("registrationEndAt", LocalDateTime.class),
+                            row.get("brandPublicAt", LocalDateTime.class),
+                            startAt,
+                            endAt,
+                            maxBooths == null ? 0 : maxBooths,
+                            registeredBoothCount == null ? 0 : registeredBoothCount.intValue());
 
             AdminEventListDto dtoItem = new AdminEventListDto(
                     row.get("id", Long.class),
