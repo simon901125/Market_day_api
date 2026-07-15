@@ -130,9 +130,12 @@ public class PaymentRepository {
                     p.status AS paymentRecordStatus,
                     p.paid_at AS paidAt,
                     a.application_no AS applicationNo,
-                    a.payment_status AS applicationPaymentStatus
+                    a.user_id AS userId,
+                    a.payment_status AS applicationPaymentStatus,
+                    me.title AS eventTitle
                 FROM dbo.payments p
                 INNER JOIN dbo.event_applications a ON a.id = p.application_id
+                INNER JOIN dbo.market_events me ON me.id = a.event_id
                 WHERE p.payment_no = :paymentNo
                 """;
 

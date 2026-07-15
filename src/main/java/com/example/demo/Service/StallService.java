@@ -99,6 +99,9 @@ public class StallService {
     @Autowired
     private TaiwanAddressService taiwanAddressService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     @Transactional
     public ApiResponse<StallSelectionResponse> selectEventStall(
             String authorizationHeader,
@@ -241,6 +244,11 @@ public class StallService {
                         toLocalDate(selectedDate.get("applyDate")),
                         normalizeText(selectedDate.get("stallNo"))))
                 .toList();
+
+        notificationService.notifyStallSelectionCompleted(
+                vendorUserId,
+                applicationId,
+                stringValue(application.get("eventTitle")));
 
         return ApiResponse.success(
                 "Stall selection successful",
@@ -1450,6 +1458,11 @@ public class StallService {
                             appliance.getWattage());
                 }
             }
+
+            notificationService.notifyApplicationSubmitted(
+                    vendorUserId,
+                    applicationId,
+                    stringValue(event.get("eventTitle")));
 
             Map<String, Object> response = orderedMap(
                     "applicationId", applicationId,

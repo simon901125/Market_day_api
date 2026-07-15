@@ -135,6 +135,7 @@ public class StallRepository {
                     a.id AS applicationId,
                     a.application_no AS applicationNo,
                     a.event_id AS eventId,
+                    e.title AS eventTitle,
                     a.user_id AS userId,
                     a.vendor_profile_id AS vendorProfileId,
                     a.review_status AS reviewStatus,
@@ -143,6 +144,7 @@ public class StallRepository {
                     date_counts.applicationDateCount,
                     date_counts.selectedStallCount
                 FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
                 OUTER APPLY (
                     SELECT
                         COUNT(*) AS applicationDateCount,

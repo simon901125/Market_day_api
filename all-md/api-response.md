@@ -1,6 +1,6 @@
 # API Response 與 DTO 架構
 
-更新日期：2026-06-29
+更新日期：2026-07-15
 
 目前 `demo` 的 Controller 直接回傳 `ApiResponse<T>`，其中 `T` 會是對應的 Response DTO。
 Request body 使用 `dto/request` 內的 Request DTO，Response data 使用 `dto/response` 內的 Response DTO。
@@ -786,3 +786,69 @@ Service 或 Filter 即使傳入英文 key，也會透過 `ApiResponse.fail(...)`
 | `Service end time must be after start time`                                                    | 服務結束時間必須晚於開始時間       |
 
 縣市與地區驗證集中在 `TaiwanAddressService`，內部以程式碼保存台灣縣市與各縣市行政區清單，並提供 `isValidCity(...)`、`isValidDistrict(...)`。輸入會將 `臺` 正規化為 `台` 後再比對。
+
+## 2026-07-15 更新：攤主通知中心
+
+```http
+GET /api/vendor/notices?filter=全部&page=1&pageSize=10
+Authorization: Bearer <JWT_TOKEN>
+```
+
+`filter` 僅接受中文值：
+
+| 篩選值 | 查詢內容 |
+| ------ | -------- |
+| `全部` | 全部已讀與未讀通知 |
+| `未讀` | 所有分類的未讀通知 |
+| `報名審核` | `APPLICATION_REVIEW` 分類 |
+| `付款相關` | `PAYMENT` 分類 |
+| `攤位分配` | `STALL_ASSIGNMENT` 分類 |
+| `活動異動` | `EVENT_CHANGE` 分類 |
+
+成功 Response：
+
+```json
+{
+  "statusCode": 200,
+  "message": "Vendor notifications retrieved successfully",
+  "messageDetails": null,
+  "data": {
+    "unreadCount": 3,
+    "notifications": {
+      "items": [
+        {
+          "id": 15,
+          "category": "APPLICATION_REVIEW",
+          "type": "APPLICATION_APPROVED",
+          "targetType": "EVENT_APPLICATION",
+          "targetId": 8,
+          "title": "待付款",
+          "content": "夏日綠意市集審核通過，請完成付款",
+          "isRead": false,
+          "readAt": null,
+          "createdAt": "2026-07-15T13:10:00"
+        }
+      ],
+      "page": 1,
+      "pageSize": 10,
+      "totalItems": 12,
+      "totalPages": 2,
+      "hasPrevious": false,
+      "hasNext": true
+    }
+  }
+}
+```
+
+| 欄位 | 說明 |
+| ---- | ---- |
+| `unreadCount` | 目前攤主在通知保留期內的全部未讀總數，不受目前分類篩選影響 |
+| `category` | 通知中心分類，用於前端分類顯示 |
+| `type` | 具體通知事件，例如 `APPLICATION_APPROVED`、`PAYMENT_PAID` |
+| `targetType` | 關聯資料類型，例如 `EVENT_APPLICATION`、`MARKET_EVENT` |
+| `targetId` | 關聯的報名、活動或其他資料 ID；系統通知可為 `null` |
+| `isRead` / `readAt` | 閱讀狀態與閱讀時間 |
+| `createdAt` | 通知建立時間 |
+| `notifications` | 標準 `PageResponse`，包含頁碼、總筆數、總頁數與上／下頁狀態 |
+
+查詢預設限制為最近一年，可透過 `notification.retention-years` 調整且不得小於 1。排序固定為未讀優先，相同閱讀狀態再依 `createdAt` 由新到舊、`id` 由大到小。

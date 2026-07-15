@@ -94,6 +94,9 @@ public class OrganizerService {
     @Autowired
     private TaiwanAddressService taiwanAddressService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     public ApiResponse<OrganizerDashboardInitResponse> initOrganizerDashboard(String authorizationHeader) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
@@ -616,6 +619,12 @@ public class OrganizerService {
                     reviewNote,
                     reviewNoteDetail);
         }
+
+        notificationService.notifyApplicationReviewed(
+                ((Number) application.get("vendorUserId")).longValue(),
+                applicationId,
+                statusText(application.get("eventTitle")),
+                "APPROVED".equals(reviewStatus));
 
         return ApiResponse.success(
                 "Organizer application reviewed successfully",

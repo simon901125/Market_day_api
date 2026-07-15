@@ -1,6 +1,6 @@
 # Swagger / OpenAPI 文件
 
-更新日期：2026-07-07
+更新日期：2026-07-15
 
 本文件說明目前 `demo` 專案的 Swagger / OpenAPI 設定、DTO 標註方式、JWT 使用方式，以及目前 API 清單。
 
@@ -226,7 +226,30 @@ Bearer <JWT_TOKEN>
 | POST | `/api/stalls/select` | `StallSelectionRequest` | 是 | 依 `applicationNo` 與 `selections[]` 一次送出該申請單所有報名日期的選位。 |
 | GET | `/api/eventsMap/{eventId}/stallsStatus` | - | 否 | 公開查詢活動指定日期攤位狀態；未帶日期時預設活動第一天。 |
 | GET | `/api/vendor/account` | - | 是 | 取得目前登入攤主資料。 |
+| GET | `/api/vendor/notices` | Query params | 是 | 查詢目前攤主的通知，支援中文分類篩選與分頁。 |
 | GET | `/api/vendor/stall-map/{applicationNo}` | - | 是 | 查詢待選位或已成功選位申請單的攤位圖；已選位時回傳 `selectedStall`。 |
+
+#### 攤主通知中心 API
+
+`GET /api/vendor/notices`
+
+- Header：`Authorization: Bearer <JWT_TOKEN>`，且登入者必須為已建立攤主資料的 `VENDOR`。
+- 只查詢目前登入攤主的通知，包含已讀與未讀。
+- 預設查詢最近一年；可用 `notification.retention-years` 調整，設定值最小為 1。
+- 排序為 `is_read ASC, created_at DESC, id DESC`，也就是未讀優先，同閱讀狀態下新通知優先。
+
+| Query 參數 | 必填 | 預設值 | 可接受值／說明 |
+| ---------- | ---- | ------ | --------------- |
+| `filter` | 否 | `全部` | `全部`、`未讀`、`報名審核`、`付款相關`、`攤位分配`、`活動異動`；其他值會回傳篩選錯誤 |
+| `page` | 否 | `1` | 頁碼從 1 開始 |
+| `pageSize` | 否 | `10` | 每頁筆數，上限 10 |
+
+Swagger 範例：
+
+```http
+GET /api/vendor/notices?filter=付款相關&page=1&pageSize=10
+Authorization: Bearer <JWT_TOKEN>
+```
 
 #### 攤位選位 API
 
