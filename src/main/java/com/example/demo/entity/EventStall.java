@@ -1,5 +1,7 @@
 package com.example.demo.entity;
 
+import java.util.List;
+
 import com.example.demo.enums.status.StallStatus;
 
 import jakarta.persistence.Column;
@@ -13,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
@@ -25,6 +28,7 @@ import lombok.ToString;
  * 包含攤位編號、攤位長度、攤位寬度、攤位高度、攤位狀態{@link StallStatus}<br>
  * <b>FK</b>: 市集活動{@link MarketEvent}、活動攤位分區{@link EventStallZone}
  *
+ * @see ApplicationDate#selectedStall
  */
 @Entity
 @Data
@@ -58,5 +62,13 @@ public class EventStall {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private StallStatus status = StallStatus.AVAILABLE;
+
+    // ----------其他Entity的FK----------
+
+    /**已選定此攤位的參與日期清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "selectedStall")
+    private List<ApplicationDate> applicationDates;
 
 }

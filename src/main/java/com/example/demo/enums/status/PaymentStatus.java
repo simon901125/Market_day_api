@@ -1,6 +1,7 @@
 package com.example.demo.enums.status;
 
 import com.example.demo.entity.EventApplication;
+import com.example.demo.entity.Payment;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
@@ -9,8 +10,9 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 攤主報名活動的付款狀態，包含待付款、付款成功、付款失敗、已逾期
- * 
+ *
  * @see EventApplication#paymentStatus
+ * @see Payment#status
  */
 @Getter
 @RequiredArgsConstructor

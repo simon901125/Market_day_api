@@ -126,6 +126,24 @@ public class AdminController {
         return ApiResponse.success("ok");
     }
 
+    @GetMapping("/users/{id}/venderReg")
+    public ApiResponse<?> getVenderRegLogs(@PathVariable String id) {
+        // TODO:取得攤主詳細: 活動報名紀錄
+        return ApiResponse.success("ok");
+    }
+
+    @GetMapping("/users/{id}/OrgEvent")
+    public ApiResponse<?> getOrgEventLogs(@PathVariable String id) {
+        // TODO:取得主辦方詳細 :活動管理紀錄
+        return ApiResponse.success("ok");
+    }
+
+    @GetMapping("/users/{id}/loginLog")
+    public ApiResponse<?> getUserLoginLogs(@PathVariable String id) {
+        // TODO:取得使用者詳細 :使用者登入紀錄
+        return ApiResponse.success("ok");
+    }
+
     @PostMapping("/users/{id}/disable")
     public ApiResponse<?> setUserAccountDisable(@PathVariable String id) {
         // TODO:使用者帳號停用
