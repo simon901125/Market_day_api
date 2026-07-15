@@ -149,6 +149,7 @@ public class ApiResponse<T> {
             case "NewebPay payment created successfully" -> "\u85cd\u65b0\u91d1\u6d41\u4ed8\u6b3e\u8cc7\u6599\u5efa\u7acb\u6210\u529f";
             case "Payment status retrieved successfully" -> "\u4ed8\u6b3e\u72c0\u614b\u53d6\u5f97\u6210\u529f";
             case "NewebPay trade queried successfully" -> "\u85cd\u65b0\u4ea4\u6613\u67e5\u8a62\u6210\u529f";
+            case "Image saved successfully" -> "\u5716\u7247\u5df2\u5132\u5b58\u4e26\u7d81\u5b9a\u8cc7\u6599";
             default -> isLikelyEnglish(message) ? "\u64cd\u4f5c\u6210\u529f" : message;
         };
     }
@@ -218,6 +219,11 @@ public class ApiResponse<T> {
             case "Service end time format is invalid" -> "\u670d\u52d9\u7d50\u675f\u6642\u9593\u683c\u5f0f\u4e0d\u6b63\u78ba";
             case "Service end time must be after start time" -> "\u670d\u52d9\u7d50\u675f\u6642\u9593\u5fc5\u9808\u665a\u65bc\u958b\u59cb\u6642\u9593";
             case "Vendor profile not found" -> "\u627e\u4e0d\u5230\u6524\u4e3b\u8cc7\u6599";
+            case "Vendor products are required" -> "\u8acb\u63d0\u4f9b\u76ee\u524d\u5b8c\u6574\u7684\u5546\u54c1\u6e05\u55ae";
+            case "Vendor products must not exceed 3 items" -> "\u5546\u54c1\u6700\u591a\u53ea\u80fd\u6709 3 \u7b46";
+            case "Vendor product snapshot save failed" -> "\u5546\u54c1\u8cc7\u6599\u5132\u5b58\u5931\u6557";
+            case "Product id is invalid" -> "\u5546\u54c1 ID \u4e0d\u6b63\u78ba";
+            case "Duplicate product id" -> "\u5546\u54c1\u6e05\u55ae\u4e2d\u6709\u91cd\u8907\u7684\u5546\u54c1 ID";
             case "This account is not an organizer" -> "\u6b64\u5e33\u865f\u4e0d\u662f\u4e3b\u8fa6\u65b9\u5e33\u865f";
             case "This account is not a vendor" -> "\u6b64\u5e33\u865f\u4e0d\u662f\u6524\u4e3b\u5e33\u865f";
             case "Application id is required" -> "\u8acb\u63d0\u4f9b\u7533\u8acb ID";
@@ -274,6 +280,21 @@ public class ApiResponse<T> {
             case "Password is required" -> "\u8acb\u8f38\u5165\u5bc6\u78bc";
             case "Password must be at least 8 characters and contain letters and numbers" -> "\u5bc6\u78bc\u81f3\u5c11\u9700 8 \u500b\u5b57\uff0c\u4e14\u9700\u5305\u542b\u82f1\u6587\u8207\u6578\u5b57";
             case "Password reset failed" -> "\u5bc6\u78bc\u91cd\u8a2d\u5931\u6557";
+            case "Image purpose is required" -> "\u8acb\u63d0\u4f9b\u5716\u7247\u7528\u9014";
+            case "Image purpose is invalid" -> "\u5716\u7247\u7528\u9014\u4e0d\u6b63\u78ba";
+            case "Image purpose is not allowed for this account" -> "\u76ee\u524d\u5e33\u865f\u4e0d\u80fd\u4e0a\u50b3\u6b64\u7528\u9014\u7684\u5716\u7247";
+            case "Image file is required" -> "\u8acb\u9078\u64c7\u8981\u4e0a\u50b3\u7684\u5716\u7247";
+            case "File size must not exceed 5 MB" -> "\u6a94\u6848\u5927\u5c0f\u4e0d\u5f97\u8d85\u904e 5 MB";
+            case "Only JPG or PNG files are allowed" -> "\u50c5\u652f\u63f4 JPG \u6216 PNG \u6a94\u6848";
+            case "Only JPG, PNG, or PDF files are allowed" -> "\u50c5\u652f\u63f4 JPG\u3001PNG \u6216 PDF \u6a94\u6848";
+            case "Invalid upload path" -> "\u4e0a\u50b3\u8def\u5f91\u4e0d\u6b63\u78ba";
+            case "File upload failed" -> "\u6a94\u6848\u4e0a\u50b3\u5931\u6557";
+            case "Product id is required for product image" -> "\u5546\u54c1\u5716\u7247\u5fc5\u9808\u63d0\u4f9b productId";
+            case "Event id is required for event image" -> "\u6d3b\u52d5\u5716\u7247\u5fc5\u9808\u63d0\u4f9b eventId";
+            case "Product id is not allowed for this image purpose" -> "\u6b64\u5716\u7247\u7528\u9014\u4e0d\u5141\u8a31\u63d0\u4f9b productId";
+            case "Event id is not allowed for this image purpose" -> "\u6b64\u5716\u7247\u7528\u9014\u4e0d\u5141\u8a31\u63d0\u4f9b eventId";
+            case "Image target not found or does not belong to this account" -> "\u627e\u4e0d\u5230\u8981\u7d81\u5b9a\u7684\u8cc7\u6599\uff0c\u6216\u8a72\u8cc7\u6599\u4e0d\u5c6c\u65bc\u76ee\u524d\u5e33\u865f";
+            case "Image save failed" -> "\u5716\u7247\u5132\u5b58\u5931\u6557";
             case "Verification code is required" -> "\u8acb\u8f38\u5165\u9a57\u8b49\u78bc";
             case "Verification code must be 6 digits" -> "\u9a57\u8b49\u78bc\u5fc5\u9808\u70ba 6 \u4f4d\u6578\u5b57";
             case "6-digit verification code is required" -> "\u8acb\u8f38\u5165 6 \u4f4d\u6578\u9a57\u8b49\u78bc";
