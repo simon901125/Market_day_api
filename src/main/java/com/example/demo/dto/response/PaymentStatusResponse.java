@@ -8,19 +8,30 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Payment status response")
 public class PaymentStatusResponse {
 
+    private Long applicationId;
     private String applicationNo;
     private String reviewStatus;
     private String applicationPaymentStatus;
     private Boolean cancelled;
     private BigDecimal applicationAmount;
     private LocalDateTime paymentDueAt;
+    private Long paymentId;
     private String paymentNo;
+    private String merchantOrderNo;
     private BigDecimal paymentAmount;
     private String provider;
     private String providerTradeNo;
     private String paymentRecordStatus;
     private LocalDateTime paidAt;
     private LocalDateTime paymentCreatedAt;
+
+    public Long getApplicationId() {
+        return applicationId;
+    }
+
+    public void setApplicationId(Long applicationId) {
+        this.applicationId = applicationId;
+    }
 
     public String getApplicationNo() {
         return applicationNo;
@@ -70,12 +81,28 @@ public class PaymentStatusResponse {
         this.paymentDueAt = paymentDueAt;
     }
 
+    public Long getPaymentId() {
+        return paymentId;
+    }
+
+    public void setPaymentId(Long paymentId) {
+        this.paymentId = paymentId;
+    }
+
     public String getPaymentNo() {
         return paymentNo;
     }
 
     public void setPaymentNo(String paymentNo) {
         this.paymentNo = paymentNo;
+    }
+
+    public String getMerchantOrderNo() {
+        return merchantOrderNo;
+    }
+
+    public void setMerchantOrderNo(String merchantOrderNo) {
+        this.merchantOrderNo = merchantOrderNo;
     }
 
     public BigDecimal getPaymentAmount() {
