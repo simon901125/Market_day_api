@@ -43,4 +43,18 @@ class RepositoryResultMapperTest {
         assertThat(RepositoryResultMapper.normalizeOptional(Optional.of(row))).isPresent();
         assertThat(RepositoryResultMapper.normalizeOptional(Optional.empty())).isEmpty();
     }
+
+    @Test
+    void normalizedMapKeepsJdbcColumnLookupCaseInsensitive() {
+        Map<String, Object> row = Map.of(
+                "USERID", 7L,
+                "VENDORPROFILEID", 20L,
+                "CONTACTNAME", "Vendor");
+
+        Map<String, Object> normalized = RepositoryResultMapper.normalizeMap(row);
+
+        assertThat(normalized.get("userId")).isEqualTo(7L);
+        assertThat(normalized.get("vendorProfileId")).isEqualTo(20L);
+        assertThat(normalized.get("contactName")).isEqualTo("Vendor");
+    }
 }

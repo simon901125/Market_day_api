@@ -251,6 +251,14 @@ public class ApiResponse<T> {
             case "Service end time must be after start time" ->
                 "\u670d\u52d9\u7d50\u675f\u6642\u9593\u5fc5\u9808\u665a\u65bc\u958b\u59cb\u6642\u9593";
             case "Vendor profile not found" -> "\u627e\u4e0d\u5230\u6524\u4e3b\u8cc7\u6599";
+            case "Avatar image URL must be uploaded through /api/images" ->
+                "\u8acb\u5148\u900f\u904e /api/images \u5716\u7247\u4e0a\u50b3 API \u4e0a\u50b3\u54c1\u724c\u982d\u50cf";
+            case "Cover image URL must be uploaded through /api/images" ->
+                "\u8acb\u5148\u900f\u904e /api/images \u5716\u7247\u4e0a\u50b3 API \u4e0a\u50b3\u54c1\u724c\u5c01\u9762";
+            case "Avatar image URL must not exceed 500 characters" ->
+                "\u54c1\u724c\u982d\u50cf URL \u4e0d\u5f97\u8d85\u904e 500 \u5b57";
+            case "Cover image URL must not exceed 500 characters" ->
+                "\u54c1\u724c\u5c01\u9762 URL \u4e0d\u5f97\u8d85\u904e 500 \u5b57";
             case "Vendor products are required" ->
                 "\u8acb\u63d0\u4f9b\u76ee\u524d\u5b8c\u6574\u7684\u5546\u54c1\u6e05\u55ae";
             case "Vendor products must not exceed 3 items" -> "\u5546\u54c1\u6700\u591a\u53ea\u80fd\u6709 3 \u7b46";

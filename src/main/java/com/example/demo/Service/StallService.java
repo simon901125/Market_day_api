@@ -942,6 +942,28 @@ public class StallService {
         if (normalizeText(body.getBrandType()).isEmpty()) {
             return "Brand type is required";
         }
+        String avatarImageError = validateImageUrl(body.getAvatarImageUrl(), "Avatar image URL");
+        if (avatarImageError != null) {
+            return avatarImageError;
+        }
+        String coverImageError = validateImageUrl(body.getCoverImageUrl(), "Cover image URL");
+        if (coverImageError != null) {
+            return coverImageError;
+        }
+        return null;
+    }
+
+    private String validateImageUrl(String value, String fieldName) {
+        String imageUrl = normalizeText(value);
+        if (imageUrl.isEmpty()) {
+            return null;
+        }
+        if (imageUrl.startsWith("data:")) {
+            return fieldName + " must be uploaded through /api/images";
+        }
+        if (imageUrl.length() > 500) {
+            return fieldName + " must not exceed 500 characters";
+        }
         return null;
     }
 

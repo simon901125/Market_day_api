@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 import java.util.List;
 import java.util.Map;
@@ -75,6 +76,20 @@ class StallServiceVendorImageSaveTest {
         assertThat(profileCaptor.getValue())
                 .containsEntry("avatarImageUrl", "http://localhost:8081/images/vendor-avatar/new.png")
                 .containsEntry("coverImageUrl", "http://localhost:8081/images/vendor-cover/new.png");
+    }
+
+    @Test
+    void profileSaveRejectsBase64ImagePayloads() {
+        VendorStallSaveRequest request = validRequest();
+        request.setAvatarImageUrl("data:image/png;base64,iVBORw0KGgoAAA");
+
+        ApiResponse<MapBackedResponse> response = stallService.saveVendorStallProfile(
+                AUTHORIZATION,
+                request);
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        assertThat(response.getMessage()).contains("/api/images");
+        verify(stallRepository, never()).updateVendorProfile(anyLong(), anyLong(), anyMap());
     }
 
     @Test
