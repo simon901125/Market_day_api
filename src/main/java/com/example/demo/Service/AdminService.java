@@ -50,8 +50,10 @@ import com.example.demo.dto.response.admin.AdminUserLoginDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
 import com.example.demo.dto.response.admin.AdminVenderRegDto;
 import com.example.demo.dto.response.admin.BoothZone;
+import com.example.demo.dto.response.admin.EventStatusChangeDto;
 import com.example.demo.dto.response.admin.RegBooth;
 import com.example.demo.dto.response.admin.StatusLog;
+import com.example.demo.dto.response.admin.UserStatusChangeDto;
 import com.example.demo.entity.AdminOperationLog;
 import com.example.demo.entity.EventStallZone;
 import com.example.demo.entity.MarketEvent;
@@ -70,7 +72,7 @@ import jakarta.annotation.Nonnull;
 import jakarta.persistence.Tuple;
 
 @Service
-public class AdminService implements AdminServiceInterface, EventStatusServiceInterface<Object> {
+public class AdminService extends AdminServiceBase implements EventStatusServiceInterface<Object> {
     @Autowired
     EventRepo eventRepo;
 
@@ -103,11 +105,11 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     private final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     /** 主辦方登入API路徑 */
-    static final List<String> ORGANIZER_LOGIN_PATHS = List.of(
+    private static final List<String> ORGANIZER_LOGIN_PATHS = List.of(
             "/api/organizer/google-login",
             "/api/organizer/local-login");
     /** 攤主登入API路徑 */
-    static final List<String> VENDOR_LOGIN_PATHS = List.of(
+    private static final List<String> VENDOR_LOGIN_PATHS = List.of(
             "/api/vender/google-login",
             "/api/vender/local-login");
 
@@ -602,6 +604,42 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     entity.getEventApplications() == null ? 0 : entity.getEventApplications().size());
         }
         throw new IllegalArgumentException("data須符合型別類型MarketEvent");
+    }
+  
+    @Override
+    public UserStatusChangeDto setUserAccountDisable(Long userId) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setUserAccountDisable'");
+    }
+
+    @Override
+    public UserStatusChangeDto setUserAccountRestore(Long userId) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setUserAccountRestore'");
+    }
+
+    @Override
+    public EventStatusChangeDto setEventApprove(Long userId) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setEventApprove'");
+    }
+
+    @Override
+    public EventStatusChangeDto setEventRevision(Long userId) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setEventRevision'");
+    }
+
+    @Override
+    public EventStatusChangeDto setEventMapComplete(Long userId) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setEventMapComplete'");
+    }
+
+    @Override
+    public EventStatusChangeDto setEventUnpublish(Long userId) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setEventUnpublish'");
     }
 
     //處理活動狀態變動紀錄:說明的文字映射
