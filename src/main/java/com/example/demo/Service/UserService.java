@@ -482,7 +482,10 @@ public class UserService {
 
         String loginToken = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
         if (loginToken != null && !loginToken.isBlank()) {
-            return resetPasswordByCurrentLogin(loginToken, body.getPassword());
+            return resetPasswordByCurrentLogin(
+                    loginToken,
+                    body.getCurrentPassword(),
+                    body.getPassword());
         }
 
         if (body.getResetToken() == null || body.getResetToken().isBlank()) {
@@ -520,7 +523,10 @@ public class UserService {
         return ApiResponse.success("Password reset successfully");
     }
 
-    private ApiResponse<Void> resetPasswordByCurrentLogin(String token, String password) {
+    private ApiResponse<Void> resetPasswordByCurrentLogin(
+            String token,
+            String currentPassword,
+            String password) {
         if (!jwtService.isTokenValid(token)) {
             return ApiResponse.fail("Invalid or expired token");
         }
@@ -528,8 +534,21 @@ public class UserService {
             return ApiResponse.fail("Session expired");
         }
 
+        if (currentPassword == null || currentPassword.isBlank()) {
+            return ApiResponse.fail("Current password is required");
+        }
+
+        String email = jwtService.getEmail(token);
+        Optional<Map<String, Object>> userData = userRepository.findLocalUserByEmail(email);
+        if (userData.isEmpty()
+                || !authService.matchesPassword(
+                        currentPassword,
+                        (String) userData.get().get("password_hash"))) {
+            return ApiResponse.fail("Current password is incorrect");
+        }
+
         int updatedRows = userRepository.updateLocalPasswordByEmail(
-                jwtService.getEmail(token),
+                email,
                 authService.hashPassword(password));
         if (updatedRows == 0) {
             return ApiResponse.fail("Password reset failed");
