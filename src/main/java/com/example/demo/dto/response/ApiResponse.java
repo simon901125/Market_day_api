@@ -140,6 +140,7 @@ public class ApiResponse<T> {
             case "Stall selection successful" -> "\u6524\u4f4d\u9078\u64c7\u6210\u529f";
             case "Event stalls status retrieved successfully" -> "\u6d3b\u52d5\u6524\u4f4d\u72c0\u614b\u53d6\u5f97\u6210\u529f";
             case "Vendor account retrieved successfully" -> "\u6524\u4e3b\u5e33\u865f\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
+            case "Vendor dashboard initialized successfully" -> "\u6524\u4e3b\u5f8c\u53f0\u521d\u59cb\u5316\u6210\u529f";
             case "Vendor stall map retrieved successfully" -> "\u6524\u4e3b\u9078\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
             case "Organizer stall map retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
             case "Organizer stall detail retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u8cc7\u6599\u53d6\u5f97\u6210\u529f";

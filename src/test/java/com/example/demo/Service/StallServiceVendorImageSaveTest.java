@@ -95,6 +95,30 @@ class StallServiceVendorImageSaveTest {
                 .satisfies(savedProduct -> assertThat(savedProduct.get("id")).isEqualTo(88L));
     }
 
+    @Test
+    void firstProfileSaveCreatesVendorProfile() {
+        when(stallRepository.findVendorAccountByEmail("vendor1@example.test"))
+                .thenReturn(Optional.empty());
+        when(stallRepository.findVendorDashboardStatusByEmail("vendor1@example.test"))
+                .thenReturn(Optional.of(Map.ofEntries(
+                        Map.entry("userId", 10L),
+                        Map.entry("userProfileId", 11L),
+                        Map.entry("email", "vendor1@example.test"),
+                        Map.entry("role", "VENDOR"),
+                        Map.entry("hasVendorProfile", false))));
+        when(stallRepository.createVendorProfile(eq(10L), eq(11L), anyMap()))
+                .thenReturn(21L);
+        when(stallRepository.replaceVendorProducts(21L, List.of())).thenReturn(0);
+
+        ApiResponse<MapBackedResponse> response = stallService.saveVendorStallProfile(
+                AUTHORIZATION,
+                validRequest());
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        verify(stallRepository).createVendorProfile(eq(10L), eq(11L), anyMap());
+        verify(stallRepository).replaceVendorProducts(21L, List.of());
+    }
+
     private VendorStallSaveRequest validRequest() {
         VendorStallSaveRequest request = new VendorStallSaveRequest();
         request.setBrandName("測試攤位");
