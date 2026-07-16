@@ -223,7 +223,7 @@ public class AdminController {
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         } catch (Exception e) {
-            return ApiResponse.fail("活動地圖建置完成失敗");
+            return ApiResponse.fail("通知主辦方攤位地圖建置完成失敗");
         }
     }
 
@@ -231,7 +231,9 @@ public class AdminController {
     @PostMapping("/events/{id}/unpublish-confirm")
     public ApiResponse<?> setEventUnpublish(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable String id) {
+            @PathVariable String id, 
+            @RequestBody String note
+        ) {
         // TODO:確認活動下架
         return ApiResponse.success("ok");
     }
