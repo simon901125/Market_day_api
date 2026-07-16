@@ -281,6 +281,8 @@ public class ApiResponse<T> {
             case "Login status update failed" -> "\u767b\u5165\u72c0\u614b\u66f4\u65b0\u5931\u6557";
             case "Reset token is required" -> "\u8acb\u63d0\u4f9b\u91cd\u8a2d\u5bc6\u78bc token";
             case "Password is required" -> "\u8acb\u8f38\u5165\u5bc6\u78bc";
+            case "Current password is required" -> "\u8acb\u8f38\u5165\u76ee\u524d\u5bc6\u78bc";
+            case "Current password is incorrect" -> "\u76ee\u524d\u5bc6\u78bc\u932f\u8aa4";
             case "Password must be at least 8 characters and contain letters and numbers" -> "\u5bc6\u78bc\u81f3\u5c11\u9700 8 \u500b\u5b57\uff0c\u4e14\u9700\u5305\u542b\u82f1\u6587\u8207\u6578\u5b57";
             case "Password reset failed" -> "\u5bc6\u78bc\u91cd\u8a2d\u5931\u6557";
             case "Image purpose is required" -> "\u8acb\u63d0\u4f9b\u5716\u7247\u7528\u9014";

@@ -357,8 +357,12 @@ class UserServiceTest {
     @Test
     void resetsPasswordForCurrentValidLoginSession() {
         ResetPasswordRequest request = resetPasswordRequest(null);
+        request.setCurrentPassword("currentPassword1");
         mockValidAuthorization();
         when(updateActiveTimeService.isCurrentLoginSession(TOKEN)).thenReturn(true);
+        when(userRepository.findLocalUserByEmail(EMAIL))
+                .thenReturn(Optional.of(Map.of("password_hash", "current-hash")));
+        when(authService.matchesPassword("currentPassword1", "current-hash")).thenReturn(true);
         when(authService.hashPassword("newPassword1")).thenReturn("new-hash");
         when(userRepository.updateLocalPasswordByEmail(EMAIL, "new-hash")).thenReturn(1);
 
@@ -366,6 +370,35 @@ class UserServiceTest {
 
         assertThat(response.isSuccessStatus()).isTrue();
         verify(userRepository).updateLocalPasswordByEmail(EMAIL, "new-hash");
+    }
+
+    @Test
+    void rejectsPasswordChangeWhenCurrentPasswordIsMissing() {
+        ResetPasswordRequest request = resetPasswordRequest(null);
+        when(jwtService.extractTokenFromAuthorizationHeader(AUTHORIZATION)).thenReturn(TOKEN);
+        when(jwtService.isTokenValid(TOKEN)).thenReturn(true);
+        when(updateActiveTimeService.isCurrentLoginSession(TOKEN)).thenReturn(true);
+
+        ApiResponse<Void> response = userService.resetPassword(AUTHORIZATION, request);
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        verify(userRepository, never()).updateLocalPasswordByEmail(anyString(), anyString());
+    }
+
+    @Test
+    void rejectsPasswordChangeWhenCurrentPasswordIsIncorrect() {
+        ResetPasswordRequest request = resetPasswordRequest(null);
+        request.setCurrentPassword("wrongPassword1");
+        mockValidAuthorization();
+        when(updateActiveTimeService.isCurrentLoginSession(TOKEN)).thenReturn(true);
+        when(userRepository.findLocalUserByEmail(EMAIL))
+                .thenReturn(Optional.of(Map.of("password_hash", "current-hash")));
+        when(authService.matchesPassword("wrongPassword1", "current-hash")).thenReturn(false);
+
+        ApiResponse<Void> response = userService.resetPassword(AUTHORIZATION, request);
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        verify(userRepository, never()).updateLocalPasswordByEmail(anyString(), anyString());
     }
 
     private void mockValidAuthorization() {

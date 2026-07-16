@@ -10,6 +10,9 @@ public class ResetPasswordRequest {
     @Schema(description = "信箱驗證成功後回傳的一次性 resetToken")
     private String resetToken;
 
+    @Schema(description = "Current password; required when changing password while logged in")
+    private String currentPassword;
+
     @NotBlank(message = "Password is required")
     @Pattern(
             regexp = "^(?=.*[A-Za-z])(?=.*\\d).{8,}$",
@@ -23,6 +26,14 @@ public class ResetPasswordRequest {
 
     public void setResetToken(String resetToken) {
         this.resetToken = resetToken;
+    }
+
+    public String getCurrentPassword() {
+        return currentPassword;
+    }
+
+    public void setCurrentPassword(String currentPassword) {
+        this.currentPassword = currentPassword;
     }
 
     public String getPassword() {
