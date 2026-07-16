@@ -79,7 +79,7 @@ public abstract class AdminServiceBase {
     public abstract EventStatusChangeDto setEventApprove(Long userId, String operatorEmail, Role operatorRole);
 
     /** 設定活動要求補件 */
-    public abstract EventStatusChangeDto setEventRevision(Long userId, String operatorEmail, Role operatorRole);
+    public abstract EventStatusChangeDto setEventRevision(Long userId, String operatorEmail, Role operatorRole, String note);
 
     /** 設定地圖建置完成 */
     public abstract EventStatusChangeDto setEventMapComplete(Long userId, String operatorEmail, Role operatorRole);

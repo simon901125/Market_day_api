@@ -735,9 +735,52 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
-    public EventStatusChangeDto setEventRevision(Long userId, String operatorEmail, Role operatorRole) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setEventRevision'");
+    @Transactional
+    public EventStatusChangeDto setEventRevision(Long eventId, String operatorEmail, Role operatorRole, String note) {
+        if (eventId == null) {
+            throw new IllegalArgumentException("請提供活動id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        if (note == null || note.isBlank()) {
+            throw new IllegalArgumentException("請提供補件原因");
+        }
+
+        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+
+        if (event.workflowStatus() != WorkflowStatus.PENDING_REVIEW) {
+            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+
+        eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+                eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.REVISION_REQUIRED, note);
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(event.organizerId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Event_Revision");
+        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
+        notification.setTargetId(eventId);
+        notification.setTitle("補件通知");
+        notification.setContent(event.title() + "需要補件，請修改後重新送出審核");
+        notificationRepo.save(notification);
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.REQUEST_REVISION);
+        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
+        adminLog.setTargetId(eventId);
+        adminLog.setTargetLabel(event.title());
+        adminLog.setContent(admin.adminName() + "退回" + event.title() + "申請, 原因:" + note);
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(event.title(), EventStatus.REVISION_REQUIRED);
     }
 
     @Override

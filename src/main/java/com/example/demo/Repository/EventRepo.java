@@ -158,4 +158,14 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             @Param("expectedStatus") WorkflowStatus expectedStatus,
             @Param("newStatus") WorkflowStatus newStatus);
 
+    /** 管理員後台: 活動要求補件:僅當目前流程狀態符合預期時才更新狀態與補件原因，回傳影響筆數 */
+    @Modifying
+    @Query("UPDATE MarketEvent market SET market.workflowStatus = :newStatus, market.reviewNote = :reviewNote "
+            + "WHERE market.id = :eventId AND market.workflowStatus = :expectedStatus")
+    int updateWorkflowStatusAndReviewNoteIfCurrent(
+            @Param("eventId") Long eventId,
+            @Param("expectedStatus") WorkflowStatus expectedStatus,
+            @Param("newStatus") WorkflowStatus newStatus,
+            @Param("reviewNote") String reviewNote);
+
 }

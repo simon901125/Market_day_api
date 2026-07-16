@@ -167,13 +167,39 @@ public class AdminController {
         }
     }
 
+    /**
+     * 設定:活動審核通過，將指定活動的workflowStatus設為<br>
+     * <b>API路徑</b>: /api/admin/events/{id}/request-revision<br>
+     * @param authorizationHeader
+     * @param id
+     * @param note 補件原因
+     * @return 活動名稱、活動新狀態
+     */
     @Operation(summary = "活動要求補件", description = "將指定活動的審核狀態設為要求補件。")
     @PostMapping("/events/{id}/request-revision")
     public ApiResponse<?> setEventRevision(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable String id) {
-        // TODO:活動要求補件
-        return ApiResponse.success("ok");
+            @PathVariable Long id,
+            @RequestBody(required = false) String note
+        ) {
+        if (id == null) {
+            return ApiResponse.fail("請提供活動id");
+        }
+
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("驗證憑證無效或已過期");
+        }
+
+        try {
+            String operatorEmail = jwtService.getEmail(token);
+            Role operatorRole = Role.fromRole(jwtService.getRole(token));
+            return ApiResponse.success("ok", service.setEventRevision(id, operatorEmail, operatorRole, note));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.fail("活動要求補件失敗");
+        }
     }
 
     @Operation(summary = "活動地圖建置完成", description = "將指定活動的地圖建置狀態設為完成。")

@@ -70,7 +70,10 @@ public class StatusLogService {
                             requestLogId, request, "/restore", "ACTIVE")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/approve",
                     (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
-                            requestLogId, request, "/approve", "MAP_BUILDING")));
+                            requestLogId, request, "/approve", "MAP_BUILDING")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/request-revision",
+                    (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
+                            requestLogId, request, "/request-revision", "REVISION_REQUIRED")));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {

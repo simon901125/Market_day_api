@@ -321,4 +321,93 @@ class AdminServiceTest {
         assertThat(savedLog.getContent()).isEqualTo("管理員小明同意夏日市集申請");
     }
 
+    @Test void setEventRevisionRejectsWhenOperatorRoleIsNotAdmin() {
+        assertThatThrownBy(() -> service.setEventRevision(1L, "op@test.com", Role.ORGANIZER, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("權限不足，請重新登入管理員帳號再操作");
+        verifyNoInteractions(userRepo, eventRepo, logRepo, notificationRepo);
+    }
+
+    @Test void setEventRevisionThrowsWhenAdminNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEventRevision(1L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該管理員");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo);
+    }
+
+    @Test void setEventRevisionThrowsWhenNoteIsBlank() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+
+        assertThatThrownBy(() -> service.setEventRevision(1L, "op@test.com", Role.ADMIN, "  "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("請提供補件原因");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo);
+    }
+
+    @Test void setEventRevisionThrowsWhenEventNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEventRevision(1L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到指定的活動");
+        verifyNoInteractions(logRepo, notificationRepo);
+    }
+
+    @Test void setEventRevisionThrowsWhenEventNotPendingReview() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L)));
+
+        assertThatThrownBy(() -> service.setEventRevision(1L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("夏日市集當前狀態不可執行此操作");
+        verify(eventRepo, never()).updateWorkflowStatusAndReviewNoteIfCurrent(any(), any(), any(), any());
+        verifyNoInteractions(logRepo, notificationRepo);
+    }
+
+    @Test void setEventRevisionRequiresRevisionForPendingReviewEventAndWritesNotificationAndOperationLog() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L)));
+        User adminRef = new User();
+        User organizerRef = new User();
+        when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
+        when(userRepo.getReferenceById(5L)).thenReturn(organizerRef);
+
+        var result = service.setEventRevision(1L, "op@test.com", Role.ADMIN, "缺少營業執照");
+
+        verify(eventRepo).updateWorkflowStatusAndReviewNoteIfCurrent(
+                1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.REVISION_REQUIRED, "缺少營業執照");
+        assertThat(result.eventName()).isEqualTo("夏日市集");
+        assertThat(result.newEventStatus()).isEqualTo(EventStatus.REVISION_REQUIRED);
+
+        ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepo).save(notificationCaptor.capture());
+        Notification savedNotification = notificationCaptor.getValue();
+        assertThat(savedNotification.getUser()).isSameAs(organizerRef);
+        assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
+        assertThat(savedNotification.getType()).isEqualTo("Event_Revision");
+        assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
+        assertThat(savedNotification.getTargetId()).isEqualTo(1L);
+        assertThat(savedNotification.getTitle()).isEqualTo("補件通知");
+        assertThat(savedNotification.getContent()).isEqualTo("夏日市集需要補件，請修改後重新送出審核");
+
+        ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
+        verify(logRepo).save(logCaptor.capture());
+        AdminOperationLog savedLog = logCaptor.getValue();
+        assertThat(savedLog.getUser()).isSameAs(adminRef);
+        assertThat(savedLog.getOperationType()).isEqualTo(AdminOperationType.REQUEST_REVISION);
+        assertThat(savedLog.getTargetType()).isEqualTo(AdminTargetType.MARKET_EVENT);
+        assertThat(savedLog.getTargetId()).isEqualTo(1L);
+        assertThat(savedLog.getTargetLabel()).isEqualTo("夏日市集");
+        assertThat(savedLog.getContent()).isEqualTo("管理員小明退回夏日市集申請, 原因:缺少營業執照");
+    }
+
 }
