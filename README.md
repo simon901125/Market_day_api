@@ -5,6 +5,19 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 ## 更新紀錄
 
+### 2026-07-16
+
+#### simon branch
+
+- 新增攤主首頁初始化 API：`GET /api/vendor/dashboard/init`，需攜帶有效的 Vendor Bearer Token。
+- 初始化時依攤主必填資料完整度判斷 `needsProfile`；品牌、聯絡資訊、地址、分類、品牌頭像、品牌封面、品牌介紹及至少一筆商品任一缺漏時，回傳首次設定導引提示，由前端顯示固定導引內容。
+- Instagram、Facebook、官方網站及商品圖片維持選填，不影響攤主資料完整度判斷。
+- 攤主資料完整時，首頁回傳聯絡人名稱、待審核報名數、待付款報名數及待選位報名數；待付款包含 `PENDING`、`FAILED`，待選位為審核通過且付款完成但仍有參加日期尚未選位的報名。
+- 攤主首頁回傳最近一年內最多 6 筆通知，依未讀優先、建立時間新到舊、通知 ID 大到小排序，不提供通知中心的分類與分頁參數。
+- 修正新註冊攤主尚未建立 `vendor_profiles` 時呼叫 `GET /api/vendor/notices` 回傳「找不到攤主資料」的問題；現在會正常回傳未讀數 0、總筆數 0 與空通知陣列。
+- Swagger 將原「攤主選位 API」合併至「攤主專區 API」，統一顯示攤主首頁、通知、報名、帳號與選位功能，既有 API 路徑不變。
+- 新增攤主首頁、空通知與 Controller 委派測試，並通過完整單元測試及 Spring Boot 啟動冒煙測試。
+
 ### 2026-07-15
 
 #### yingtung branch
@@ -33,7 +46,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - `JwtAuthenticationFilter` 由逐支維護 `protectedApis` 改為「受保護路徑前綴＋明確公開端點白名單」；`/api/vendor/**`、`/api/organizer/**`、`/api/admin/**`、`/api/auth/**`、`/api/account/**`、`/api/images**` 與 `/api/stalls/**` 預設需要 JWT。
 - 登入、註冊、信箱驗證、密碼重設、公開市集查詢與藍新回呼維持公開；所有 CORS `OPTIONS` 預檢請求亦直接放行。新增前綴保護、公開白名單、管理員角色及 CORS 測試。
 
-最後更新：2026-07-15
+最後更新：2026-07-16
 
 ## 更新紀錄
 

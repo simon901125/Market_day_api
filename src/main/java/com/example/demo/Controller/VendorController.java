@@ -19,22 +19,34 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 import com.example.demo.Service.StallService;
+import com.example.demo.Service.VendorDashboardService;
 import com.example.demo.Service.VendorNotificationService;
 import com.example.demo.dto.request.VendorApplicationSubmitRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MarketSearchResponse;
 import com.example.demo.dto.response.VendorApplicationSubmitResponse;
+import com.example.demo.dto.response.VendorDashboardInitResponse;
 import com.example.demo.dto.response.VendorMarketDetailResponse;
 import com.example.demo.dto.response.VendorNotificationSearchResponse;
 
 @RestController
-@Tag(name = "攤主專區 API", description = "取得活動報名列表、活動詳細資訊")
+@Tag(name = "攤主專區 API", description = "提供攤主首頁、通知、報名、帳號與選位相關功能")
 public class VendorController {
   @Autowired
   private StallService stallService;
 
   @Autowired
   private VendorNotificationService vendorNotificationService;
+
+  @Autowired
+  private VendorDashboardService vendorDashboardService;
+
+  @Operation(summary = "初始化攤主首頁", description = "依攤主必填資料完整度回傳首次設定導引，或一般首頁統計與最新通知")
+  @GetMapping("/api/vendor/dashboard/init")
+  public ApiResponse<VendorDashboardInitResponse> initVendorDashboard(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+    return vendorDashboardService.initDashboard(authorizationHeader);
+  }
 
   @Operation(summary = "取得攤主通知中心", description = "查詢目前登入攤主最近一年內的通知；支援全部、未讀、報名審核、付款、攤位分配及活動異動分類，未讀通知優先。")
   @GetMapping("/api/vendor/notices")

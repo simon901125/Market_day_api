@@ -83,6 +83,27 @@ class VendorNotificationServiceTest {
     }
 
     @Test
+    void newVendorWithoutProfileReturnsEmptyNotificationPage() {
+        authenticateVendor(7L);
+        when(notificationRepository.countVendorNotifications(
+                eq(7L), eq(null), eq(false), any(LocalDateTime.class)))
+                .thenReturn(0L);
+        when(notificationRepository.countVendorNotifications(
+                eq(7L), eq(null), eq(true), any(LocalDateTime.class)))
+                .thenReturn(0L);
+        when(notificationRepository.findVendorNotifications(
+                eq(7L), eq(null), eq(false), any(LocalDateTime.class), eq(0), eq(10)))
+                .thenReturn(List.of());
+
+        var response = service.getNotifications("Bearer token", "全部", 1, 10);
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        assertThat(response.getData().unreadCount()).isZero();
+        assertThat(response.getData().notifications().getTotalItems()).isZero();
+        assertThat(response.getData().notifications().getItems()).isEmpty();
+    }
+
+    @Test
     void invalidFilterAndNonVendorAreRejectedBeforeNotificationQuery() {
         authenticateVendor(7L);
         var invalidFilter = service.getNotifications("Bearer token", "SYSTEM", 1, 10);
@@ -104,7 +125,7 @@ class VendorNotificationServiceTest {
         when(jwtService.isTokenValid("token")).thenReturn(true);
         when(jwtService.getRole("token")).thenReturn("VENDOR");
         when(jwtService.getEmail("token")).thenReturn("vendor@example.test");
-        when(stallRepository.findVendorAccountByEmail("vendor@example.test"))
+        when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(Map.of("userId", userId, "role", "VENDOR")));
     }
 }

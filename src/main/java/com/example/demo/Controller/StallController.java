@@ -30,7 +30,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
-@Tag(name = "攤主選位 API", description = "提供攤主帳號、選位地圖與送出選位相關功能")
+@Tag(name = "攤主專區 API", description = "提供攤主首頁、通知、報名、帳號與選位相關功能")
 public class StallController {
 
     @Autowired
