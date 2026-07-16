@@ -76,7 +76,9 @@ public class StatusLogService {
                             requestLogId, request, "/request-revision", "REVISION_REQUIRED")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/map-complete",
                     (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
-                            requestLogId, request, "/map-complete", "READY_TO_PUBLISH")));
+                            requestLogId, request, "/map-complete", "READY_TO_PUBLISH")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/unpublish-confirm",
+                    this::buildAdminEventUnpublishConfirmLogs));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {
@@ -165,6 +167,21 @@ public class StatusLogService {
             Long requestLogId, HttpServletRequest request, String suffix, String newStatus) {
         Long eventId = pathId(request.getRequestURI(), "/api/admin/events/", suffix);
         return validEntries(List.of(entry(requestLogId, "EVENT", eventId, "workflow_status", newStatus)));
+    }
+
+    private List<StatusLogEntry> buildAdminEventUnpublishConfirmLogs(Long requestLogId, HttpServletRequest request) {
+        Long eventId = pathId(request.getRequestURI(), "/api/admin/events/", "/unpublish-confirm");
+        List<StatusLogEntry> entries = new ArrayList<>();
+        entries.add(entry(requestLogId, "EVENT", eventId, "workflow_status", "UNPUBLISHED"));
+
+        Long unpublishRequestId = eventId == null
+                ? null
+                : statusLogRepository.findLatestApprovedUnpublishRequestId(eventId);
+        if (unpublishRequestId != null) {
+            entries.add(entry(requestLogId, "EventUnpublishRequest", unpublishRequestId, "status", "APPROVED"));
+        }
+
+        return validEntries(entries);
     }
 
     private List<StatusLogEntry> buildEmailVerifyLogs(Long requestLogId, HttpServletRequest request) {

@@ -85,6 +85,6 @@ public abstract class AdminServiceBase {
     public abstract EventStatusChangeDto setEventMapComplete(Long userId, String operatorEmail, Role operatorRole);
 
     /** 設定確認活動下架 */
-    public abstract EventStatusChangeDto setEventUnpublish(Long userId, String operatorEmail, Role operatorRole);
+    public abstract EventStatusChangeDto setEventUnpublish(Long userId, String operatorEmail, Role operatorRole, String note);
 
 }

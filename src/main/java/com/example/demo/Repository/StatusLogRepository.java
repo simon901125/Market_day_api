@@ -16,6 +16,23 @@ public class StatusLogRepository {
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
+    /** 查詢指定活動最新一筆審核通過的下架申請id，供組裝活動下架確認的狀態變更紀錄使用 */
+    public Long findLatestApprovedUnpublishRequestId(Long eventId) {
+        if (eventId == null) {
+            return null;
+        }
+
+        String sql = """
+                SELECT TOP 1 id
+                FROM dbo.event_unpublish_requests
+                WHERE event_id = :eventId AND status = 'APPROVED'
+                ORDER BY reviewed_at DESC
+                """;
+
+        List<Long> ids = namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId), Long.class);
+        return ids.isEmpty() ? null : ids.get(0);
+    }
+
     public void createStatusLogs(Long requestLogId, List<StatusLogEntry> entries) {
         if (requestLogId == null || entries == null || entries.isEmpty()) {
             return;

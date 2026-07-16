@@ -227,15 +227,39 @@ public class AdminController {
         }
     }
 
+    /**
+     * 設定:確認活動下架，將指定活動的workflowStatus設為UNPUBLISHED，並審核通過該活動最新一筆待審核的下架申請<br>
+     * <b>API路徑</b>: /api/admin/events/{id}/unpublish-confirm<br>
+     * @param authorizationHeader
+     * @param id
+     * @param note 審核備註，可為null
+     * @return 活動名稱、活動新狀態
+     */
     @Operation(summary = "確認活動下架", description = "確認將指定活動下架。")
     @PostMapping("/events/{id}/unpublish-confirm")
     public ApiResponse<?> setEventUnpublish(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable String id, 
-            @RequestBody String note
+            @PathVariable Long id,
+            @RequestBody(required = false) String note
         ) {
-        // TODO:確認活動下架
-        return ApiResponse.success("ok");
+        if (id == null) {
+            return ApiResponse.fail("請提供活動id");
+        }
+
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("驗證憑證無效或已過期");
+        }
+
+        try {
+            String operatorEmail = jwtService.getEmail(token);
+            Role operatorRole = Role.fromRole(jwtService.getRole(token));
+            return ApiResponse.success("ok", service.setEventUnpublish(id, operatorEmail, operatorRole, note));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.fail("確認活動下架失敗");
+        }
     }
 
     /**

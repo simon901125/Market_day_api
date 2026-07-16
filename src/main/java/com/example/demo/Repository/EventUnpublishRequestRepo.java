@@ -1,0 +1,44 @@
+package com.example.demo.Repository;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.example.demo.entity.EventUnpublishRequest;
+import com.example.demo.entity.User;
+import com.example.demo.enums.status.UnpublishRequestStatus;
+
+public interface EventUnpublishRequestRepo extends JpaRepository<EventUnpublishRequest, Long> {
+
+    /** 管理員後台: 確認活動下架:查詢指定活動、指定狀態中，申請時間最新的一筆下架申請id */
+    @Query("""
+            SELECT r.id
+            FROM EventUnpublishRequest r
+            WHERE r.event.id = :eventId
+                AND r.status = :status
+                AND r.requestedAt = (
+                    SELECT MAX(r2.requestedAt)
+                    FROM EventUnpublishRequest r2
+                    WHERE r2.event.id = :eventId AND r2.status = :status
+                )
+            """)
+    Optional<Long> findLatestRequestIdByEventIdAndStatus(
+            @Param("eventId") Long eventId, @Param("status") UnpublishRequestStatus status);
+
+    /** 管理員後台: 確認活動下架:僅當目前狀態符合預期時才更新審核人員、狀態、審核備註與審核時間，回傳影響筆數 */
+    @Modifying
+    @Query("""
+            UPDATE EventUnpublishRequest r
+            SET r.reviewUser = :reviewer, r.status = :newStatus, r.reviewNote = :reviewNote, r.reviewedAt = CURRENT_TIMESTAMP
+            WHERE r.id = :requestId AND r.status = :expectedStatus
+            """)
+    int reviewIfCurrent(
+            @Param("requestId") Long requestId,
+            @Param("reviewer") User reviewer,
+            @Param("expectedStatus") UnpublishRequestStatus expectedStatus,
+            @Param("newStatus") UnpublishRequestStatus newStatus,
+            @Param("reviewNote") String reviewNote);
+}

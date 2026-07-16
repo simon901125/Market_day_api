@@ -21,6 +21,7 @@ import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventApplicationRepo;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.EventStallZoneRepo;
+import com.example.demo.Repository.EventUnpublishRequestRepo;
 import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.RequestLogRepo;
 import com.example.demo.Repository.StatusLogRepo;
@@ -68,6 +69,7 @@ import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.PaymentStatus;
 import com.example.demo.enums.status.RefundStatus;
 import com.example.demo.enums.status.ReviewStatus;
+import com.example.demo.enums.status.UnpublishRequestStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
@@ -105,6 +107,9 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
     @Autowired
     NotificationRepo notificationRepo;
+
+    @Autowired
+    EventUnpublishRequestRepo eventUnpublishRequestRepo;
 
     @Autowired
     MessageSource messageSource;
@@ -831,9 +836,70 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
-    public EventStatusChangeDto setEventUnpublish(Long userId, String operatorEmail, Role operatorRole) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setEventUnpublish'");
+    @Transactional
+    public EventStatusChangeDto setEventUnpublish(Long eventId, String operatorEmail, Role operatorRole, String note) {
+        if (eventId == null) {
+            throw new IllegalArgumentException("請提供活動id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+
+        if (event.workflowStatus() != WorkflowStatus.UNPUBLISH_REQUESTED) {
+            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+
+        User adminRef = userRepo.getReferenceById(admin.id());
+
+        Long unpublishRequestId = eventUnpublishRequestRepo
+                .findLatestRequestIdByEventIdAndStatus(eventId, UnpublishRequestStatus.PENDING)
+                .orElse(null);
+
+        if (unpublishRequestId == null) {
+            Notification exceptionNotification = new Notification();
+            exceptionNotification.setUser(adminRef);
+            exceptionNotification.setCategory(NotificationCategory.EXCEPTION);
+            exceptionNotification.setType("System_EXCEPTION");
+            exceptionNotification.setTargetType(NotificationTargetType.MARKET_EVENT);
+            exceptionNotification.setTargetId(eventId);
+            exceptionNotification.setTitle("活動狀態異常");
+            exceptionNotification.setContent(event.title() + "活動狀態為申請下架，資料庫查無該活動下架申請單");
+            notificationRepo.save(exceptionNotification);
+
+            throw new IllegalArgumentException("找不到該活動的下架申請");
+        }
+
+        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.UNPUBLISHED);
+
+        eventUnpublishRequestRepo.reviewIfCurrent(
+                unpublishRequestId, adminRef, UnpublishRequestStatus.PENDING, UnpublishRequestStatus.APPROVED, note);
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(event.organizerId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Event_Unpublish");
+        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
+        notification.setTargetId(eventId);
+        notification.setTitle("活動下架");
+        notification.setContent(event.title() + "活動已下架");
+        notificationRepo.save(notification);
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(adminRef);
+        adminLog.setOperationType(AdminOperationType.EVENT_UNPUBLISH_REVIEW);
+        adminLog.setTargetType(AdminTargetType.EVENT_UNPUBLISH_REQUEST);
+        adminLog.setTargetId(unpublishRequestId);
+        adminLog.setTargetLabel(event.title());
+        adminLog.setContent(admin.adminName() + "審核通過" + event.title() + "活動下架申請");
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(event.title(), EventStatus.UNPUBLISHED);
     }
 
     //處理活動狀態變動紀錄:說明的文字映射
