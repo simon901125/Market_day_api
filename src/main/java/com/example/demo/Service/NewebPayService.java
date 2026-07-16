@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Config.NewebPayProperties;
 import com.example.demo.Repository.PaymentRepository;
-import com.example.demo.Repository.StallRepository;
 import com.example.demo.dto.request.VendorPaymentRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.NewebPayPaymentResponse;
@@ -48,9 +47,6 @@ public class NewebPayService {
 
     @Autowired
     private PaymentRepository paymentRepository;
-
-    @Autowired
-    private StallRepository stallRepository;
 
     @Autowired
     private JwtService jwtService;
@@ -81,7 +77,7 @@ public class NewebPayService {
             return ApiResponse.fail("NewebPay config is incomplete");
         }
 
-        Map<String, Object> vendor = stallRepository.findVendorAccountByEmail(jwtService.getEmail(token))
+        Map<String, Object> vendor = paymentRepository.findVendorPaymentUserByEmail(jwtService.getEmail(token))
                 .orElse(null);
         if (vendor == null) {
             return ApiResponse.fail("Vendor profile not found");
@@ -114,14 +110,17 @@ public class NewebPayService {
             return ApiResponse.fail("Payment amount is invalid");
         }
 
-        String paymentNo = paymentRepository.findLatestPendingPayment(applicationId)
-                .map(payment -> stringValue(payment.get("paymentNo")))
-                .filter(value -> !value.isBlank())
-                .orElseGet(() -> {
-                    String newPaymentNo = generatePaymentNo();
-                    paymentRepository.createPendingPayment(newPaymentNo, applicationId, amount);
-                    return newPaymentNo;
-                });
+        Map<String, Object> pendingPayment = paymentRepository.findLatestPendingPayment(applicationId)
+                .orElse(null);
+        if (pendingPayment == null) {
+            String newPaymentNo = generatePaymentNo();
+            paymentRepository.createPendingPayment(newPaymentNo, applicationId, amount);
+            pendingPayment = paymentRepository.findLatestPendingPayment(applicationId)
+                    .orElseThrow(() -> new IllegalStateException("Payment record was not created"));
+        }
+
+        String paymentNo = stringValue(pendingPayment.get("paymentNo"));
+        Long paymentId = toLong(pendingPayment.get("paymentId"));
 
         Map<String, String> tradeInfo = buildMpgTradeInfo(paymentNo, amount, application);
         String encryptedTradeInfo = encrypt(toQueryString(tradeInfo));
@@ -132,12 +131,16 @@ public class NewebPayService {
         return ApiResponse.success(
                 "NewebPay payment created successfully",
                 new NewebPayPaymentResponse(
+                        applicationId,
+                        stringValue(application.get("applicationNo")),
+                        paymentId,
+                        paymentNo,
+                        paymentNo,
                         newebPayProperties.getGateway(),
                         newebPayProperties.getMerchantId(),
                         encryptedTradeInfo,
                         tradeSha,
-                        newebPayProperties.getVersion(),
-                        paymentNo));
+                        newebPayProperties.getVersion()));
     }
 
     public ApiResponse<PaymentStatusResponse> getPaymentStatus(
@@ -159,7 +162,7 @@ public class NewebPayService {
             return ApiResponse.fail("Application not found");
         }
         Long applicationUserId = toLong(payment.get("userId"));
-        Long vendorUserId = toLong(stallRepository.findVendorAccountByEmail(jwtService.getEmail(token))
+        Long vendorUserId = toLong(paymentRepository.findVendorPaymentUserByEmail(jwtService.getEmail(token))
                 .map(vendor -> vendor.get("userId"))
                 .orElse(null));
         if (applicationUserId == null || vendorUserId == null || !applicationUserId.equals(vendorUserId)) {
@@ -292,7 +295,38 @@ public class NewebPayService {
             return "0|Payment not found";
         }
 
+        syncPaymentStatusFromCallback(payment, result);
+        return "1|OK";
+    }
+    @Transactional
+    public String buildReturnUrl(Map<String, String> payload, String frontendUrl) {
+        try {
+            Map<String, String> result = parseAndVerifyCallback(payload);
+            String paymentNo = result.getOrDefault("MerchantOrderNo", "");
+            String status = result.getOrDefault("Status", "");
+            Map<String, Object> payment = paymentNo.isBlank()
+                    ? Map.of()
+                    : paymentRepository.findPaymentWithApplication(paymentNo).orElse(Map.of());
+            if (!payment.isEmpty()) {
+                syncPaymentStatusFromCallback(payment, result);
+            }
+            String applicationNo = stringValue(payment.get("applicationNo"));
+            return trimTrailingSlash(frontendUrl)
+                    + "/vendor/dash-board/application-record"
+                    + "?applicationNo=" + urlEncode(applicationNo)
+                    + "&paymentNo=" + urlEncode(paymentNo)
+                    + "&merchantOrderNo=" + urlEncode(paymentNo)
+                    + "&status=" + urlEncode(status);
+        } catch (RuntimeException exception) {
+            return trimTrailingSlash(frontendUrl)
+                    + "/vendor/dash-board/application-record"
+                    + "?paymentStatus=invalid";
+        }
+    }
+
+    private void syncPaymentStatusFromCallback(Map<String, Object> payment, Map<String, String> result) {
         Long applicationId = toLong(payment.get("applicationId"));
+        String paymentNo = stringValue(payment.get("paymentNo"));
         String providerTradeNo = result.get("TradeNo");
         String status = result.get("Status");
         String currentPaymentStatus = stringValue(payment.get("paymentRecordStatus"));
@@ -317,24 +351,6 @@ public class NewebPayService {
                         stringValue(payment.get("eventTitle")),
                         false);
             }
-        }
-
-        return "1|OK";
-    }
-
-    public String buildReturnUrl(Map<String, String> payload, String frontendUrl) {
-        try {
-            Map<String, String> result = parseAndVerifyCallback(payload);
-            String paymentNo = result.getOrDefault("MerchantOrderNo", "");
-            String status = result.getOrDefault("Status", "");
-            return trimTrailingSlash(frontendUrl)
-                    + "/vendor/dash-board/application-record"
-                    + "?paymentNo=" + urlEncode(paymentNo)
-                    + "&status=" + urlEncode(status);
-        } catch (RuntimeException exception) {
-            return trimTrailingSlash(frontendUrl)
-                    + "/vendor/dash-board/application-record"
-                    + "?paymentStatus=invalid";
         }
     }
 
@@ -395,13 +411,16 @@ public class NewebPayService {
 
     private PaymentStatusResponse toPaymentStatusResponse(Map<String, Object> payment) {
         PaymentStatusResponse response = new PaymentStatusResponse();
+        response.setApplicationId(toLong(payment.get("applicationId")));
         response.setApplicationNo(stringValue(payment.get("applicationNo")));
         response.setReviewStatus(stringValue(payment.get("reviewStatus")));
         response.setApplicationPaymentStatus(stringValue(payment.get("applicationPaymentStatus")));
         response.setCancelled(isTrue(payment.get("isCancelled")));
         response.setApplicationAmount(toAmountOrNull(payment.get("applicationAmount")));
         response.setPaymentDueAt(toLocalDateTime(payment.get("paymentDueAt")));
+        response.setPaymentId(toLong(payment.get("paymentId")));
         response.setPaymentNo(blankToNull(stringValue(payment.get("paymentNo"))));
+        response.setMerchantOrderNo(response.getPaymentNo());
         response.setPaymentAmount(toAmountOrNull(payment.get("paymentAmount")));
         response.setProvider(blankToNull(stringValue(payment.get("provider"))));
         response.setProviderTradeNo(blankToNull(stringValue(payment.get("providerTradeNo"))));
