@@ -19,6 +19,7 @@ import lombok.ToString;
  * 包含:分類名稱、分類代碼、分類是否啟用
  * 
  * @see MarketEvent
+ * @see VendorProfile
  */
 @Entity
 @Data
@@ -45,4 +46,9 @@ public class Category {
     @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "category")
     private Set<MarketEvent> marketEvents;
+
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "category")
+    private Set<VendorProfile> vendorProfiles;
 }

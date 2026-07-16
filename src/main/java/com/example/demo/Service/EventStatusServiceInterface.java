@@ -20,6 +20,10 @@ public interface EventStatusServiceInterface<T> {
         int maxBooth,
         int nowBooth 
     ) {
+        if (WorkflowStatus == null) {
+            return null;
+        }
+
         LocalDateTime now = LocalDateTime.now();
         switch (WorkflowStatus) {
             case DRAFT:
@@ -33,9 +37,12 @@ public interface EventStatusServiceInterface<T> {
             case READY_TO_PUBLISH:
                 return EventStatus.READY_TO_PUBLISH;
             case PUBLISHED:
-                if (regStartTime.isAfter(now)) {
+                if (regStartTime == null) {
+                    return EventStatus.FULL;
+                } else if (regStartTime.isAfter(now)) {
                     return EventStatus.READY_TO_PUBLISH;
-                } else if (regStartTime.isBefore(now)
+                } else if (regEndTime != null
+                        && regStartTime.isBefore(now)
                         && regEndTime.isAfter(now)
                         && nowBooth <= maxBooth) {
                     return EventStatus.REGISTRATION_OPEN;

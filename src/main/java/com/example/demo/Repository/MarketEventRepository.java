@@ -39,15 +39,14 @@ public class MarketEventRepository {
                     e.city,
                     e.district,
                     e.address,
-                    e.start_date,
-                    e.end_date,
+                    CAST(e.start_at AS DATE) AS start_date,
+                    CAST(e.end_at AS DATE) AS end_date,
                     e.cover_image_url,
-                    e.publish_status,
+                    e.workflow_status AS publish_status,
                     c.name AS category_name
                 FROM dbo.market_events e
                 INNER JOIN dbo.categories c ON c.id = e.category_id
-                WHERE e.publish_status = N'PUBLISHED'
-                  AND e.review_status = N'APPROVED'
+                WHERE e.workflow_status = N'PUBLISHED'
                 """);
 
         Map<String, Object> params = new HashMap<>();
@@ -58,7 +57,7 @@ public class MarketEventRepository {
         appendEventTypeFilter(sql, request);
         appendEventStatusesFilter(sql, params, request);
 
-        sql.append(" ORDER BY e.start_date DESC, e.id DESC");
+        sql.append(" ORDER BY e.start_at DESC, e.id DESC");
         return namedParameterJdbcTemplate.query(sql.toString(), params, this::toMarketEventCardResponse);
     }
 
@@ -73,12 +72,12 @@ public class MarketEventRepository {
                     e.city,
                     e.district,
                     e.address,
-                    e.traffic_info,
+                    CONCAT_WS(N' / ', e.traffic_info_metro, e.traffic_info_bus, e.traffic_info_driving) AS traffic_info,
                     e.notice,
-                    e.start_date,
-                    e.end_date,
-                    e.start_time,
-                    e.end_time,
+                    CAST(e.start_at AS DATE) AS start_date,
+                    CAST(e.end_at AS DATE) AS end_date,
+                    CAST(e.start_at AS TIME) AS start_time,
+                    CAST(e.end_at AS TIME) AS end_time,
                     e.registration_start_at,
                     e.registration_end_at,
                     e.max_booths,
@@ -86,14 +85,13 @@ public class MarketEventRepository {
                     e.cover_image_url,
                     e.map_image_url,
                     e.public_info_at,
-                    e.review_status,
-                    e.publish_status,
+                    e.workflow_status AS review_status,
+                    e.workflow_status AS publish_status,
                     c.name AS category_name
                 FROM dbo.market_events e
                 INNER JOIN dbo.categories c ON c.id = e.category_id
                 WHERE e.id = :id
-                  AND e.publish_status = N'PUBLISHED'
-                  AND e.review_status = N'APPROVED'
+                  AND e.workflow_status = N'PUBLISHED'
                 """;
 
         Map<String, Object> params = Map.of("id", id);
@@ -147,12 +145,12 @@ public class MarketEventRepository {
         }
 
         if (request.startDate() != null) {
-            sql.append(" AND e.end_date >= :startDate");
+            sql.append(" AND CAST(e.end_at AS DATE) >= :startDate");
             params.put("startDate", request.startDate());
         }
 
         if (request.endDate() != null) {
-            sql.append(" AND e.start_date <= :endDate");
+            sql.append(" AND CAST(e.start_at AS DATE) <= :endDate");
             params.put("endDate", request.endDate());
         }
     }
@@ -164,12 +162,12 @@ public class MarketEventRepository {
         }
 
         if ("CURRENT".equalsIgnoreCase(eventType)) {
-            sql.append(" AND e.end_date >= CAST(GETDATE() AS DATE)");
+            sql.append(" AND CAST(e.end_at AS DATE) >= CAST(GETDATE() AS DATE)");
             return;
         }
 
         if ("HISTORY".equalsIgnoreCase(eventType)) {
-            sql.append(" AND e.end_date < CAST(GETDATE() AS DATE)");
+            sql.append(" AND CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)");
         }
     }
 
@@ -191,7 +189,7 @@ public class MarketEventRepository {
 
         if (statuses.contains("UPCOMING")) {
             sql.append("""
-                    e.start_date > DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
+                    CAST(e.start_at AS DATE) > DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
                     """);
             hasCondition = true;
         }
@@ -202,8 +200,8 @@ public class MarketEventRepository {
             }
             sql.append("""
                     (
-                        e.start_date > CAST(GETDATE() AS DATE)
-                        AND e.start_date <= DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
+                        CAST(e.start_at AS DATE) > CAST(GETDATE() AS DATE)
+                        AND CAST(e.start_at AS DATE) <= DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
                     )
                     """);
             hasCondition = true;
@@ -215,8 +213,8 @@ public class MarketEventRepository {
             }
             sql.append("""
                     (
-                        e.start_date <= CAST(GETDATE() AS DATE)
-                        AND e.end_date >= CAST(GETDATE() AS DATE)
+                        CAST(e.start_at AS DATE) <= CAST(GETDATE() AS DATE)
+                        AND CAST(e.end_at AS DATE) >= CAST(GETDATE() AS DATE)
                     )
                     """);
             hasCondition = true;
@@ -226,7 +224,7 @@ public class MarketEventRepository {
             if (hasCondition) {
                 sql.append(" OR ");
             }
-            sql.append("e.end_date < CAST(GETDATE() AS DATE)");
+            sql.append("CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)");
         }
 
         sql.append(")");

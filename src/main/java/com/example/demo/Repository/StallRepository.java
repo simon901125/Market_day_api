@@ -21,6 +21,78 @@ public class StallRepository {
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
+    public List<Map<String, Object>> findVendorApplications(
+            Long vendorUserId,
+            String eventTitle,
+            LocalDateTime eventStartAt,
+            LocalDateTime eventEndExclusive) {
+        String sql = """
+                SELECT
+                    a.id AS applicationId,
+                    a.application_no AS applicationNo,
+                    a.created_at AS appliedAt,
+                    a.review_status AS reviewStatus,
+                    a.payment_status AS paymentStatus,
+                    a.deposit_status AS depositStatus,
+                    a.is_cancelled AS isCancelled,
+                    e.id AS eventId,
+                    e.cover_image_url AS eventImageUrl,
+                    e.title AS eventTitle,
+                    e.start_at AS eventStartAt,
+                    e.end_at AS eventEndAt,
+                    CONCAT(
+                        CONVERT(varchar(10), e.start_at, 23),
+                        N' - ',
+                        CONVERT(varchar(10), e.end_at, 23)
+                    ) AS eventDate,
+                    CONCAT_WS(N' ',
+                        NULLIF(LTRIM(RTRIM(e.city)), N''),
+                        NULLIF(LTRIM(RTRIM(e.district)), N''),
+                        NULLIF(LTRIM(RTRIM(e.location_name)), N'')
+                    ) AS location,
+                    application_dates.applicationDateCount,
+                    application_dates.selectedStallCount,
+                    refund_data.refundStatus
+                FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
+                OUTER APPLY (
+                    SELECT
+                        COUNT(*) AS applicationDateCount,
+                        SUM(CASE WHEN ad.selected_stall_id IS NULL THEN 0 ELSE 1 END) AS selectedStallCount
+                    FROM dbo.application_dates ad
+                    WHERE ad.application_id = a.id
+                ) application_dates
+                OUTER APPLY (
+                    SELECT TOP 1 r.refund_status AS refundStatus
+                    FROM dbo.refunds r
+                    WHERE r.application_id = a.id
+                    ORDER BY
+                        CASE r.refund_status
+                            WHEN N'REFUNDED' THEN 1
+                            WHEN N'REFUNDING' THEN 2
+                            WHEN N'REFUND_REQUESTED' THEN 3
+                            WHEN N'REFUND_FAILED' THEN 4
+                            ELSE 5
+                        END,
+                        r.id DESC
+                ) refund_data
+                WHERE a.user_id = :vendorUserId
+                  AND (:eventTitle IS NULL OR e.title LIKE N'%' + :eventTitle + N'%')
+                  AND (:eventStartAt IS NULL OR e.start_at >= :eventStartAt)
+                  AND (:eventEndExclusive IS NULL OR e.end_at < :eventEndExclusive)
+                ORDER BY
+                    a.created_at DESC,
+                    a.id DESC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("vendorUserId", vendorUserId);
+        map.put("eventTitle", normalizeText(eventTitle));
+        map.put("eventStartAt", eventStartAt);
+        map.put("eventEndExclusive", eventEndExclusive);
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
+    }
+
     public Optional<Long> findStallId(Long eventId, String stallNo) {
         String sql = """
                 SELECT id
@@ -63,6 +135,7 @@ public class StallRepository {
                     a.id AS applicationId,
                     a.application_no AS applicationNo,
                     a.event_id AS eventId,
+                    e.title AS eventTitle,
                     a.user_id AS userId,
                     a.vendor_profile_id AS vendorProfileId,
                     a.review_status AS reviewStatus,
@@ -71,6 +144,7 @@ public class StallRepository {
                     date_counts.applicationDateCount,
                     date_counts.selectedStallCount
                 FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
                 OUTER APPLY (
                     SELECT
                         COUNT(*) AS applicationDateCount,
@@ -188,14 +262,7 @@ public class StallRepository {
                 .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
-    /**
-     * 依登入 Email 查詢帳號角色及攤主品牌資料是否存在。
-     * LEFT JOIN 可保留尚未建立 vendor_profiles 的首次登入帳號。
-     *
-     * @param email 登入帳號 Email
-     * @return 帳號角色與 hasVendorProfile；找不到帳號時回傳 empty
-     */
-    public Optional<Map<String, Object>> findVendorDashboardStatusByEmail(String email) {
+    public Optional<Map<String, Object>> findVendorDashboardProfileByEmail(String email) {
         String sql = """
                 SELECT
                     u.id AS userId,
@@ -203,8 +270,18 @@ public class StallRepository {
                     u.email,
                     up.id AS userProfileId,
                     vp.id AS vendorProfileId,
-                    -- vendor_profiles 不存在代表尚未完成首次攤位資料設定
-                    CAST(CASE WHEN vp.id IS NULL THEN 0 ELSE 1 END AS BIT) AS hasVendorProfile
+                    vp.brand_name AS name,
+                    up.contact_name AS contactName,
+                    up.contact_phone AS contactPhone,
+                    up.contact_email AS contactEmail,
+                    up.city,
+                    up.district,
+                    up.address,
+                    vp.category_id AS categoryId,
+                    vp.avatar_image_url AS avatarImageUrl,
+                    vp.cover_image_url AS coverImageUrl,
+                    vp.brand_summary AS brandSummary,
+                    vp.brand_description AS brandDescription
                 FROM dbo.users u
                 LEFT JOIN dbo.user_profiles up ON up.user_id = u.id
                     AND up.profile_type = N'VENDOR'
@@ -212,8 +289,45 @@ public class StallRepository {
                 WHERE u.email = :email
                 """;
 
+        Map<String, Object> parameters = Map.of("email", email);
         return RepositoryResultMapper.normalizeOptional(
-                namedParameterJdbcTemplate.queryForList(sql, Map.of("email", email)).stream().findFirst());
+                namedParameterJdbcTemplate.queryForList(sql, parameters).stream().findFirst());
+    }
+
+    public Map<String, Object> findVendorDashboardApplicationCounts(Long userId) {
+        String sql = """
+                SELECT
+                    COALESCE(SUM(CASE
+                        WHEN a.is_cancelled = 0
+                         AND a.review_status = N'PENDING'
+                        THEN 1 ELSE 0 END), 0) AS pendingReviewCount,
+                    COALESCE(SUM(CASE
+                        WHEN a.is_cancelled = 0
+                         AND a.review_status = N'APPROVED'
+                         AND a.payment_status IN (N'PENDING', N'FAILED')
+                        THEN 1 ELSE 0 END), 0) AS pendingPaymentCount,
+                    COALESCE(SUM(CASE
+                        WHEN a.is_cancelled = 0
+                         AND a.review_status = N'APPROVED'
+                         AND a.payment_status = N'PAID'
+                         AND COALESCE(application_dates.applicationDateCount, 0) > 0
+                         AND COALESCE(application_dates.selectedStallCount, 0)
+                             < application_dates.applicationDateCount
+                        THEN 1 ELSE 0 END), 0) AS pendingStallSelectionCount
+                FROM dbo.event_applications a
+                LEFT JOIN (
+                    SELECT
+                        ad.application_id AS applicationId,
+                        COUNT_BIG(*) AS applicationDateCount,
+                        SUM(CASE WHEN ad.selected_stall_id IS NULL THEN 0 ELSE 1 END) AS selectedStallCount
+                    FROM dbo.application_dates ad
+                    GROUP BY ad.application_id
+                ) application_dates ON application_dates.applicationId = a.id
+                WHERE a.user_id = :userId
+                """;
+
+        return RepositoryResultMapper.normalizeMap(
+                namedParameterJdbcTemplate.queryForMap(sql, Map.of("userId", userId)));
     }
 
     public List<Map<String, Object>> findVendorProducts(Long vendorProfileId) {
@@ -820,6 +934,10 @@ public class StallRepository {
             return null;
         }
         return value.trim();
+    }
+
+    private String normalizeText(String value) {
+        return blankToNull(value);
     }
 
     /**

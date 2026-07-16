@@ -2,6 +2,7 @@ HELP.md
 src/main/resources/application.properties
 run-local.ps1
 run-local.cmd
+src/test/run-test.cmd
 target/
 images/
 .mvn/wrapper/maven-wrapper.jar

@@ -1,0 +1,26 @@
+#!/bin/sh
+
+set -u
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+TEST_SCRIPT="$REPO_ROOT/src/test/run-test.cmd"
+
+if [ ! -f "$TEST_SCRIPT" ]; then
+    echo "[pre-push] ERROR: src/test/run-test.cmd was not found."
+    echo "[pre-push] Create the local test script before pushing."
+    exit 1
+fi
+
+echo "[pre-push] Running unit, controller, smoke, and SQL Server integration tests..."
+
+cd "$REPO_ROOT" || exit 1
+cmd.exe //d //c "call src\\test\\run-test.cmd"
+TEST_EXIT_CODE=$?
+
+if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+    echo "[pre-push] Tests failed. Push cancelled."
+    exit "$TEST_EXIT_CODE"
+fi
+
+echo "[pre-push] All tests passed. Continuing push."
+exit 0

@@ -19,7 +19,6 @@ import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorAccountResponse;
-import com.example.demo.dto.response.VendorDashboardInitResponse;
 import com.example.demo.dto.response.VendorStallMapResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,7 +28,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
-@Tag(name = "攤主選位 API", description = "提供攤主帳號、選位地圖與送出選位相關功能")
+@Tag(name = "攤主專區 API", description = "提供攤主首頁、通知、報名、帳號與選位相關功能")
 public class StallController {
 
     @Autowired
@@ -58,19 +57,6 @@ public class StallController {
     public ApiResponse<VendorAccountResponse> getVendorAccount(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         return stallService.getVendorAccount(authorizationHeader);
-    }
-
-    /**
-     * 初始化攤主後台，判斷目前登入攤主是否需要先填寫攤位資料。
-     *
-     * @param authorizationHeader Bearer JWT
-     * @return 是否需要填寫攤位資料
-     */
-    @Operation(summary = "初始化攤主後台", description = "登入後判斷目前攤主是否尚未建立攤位資料。")
-    @GetMapping("/api/vendor/dashboard/init")
-    public ApiResponse<VendorDashboardInitResponse> initVendorDashboard(
-            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
-        return stallService.initVendorDashboard(authorizationHeader);
     }
 
     @Operation(summary = "讀取攤主品牌資料", description = "取得目前登入攤主的品牌、聯絡資料、圖片、分類與商品資料。")

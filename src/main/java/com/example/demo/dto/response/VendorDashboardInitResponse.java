@@ -1,14 +1,13 @@
 package com.example.demo.dto.response;
 
-import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
 
-/**
- * 攤主登入後的後台初始化狀態。
- *
- * @param needsProfileSetup 是否需要先填寫攤位資料
- */
-@Schema(description = "攤主後台初始化結果")
 public record VendorDashboardInitResponse(
-        @Schema(description = "是否需要填寫攤位資料", example = "true")
-        boolean needsProfileSetup) {
+    boolean needsProfile,
+    String guideMessage,
+    String name,
+    long pendingReviewCount,
+    long pendingPaymentCount,
+    long pendingStallSelectionCount,
+    List<VendorNotificationItemResponse> notifications) {
 }

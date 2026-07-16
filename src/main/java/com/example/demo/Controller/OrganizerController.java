@@ -28,6 +28,7 @@ import com.example.demo.dto.response.OrganizerAccountResponse;
 import com.example.demo.dto.response.OrganizerAccountingSearchResponse;
 import com.example.demo.dto.response.OrganizerApplicationDetailResponse;
 import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
+import com.example.demo.dto.response.OrganizerDashboardInitResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 
@@ -43,6 +44,13 @@ public class OrganizerController {
 
     @Autowired
     private StallService stallService;
+
+    @Operation(summary = "初始化主辦方後台", description = "登入後判斷目前主辦方是否需要填寫基本資料")
+    @GetMapping("/api/organizer/dashboard/init")
+    public ApiResponse<OrganizerDashboardInitResponse> initOrganizerDashboard(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        return organizerService.initOrganizerDashboard(authorizationHeader);
+    }
 
     @Operation(summary = "查詢主辦方帳務活動列表", description = "依活動名稱、狀態、活動日期與分頁查詢主辦方帳務活動。")
     @GetMapping("/api/organizer/accounts/search")

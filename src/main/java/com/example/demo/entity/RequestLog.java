@@ -1,6 +1,7 @@
 package com.example.demo.entity;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -13,6 +14,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -22,6 +24,8 @@ import lombok.ToString;
  * API請求紀錄的Entity。<br>
  * 包含請求使用者、HTTP方法、API路徑、回應狀態碼、請求時間<br>
  * <b>FK</b>:使用者{@link User}
+ *
+ * @see StatusLog#requestLog
  */
 @Entity
 @Data
@@ -55,4 +59,12 @@ public class RequestLog {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    //----------我是分隔線----------
+
+    /** 此請求觸發的狀態變更紀錄清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "requestLog")
+    private List<StatusLog> statusLogs;
 }

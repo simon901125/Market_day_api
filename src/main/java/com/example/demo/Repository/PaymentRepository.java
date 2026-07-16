@@ -28,11 +28,10 @@ public class PaymentRepository {
                     a.payment_due_at AS paymentDueAt,
                     a.is_cancelled AS isCancelled,
                     me.title AS eventName,
-                    up.name AS vendorName
+                    vp.brand_name AS vendorName
                 FROM dbo.event_applications a
                 INNER JOIN dbo.market_events me ON me.id = a.event_id
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
-                INNER JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
                 WHERE a.application_no = :applicationNo
                 """;
 
@@ -131,9 +130,12 @@ public class PaymentRepository {
                     p.status AS paymentRecordStatus,
                     p.paid_at AS paidAt,
                     a.application_no AS applicationNo,
-                    a.payment_status AS applicationPaymentStatus
+                    a.user_id AS userId,
+                    a.payment_status AS applicationPaymentStatus,
+                    me.title AS eventTitle
                 FROM dbo.payments p
                 INNER JOIN dbo.event_applications a ON a.id = p.application_id
+                INNER JOIN dbo.market_events me ON me.id = a.event_id
                 WHERE p.payment_no = :paymentNo
                 """;
 

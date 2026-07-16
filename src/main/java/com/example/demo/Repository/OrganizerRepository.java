@@ -696,6 +696,20 @@ public class OrganizerRepository {
     }
 
     public Optional<Map<String, Object>> findOrganizerApplicationDetail(Long organizerUserId, Long applicationId) {
+        return findApplicationDetail(organizerUserId, applicationId, true);
+    }
+
+    public Optional<Map<String, Object>> findVendorApplicationDetail(Long vendorUserId, Long applicationId) {
+        return findApplicationDetail(vendorUserId, applicationId, false);
+    }
+
+    private Optional<Map<String, Object>> findApplicationDetail(
+            Long ownerUserId,
+            Long applicationId,
+            boolean organizerView) {
+        String ownerCondition = organizerView
+                ? "e.user_id = :ownerUserId"
+                : "a.user_id = :ownerUserId";
         String sql = """
                 SELECT
                     a.id AS applicationId,
@@ -831,11 +845,11 @@ public class OrganizerRepository {
                         r.id DESC
                 ) latest_refund
                 WHERE a.id = :applicationId
-                  AND e.user_id = :organizerUserId
-                """;
+                  AND %s
+                """.formatted(ownerCondition);
 
         Map<String, Object> map = new HashMap<>();
-        map.put("organizerUserId", organizerUserId);
+        map.put("ownerUserId", ownerUserId);
         map.put("applicationId", applicationId);
 
         return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
