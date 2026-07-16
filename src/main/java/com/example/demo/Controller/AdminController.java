@@ -135,6 +135,13 @@ public class AdminController {
         }
     }
 
+    /**
+     * 設定:活動審核通過，將指定活動的workflowStatus設為MAP_BUILDING<br>
+     * <b>API路徑</b>: /api/admin/events/{id}/approve<br>
+     * @param authorizationHeader
+     * @param id
+     * @return 活動名稱、活動新狀態
+     */
     @Operation(summary = "活動審核通過", description = "將指定活動的審核狀態設為通過。")
     @PostMapping("/events/{id}/approve")
     public ApiResponse<?> setEventApprove(
