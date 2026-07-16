@@ -647,9 +647,39 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
+    @Transactional
     public UserStatusChangeDto setUserAccountRestore(Long userId, String operatorEmail, Role operatorRole) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setUserAccountRestore'");
+        if (userId == null) {
+            throw new IllegalArgumentException("請提供使用者id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("找不到該管理員");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+
+        UserStatus newStatus = target.status();
+        if (target.status() == UserStatus.DISABLED) {
+            userRepo.updateStatusIfCurrent(userId, UserStatus.DISABLED, UserStatus.ACTIVE);
+            newStatus = UserStatus.ACTIVE;
+        }
+
+        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.ACCOUNT_RESTORED);
+        adminLog.setTargetType(AdminTargetType.USER);
+        adminLog.setTargetId(userId);
+        adminLog.setTargetLabel(targetLabel);
+        adminLog.setContent(admin.adminName() + "恢復" + targetLabel + "的帳號");
+        logRepo.save(adminLog);
+
+        return new UserStatusChangeDto(target.contactName(), target.email(), newStatus);
     }
 
     @Override

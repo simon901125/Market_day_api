@@ -62,7 +62,12 @@ public class StatusLogService {
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject",
                     (requestLogId, request) -> buildOrganizerApplicationReviewLogs(
                             requestLogId, request, "/reject", "REJECTED")),
-            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/disable", this::buildAdminUserDisableLogs));
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/disable",
+                    (requestLogId, request) -> buildAdminUserAccountStatusLogs(
+                            requestLogId, request, "/disable", "DISABLED")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/restore",
+                    (requestLogId, request) -> buildAdminUserAccountStatusLogs(
+                            requestLogId, request, "/restore", "ACTIVE")));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {
@@ -141,9 +146,10 @@ public class StatusLogService {
                 entry(requestLogId, "USER", userId, "users.isLogin", "0")));
     }
 
-    private List<StatusLogEntry> buildAdminUserDisableLogs(Long requestLogId, HttpServletRequest request) {
-        Long userId = pathId(request.getRequestURI(), "/api/admin/users/", "/disable");
-        return validEntries(List.of(entry(requestLogId, "USER", userId, "users.status", "DISABLED")));
+    private List<StatusLogEntry> buildAdminUserAccountStatusLogs(
+            Long requestLogId, HttpServletRequest request, String suffix, String newStatus) {
+        Long userId = pathId(request.getRequestURI(), "/api/admin/users/", suffix);
+        return validEntries(List.of(entry(requestLogId, "USER", userId, "users.status", newStatus)));
     }
 
     private List<StatusLogEntry> buildEmailVerifyLogs(Long requestLogId, HttpServletRequest request) {

@@ -370,9 +370,25 @@ public class AdminController {
     @PostMapping("/users/{id}/restore")
     public ApiResponse<?> setUserAccountRestore(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable String id) {
-        // TODO:使用者帳號復原
-        return ApiResponse.success("ok");
+            @PathVariable Long id) {
+        if (id == null) {
+            return ApiResponse.fail("請提供使用者id");
+        }
+
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("驗證憑證無效或已過期");
+        }
+
+        try {
+            String operatorEmail = jwtService.getEmail(token);
+            Role operatorRole = Role.fromRole(jwtService.getRole(token));
+            return ApiResponse.success("ok", service.setUserAccountRestore(id, operatorEmail, operatorRole));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.fail("使用者帳號復原失敗");
+        }
     }
 
     /**

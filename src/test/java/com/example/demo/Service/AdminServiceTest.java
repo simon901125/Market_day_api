@@ -153,4 +153,86 @@ class AdminServiceTest {
         assertThat(captor.getValue().getTargetLabel()).isEqualTo("vendor@test.com");
     }
 
+    @Test void setUserAccountRestoreRejectsWhenOperatorRoleIsNotAdmin() {
+        assertThatThrownBy(() -> service.setUserAccountRestore(1L, "op@test.com", Role.VENDOR))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該管理員");
+        verifyNoInteractions(userRepo, logRepo);
+    }
+
+    @Test void setUserAccountRestoreThrowsWhenAdminNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setUserAccountRestore(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該管理員");
+        verifyNoInteractions(logRepo);
+    }
+
+    @Test void setUserAccountRestoreThrowsWhenTargetUserNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(userRepo.findAccountStatusById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setUserAccountRestore(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到指定的使用者");
+        verifyNoInteractions(logRepo);
+    }
+
+    @Test void setUserAccountRestoreRestoresDisabledUserAndWritesOperationLog() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(userRepo.findAccountStatusById(1L))
+                .thenReturn(Optional.of(new UserAccountStatusProjection(1L, UserStatus.DISABLED, "vendor@test.com", "攤主小華")));
+        User adminRef = new User();
+        when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
+
+        var result = service.setUserAccountRestore(1L, "op@test.com", Role.ADMIN);
+
+        verify(userRepo).updateStatusIfCurrent(1L, UserStatus.DISABLED, UserStatus.ACTIVE);
+        assertThat(result.userName()).isEqualTo("攤主小華");
+        assertThat(result.userEmail()).isEqualTo("vendor@test.com");
+        assertThat(result.newAccountStatus()).isEqualTo(UserStatus.ACTIVE);
+
+        ArgumentCaptor<AdminOperationLog> captor = ArgumentCaptor.forClass(AdminOperationLog.class);
+        verify(logRepo).save(captor.capture());
+        AdminOperationLog savedLog = captor.getValue();
+        assertThat(savedLog.getUser()).isSameAs(adminRef);
+        assertThat(savedLog.getOperationType()).isEqualTo(AdminOperationType.ACCOUNT_RESTORED);
+        assertThat(savedLog.getTargetType()).isEqualTo(AdminTargetType.USER);
+        assertThat(savedLog.getTargetId()).isEqualTo(1L);
+        assertThat(savedLog.getTargetLabel()).isEqualTo("攤主小華");
+        assertThat(savedLog.getContent()).isEqualTo("管理員小明恢復攤主小華的帳號");
+    }
+
+    @Test void setUserAccountRestoreSkipsUpdateWhenTargetAlreadyNotDisabledButStillLogs() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(userRepo.findAccountStatusById(1L))
+                .thenReturn(Optional.of(new UserAccountStatusProjection(1L, UserStatus.ACTIVE, "vendor@test.com", "攤主小華")));
+        when(userRepo.getReferenceById(9L)).thenReturn(new User());
+
+        var result = service.setUserAccountRestore(1L, "op@test.com", Role.ADMIN);
+
+        verify(userRepo, never()).updateStatusIfCurrent(any(), any(), any());
+        assertThat(result.newAccountStatus()).isEqualTo(UserStatus.ACTIVE);
+        verify(logRepo).save(any(AdminOperationLog.class));
+    }
+
+    @Test void setUserAccountRestoreFallsBackToEmailWhenContactNameMissing() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(userRepo.findAccountStatusById(1L))
+                .thenReturn(Optional.of(new UserAccountStatusProjection(1L, UserStatus.DISABLED, "vendor@test.com", null)));
+        when(userRepo.getReferenceById(9L)).thenReturn(new User());
+
+        var result = service.setUserAccountRestore(1L, "op@test.com", Role.ADMIN);
+
+        assertThat(result.userName()).isNull();
+        ArgumentCaptor<AdminOperationLog> captor = ArgumentCaptor.forClass(AdminOperationLog.class);
+        verify(logRepo).save(captor.capture());
+        assertThat(captor.getValue().getTargetLabel()).isEqualTo("vendor@test.com");
+    }
+
 }
