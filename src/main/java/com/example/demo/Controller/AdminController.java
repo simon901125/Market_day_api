@@ -36,7 +36,7 @@ public class AdminController {
         this.service = service;
     }
 
-    int standardPageSize = 6;
+    private final int STANDARD_PAGE_SIZE = 6;
 
     /**
      * 用來獲取管理員後台: 首頁資料統計部分<br>
@@ -76,7 +76,7 @@ public class AdminController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestBody AdminEventSearchRequest request) {
         if (request == null) {
-            request = new AdminEventSearchRequest(null, null, null, null, null, 1, standardPageSize);
+            request = new AdminEventSearchRequest(null, null, null, null, null, 1, STANDARD_PAGE_SIZE);
         }
 
         try {
@@ -118,7 +118,7 @@ public class AdminController {
 
         try {
             if (size != null || page != null) {
-                int pageSize = size != null ? size : standardPageSize;
+                int pageSize = size != null ? size : STANDARD_PAGE_SIZE;
                 int number = page != null ? page : 1;
                 return ApiResponse.success("ok", service.getEventStatusLogs(id, number, pageSize));
             }
@@ -180,7 +180,7 @@ public class AdminController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestBody AdminUserSearchRequest request) {
         if (request == null) {
-            request = new AdminUserSearchRequest(null, null, null, 1, standardPageSize);
+            request = new AdminUserSearchRequest(null, null, null, 1, STANDARD_PAGE_SIZE);
         }
 
         try {
@@ -223,7 +223,7 @@ public class AdminController {
 
         if (role.equals("vender")) {
             try {
-                int pageSize = size != null ? size : standardPageSize;
+                int pageSize = size != null ? size : STANDARD_PAGE_SIZE;
                 return ApiResponse.success("ok", service.getVenderDetail(id, pageSize));
             } catch (IllegalArgumentException e) {
                 return ApiResponse.fail(e.getMessage());
@@ -232,7 +232,7 @@ public class AdminController {
             }
         } else if (role.equals("organizer")) {
             try {
-                int pageSize = size != null ? size : standardPageSize;
+                int pageSize = size != null ? size : STANDARD_PAGE_SIZE;
                 return ApiResponse.success("ok", service.getOrganizerDetail(id, pageSize));
             } catch (IllegalArgumentException e) {
                 return ApiResponse.fail(e.getMessage());
@@ -265,7 +265,7 @@ public class AdminController {
         }
 
         try {
-            int pageSize = size != null ? size : standardPageSize;
+            int pageSize = size != null ? size : STANDARD_PAGE_SIZE;
             int pageNumber = page != null ? page : 1;
             return ApiResponse.success("ok", service.getVenderRegLogs(id, pageNumber, pageSize));
         } catch (IllegalArgumentException e) {
@@ -296,7 +296,7 @@ public class AdminController {
         }
 
         try {
-            int pageSize = size != null ? size : standardPageSize;
+            int pageSize = size != null ? size : STANDARD_PAGE_SIZE;
             int pageNumber = page != null ? page : 1;
             return ApiResponse.success("ok", service.getOrgEventLogs(id, pageNumber, pageSize));
         } catch (IllegalArgumentException e) {
@@ -327,7 +327,7 @@ public class AdminController {
         }
 
         try {
-            int pageSize = size != null ? size : standardPageSize;
+            int pageSize = size != null ? size : STANDARD_PAGE_SIZE;
             int pageNumber = page != null ? page : 1;
             return ApiResponse.success("ok", service.getUserLoginLogs(id, pageNumber, pageSize));
         } catch (IllegalArgumentException e) {
@@ -368,7 +368,7 @@ public class AdminController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestBody AdminLogsSearchRequest request) {
         if (request == null) {
-            request = new AdminLogsSearchRequest(null, null, null, null, null, 1, standardPageSize);
+            request = new AdminLogsSearchRequest(null, null, null, null, null, 1, STANDARD_PAGE_SIZE);
         }
 
         try {
