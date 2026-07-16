@@ -16,6 +16,25 @@ public class PaymentRepository {
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
+    public Optional<Map<String, Object>> findVendorPaymentUserByEmail(String email) {
+        String sql = """
+                SELECT
+                    id AS userId,
+                    email,
+                    role,
+                    status,
+                    isLogin,
+                    expired_time AS expiredTime
+                FROM dbo.users
+                WHERE email = :email
+                  AND role = 'VENDOR'
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("email", email);
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
     public Optional<Map<String, Object>> findPayableApplication(String applicationNo) {
         String sql = """
                 SELECT
@@ -27,12 +46,10 @@ public class PaymentRepository {
                     a.payment_status AS paymentStatus,
                     a.payment_due_at AS paymentDueAt,
                     a.is_cancelled AS isCancelled,
-                    me.title AS eventName,
-                    vp.brand_name AS vendorName
-                FROM dbo.event_applications a
-                INNER JOIN dbo.market_events me ON me.id = a.event_id
-                INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
-                WHERE a.application_no = :applicationNo
+                    me.title AS eventName
+                    FROM dbo.event_applications a
+                    INNER JOIN dbo.market_events me ON me.id = a.event_id
+                    WHERE a.application_no = :applicationNo
                 """;
 
         Map<String, Object> map = new HashMap<>();

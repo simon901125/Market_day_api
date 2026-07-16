@@ -7,6 +7,15 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 ### 2026-07-16
 
+#### yushuan branch
+
+- 調整攤主藍新金流建立付款流程，`POST /api/vendor/payments/newebpay` 回傳資料補上 `applicationId`、`applicationNo`、`paymentId`、`merchantOrderNo`，讓前端能明確對應報名單、付款紀錄與藍新商店訂單編號。
+- 調整付款狀態查詢 API，`GET /api/vendor/payments/{applicationNo}/status` 回傳資料補上 `applicationId`、`paymentId`、`merchantOrderNo`，並保留 `paymentNo`、`providerTradeNo`、`paymentRecordStatus`、`paidAt` 等付款結果欄位。
+- 調整藍新付款完成導回流程，`POST /api/newebpay/return` redirect 至前端時補上 `applicationNo`，方便前端回到報名紀錄頁後重新查詢該筆報名付款狀態。
+- 修正付款建立查詢只查金流必要欄位，不再為了聯絡人名稱查詢 `user_profiles.contact_name`，避免 `up.contact_name` 未 join 造成 SQL compile error。
+- 保留藍新背景通知流程，`POST /api/newebpay/notify` 仍負責驗章、解密、比對金額，並更新 `payments.status` 與 `event_applications.payment_status`。
+- 更新 `NewebPayServiceTest`，移除已不再使用的 `StallRepository` 測試注入，讓金流服務測試符合目前付款流程依賴。
+
 #### simon branch
 
 - 新增攤主首頁初始化 API：`GET /api/vendor/dashboard/init`，需攜帶有效的 Vendor Bearer Token。

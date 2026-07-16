@@ -152,6 +152,10 @@ public class ApiResponse<T> {
                 "\u6d3b\u52d5\u6524\u4f4d\u72c0\u614b\u53d6\u5f97\u6210\u529f";
             case "Vendor account retrieved successfully" ->
                 "\u6524\u4e3b\u5e33\u865f\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
+            case "Vendor applications retrieved successfully" ->
+                "\u6524\u4e3b\u5831\u540d\u7d00\u9304\u53d6\u5f97\u6210\u529f";
+            case "Vendor application detail retrieved successfully" ->
+                "\u6524\u4e3b\u5831\u540d\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
             case "Vendor stall map retrieved successfully" ->
                 "\u6524\u4e3b\u9078\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
             case "Organizer stall map retrieved successfully" ->
@@ -336,6 +340,8 @@ public class ApiResponse<T> {
             case "Login status update failed" -> "\u767b\u5165\u72c0\u614b\u66f4\u65b0\u5931\u6557";
             case "Reset token is required" -> "\u8acb\u63d0\u4f9b\u91cd\u8a2d\u5bc6\u78bc token";
             case "Password is required" -> "\u8acb\u8f38\u5165\u5bc6\u78bc";
+            case "Current password is required" -> "\u8acb\u8f38\u5165\u76ee\u524d\u5bc6\u78bc";
+            case "Current password is incorrect" -> "\u76ee\u524d\u5bc6\u78bc\u932f\u8aa4";
             case "Password must be at least 8 characters and contain letters and numbers" ->
                 "\u5bc6\u78bc\u81f3\u5c11\u9700 8 \u500b\u5b57\uff0c\u4e14\u9700\u5305\u542b\u82f1\u6587\u8207\u6578\u5b57";
             case "Password reset failed" -> "\u5bc6\u78bc\u91cd\u8a2d\u5931\u6557";

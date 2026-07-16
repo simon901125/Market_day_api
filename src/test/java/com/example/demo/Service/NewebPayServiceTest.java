@@ -14,14 +14,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.example.demo.Config.NewebPayProperties;
 import com.example.demo.Repository.PaymentRepository;
-import com.example.demo.Repository.StallRepository;
 import com.example.demo.dto.request.VendorPaymentRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class NewebPayServiceTest {
     @Mock PaymentRepository paymentRepository;
-    @Mock StallRepository stallRepository;
     @Mock JwtService jwtService;
     NewebPayService service;
     NewebPayProperties properties;
@@ -31,7 +29,6 @@ class NewebPayServiceTest {
         properties = new NewebPayProperties();
         ReflectionTestUtils.setField(service, "newebPayProperties", properties);
         ReflectionTestUtils.setField(service, "paymentRepository", paymentRepository);
-        ReflectionTestUtils.setField(service, "stallRepository", stallRepository);
         ReflectionTestUtils.setField(service, "jwtService", jwtService);
         ReflectionTestUtils.setField(service, "objectMapper", new ObjectMapper());
     }
