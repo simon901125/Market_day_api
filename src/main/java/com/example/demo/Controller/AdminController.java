@@ -4,6 +4,7 @@ import java.util.Map;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,7 +46,8 @@ public class AdminController {
      */
     @Operation(summary = "取得管理員後台首頁統計資料", description = "取得管理員後台首頁的資料統計總覽。")
     @GetMapping("/dashboard/overview")
-    public ApiResponse<AdminDashboardDto> getDashboardOverview() {
+    public ApiResponse<AdminDashboardDto> getDashboardOverview(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         // FIXME:需要補充通知訊息部分
         AdminDashboardDto response = service.getDashboardResponse();
         return ApiResponse.success("ok", response);
@@ -53,7 +55,9 @@ public class AdminController {
 
     @Operation(summary = "查詢通知列表", description = "查詢管理員後台的通知列表。")
     @PostMapping("/notices/search")
-    public ApiResponse<?> getNotices(@RequestBody Map<String, Object> data) {
+    public ApiResponse<?> getNotices(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody Map<String, Object> data) {
         // TODO:取得通知列表
 
         return ApiResponse.success("ok");
@@ -68,7 +72,9 @@ public class AdminController {
      */
     @Operation(summary = "搜尋活動列表", description = "依關鍵字、主辦方、狀態、時間區間等條件搜尋活動列表，支援分頁；request 為 null 時使用預設分頁參數查詢全部活動。")
     @PostMapping("/events/search")
-    public ApiResponse<?> getEventList(@RequestBody AdminEventSearchRequest request) {
+    public ApiResponse<?> getEventList(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody AdminEventSearchRequest request) {
         if (request == null) {
             request = new AdminEventSearchRequest(null, null, null, null, null, 1, standardPageSize);
         }
@@ -102,6 +108,7 @@ public class AdminController {
     @Operation(summary = "取得活動詳細資料", description = "只傳 id 時回傳活動詳細資料；有傳 pageSize 或 pageNumber 時改回傳活動狀態變動紀錄。")
     @GetMapping("/events/{id}")
     public ApiResponse<?> getEventDetail(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable Long id,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) Integer page) {
@@ -126,28 +133,36 @@ public class AdminController {
 
     @Operation(summary = "活動審核通過", description = "將指定活動的審核狀態設為通過。")
     @PostMapping("/events/{id}/approve")
-    public ApiResponse<?> setEventApprove(@PathVariable String id) {
+    public ApiResponse<?> setEventApprove(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String id) {
         // TODO:活動審核通過
         return ApiResponse.success("ok");
     }
 
     @Operation(summary = "活動要求補件", description = "將指定活動的審核狀態設為要求補件。")
     @PostMapping("/events/{id}/request-revision")
-    public ApiResponse<?> setEventRevision(@PathVariable String id) {
+    public ApiResponse<?> setEventRevision(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String id) {
         // TODO:活動要求補件
         return ApiResponse.success("ok");
     }
 
     @Operation(summary = "活動地圖建置完成", description = "將指定活動的地圖建置狀態設為完成。")
     @PostMapping("/events/{id}/map-complete")
-    public ApiResponse<?> setEventMapComplete(@PathVariable String id) {
+    public ApiResponse<?> setEventMapComplete(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String id) {
         // TODO:地圖建置完成
         return ApiResponse.success("ok");
     }
 
     @Operation(summary = "確認活動下架", description = "確認將指定活動下架。")
     @PostMapping("/events/{id}/unpublish-confirm")
-    public ApiResponse<?> setEventUnpublish(@PathVariable String id) {
+    public ApiResponse<?> setEventUnpublish(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String id) {
         // TODO:確認活動下架
         return ApiResponse.success("ok");
     }
@@ -161,7 +176,9 @@ public class AdminController {
      */
     @Operation(summary = "搜尋使用者列表", description = "依關鍵字、角色、帳號狀態等條件搜尋使用者列表，支援分頁；request 為 null 時使用預設分頁參數查詢全部使用者。")
     @PostMapping("/users/search")
-    public ApiResponse<?> getUserList(@RequestBody AdminUserSearchRequest request) {
+    public ApiResponse<?> getUserList(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody AdminUserSearchRequest request) {
         if (request == null) {
             request = new AdminUserSearchRequest(null, null, null, 1, standardPageSize);
         }
@@ -181,53 +198,50 @@ public class AdminController {
     }
 
     /**
-     * 用來獲取管理員後台: 攤主詳細頁面所需資料<br>
-     * <b>API路徑</b>: /api/admin/users/{id}/vender<br>
+     * 用來獲取管理員後台: 使用者詳細頁面所需資料<br>
+     * <b>API路徑</b>: /api/admin/users/{id}?role=vender<br>
+     * <b>API路徑</b>: /api/admin/users/{id}?role=organizer<br>
      *
      * @param id   使用者id
      * @param size 每頁筆數，未傳時預設6
      * @return ApiResponse<T>
      */
-    @Operation(summary = "取得攤主詳細資料", description = "依使用者 id 取得攤主的帳號、品牌與活動報名等詳細資料。")
-    @GetMapping("/users/{id}/vender")
-    public ApiResponse<?> getVenderDetail(@PathVariable Long id, @RequestParam(required = false) Integer size) {
+    @Operation(summary = "取得使用者詳細資料", description = "依使用者 id 和角色取得攤主的帳號、品牌與活動報名等詳細資料或是主辦方的帳號與活動管理等詳細資料。")
+    @GetMapping("/users/{id}")
+    public ApiResponse<?> getUserDetail(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long id,
+            @RequestParam String role,
+            @RequestParam(required = false) Integer size) {
         if (id == null) {
             return ApiResponse.fail("請提供使用者id");
         }
 
-        try {
-            int pageSize = size != null ? size : standardPageSize;
-            return ApiResponse.success("ok", service.getVenderDetail(id, pageSize));
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.fail(e.getMessage());
-        } catch (Exception e) {
-            return ApiResponse.fail("取得攤主詳細資料失敗");
-        }
-    }
-
-    /**
-     * 用來獲取管理員後台: 主辦方詳細頁面所需資料<br>
-     * <b>API路徑</b>: /api/admin/users/{id}/organizer<br>
-     *
-     * @param id   使用者id
-     * @param size 每頁筆數，未傳時預設6
-     * @return ApiResponse<T>
-     */
-    @Operation(summary = "取得主辦方詳細資料", description = "依使用者 id 取得主辦方的帳號與活動管理等詳細資料。")
-    @GetMapping("/users/{id}/organizer")
-    public ApiResponse<?> getOrganizerDetail(@PathVariable Long id, @RequestParam(required = false) Integer size) {
-        if (id == null) {
-            return ApiResponse.fail("請提供使用者id");
+        if (role == null) {
+            return ApiResponse.fail("請提供使用者角色");
         }
 
-        try {
-            int pageSize = size != null ? size : standardPageSize;
-            return ApiResponse.success("ok", service.getOrganizerDetail(id, pageSize));
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.fail(e.getMessage());
-        } catch (Exception e) {
-            return ApiResponse.fail("取得主辦方詳細資料失敗");
+        if (role.equals("vender")) {
+            try {
+                int pageSize = size != null ? size : standardPageSize;
+                return ApiResponse.success("ok", service.getVenderDetail(id, pageSize));
+            } catch (IllegalArgumentException e) {
+                return ApiResponse.fail(e.getMessage());
+            } catch (Exception e) {
+                return ApiResponse.fail("取得攤主詳細資料失敗");
+            }
+        } else if (role.equals("organizer")) {
+            try {
+                int pageSize = size != null ? size : standardPageSize;
+                return ApiResponse.success("ok", service.getOrganizerDetail(id, pageSize));
+            } catch (IllegalArgumentException e) {
+                return ApiResponse.fail(e.getMessage());
+            } catch (Exception e) {
+                return ApiResponse.fail("取得主辦方詳細資料失敗");
+            }
         }
+
+        return ApiResponse.fail("該使用者角色不存在");
     }
 
     /**
@@ -242,9 +256,10 @@ public class AdminController {
     @Operation(summary = "取得攤主活動報名紀錄", description = "依使用者 id 分頁查詢攤主的活動報名紀錄。")
     @GetMapping("/users/{id}/venderReg")
     public ApiResponse<?> getVenderRegLogs(
-        @PathVariable Long id,
-        @RequestParam(required = false) Integer size,
-        @RequestParam(required = false) Integer page) {
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) Integer page) {
         if (id == null) {
             return ApiResponse.fail("請提供使用者id");
         }
@@ -272,9 +287,10 @@ public class AdminController {
     @Operation(summary = "取得主辦方活動管理紀錄", description = "依使用者 id 分頁查詢主辦方的活動管理紀錄。")
     @GetMapping("/users/{id}/OrgEvent")
     public ApiResponse<?> getOrgEventLogs(
-        @PathVariable Long id,
-        @RequestParam(required = false) Integer size,
-        @RequestParam(required = false) Integer page) {
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) Integer page) {
         if (id == null) {
             return ApiResponse.fail("請提供使用者id");
         }
@@ -302,9 +318,10 @@ public class AdminController {
     @Operation(summary = "取得使用者登入紀錄", description = "依使用者 id 分頁查詢使用者的登入紀錄；若該使用者為管理員則無登入紀錄頁面。")
     @GetMapping("/users/{id}/loginLog")
     public ApiResponse<?> getUserLoginLogs(
-        @PathVariable Long id,
-        @RequestParam(required = false) Integer size,
-        @RequestParam(required = false) Integer page) {
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) Integer page) {
         if (id == null) {
             return ApiResponse.fail("請提供使用者id");
         }
@@ -322,14 +339,18 @@ public class AdminController {
 
     @Operation(summary = "使用者帳號停用", description = "將指定使用者的帳號狀態設為停用。")
     @PostMapping("/users/{id}/disable")
-    public ApiResponse<?> setUserAccountDisable(@PathVariable String id) {
+    public ApiResponse<?> setUserAccountDisable(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String id) {
         // TODO:使用者帳號停用
         return ApiResponse.success("ok");
     }
 
     @Operation(summary = "使用者帳號復原", description = "將指定使用者的帳號狀態由停用復原為正常。")
     @PostMapping("/users/{id}/restore")
-    public ApiResponse<?> setUserAccountRestore(@PathVariable String id) {
+    public ApiResponse<?> setUserAccountRestore(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String id) {
         // TODO:使用者帳號復原
         return ApiResponse.success("ok");
     }
@@ -343,7 +364,9 @@ public class AdminController {
      */
     @Operation(summary = "搜尋操作紀錄列表", description = "依關鍵字、操作類型、對象類型、時間區間等條件搜尋管理員操作紀錄，支援分頁；request 為 null 時使用預設分頁參數查詢全部紀錄。")
     @PostMapping("/logs/search")
-    public ApiResponse<?> getLogList(@RequestBody AdminLogsSearchRequest request) {
+    public ApiResponse<?> getLogList(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody AdminLogsSearchRequest request) {
         if (request == null) {
             request = new AdminLogsSearchRequest(null, null, null, null, null, 1, standardPageSize);
         }

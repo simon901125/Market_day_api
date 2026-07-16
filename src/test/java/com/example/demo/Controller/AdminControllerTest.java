@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -50,11 +51,28 @@ class AdminControllerTest {
     @Test void placeholderRoutesRemainReachable() throws Exception {
         mvc.perform(post("/api/admin/notices/search").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk());
-        String[] gets = {"/api/admin/events/1", "/api/admin/users/1"};
-        for (String path : gets) mvc.perform(get(path)).andExpect(status().isOk());
+        mvc.perform(get("/api/admin/events/1")).andExpect(status().isOk());
         String[] posts = {"/api/admin/events/1/approve", "/api/admin/events/1/request-revision",
                 "/api/admin/events/1/map-complete", "/api/admin/events/1/unpublish-confirm",
                 "/api/admin/users/1/disable", "/api/admin/users/1/restore"};
         for (String path : posts) mvc.perform(post(path)).andExpect(status().isOk());
+    }
+
+    @Test void getUserDetailWithVenderRoleDelegatesToVenderDetail() throws Exception {
+        mvc.perform(get("/api/admin/users/1").param("role", "vender").param("size", "5"))
+                .andExpect(status().isOk());
+        verify(service).getVenderDetail(1L, 5);
+    }
+
+    @Test void getUserDetailWithOrganizerRoleDelegatesToOrganizerDetail() throws Exception {
+        mvc.perform(get("/api/admin/users/1").param("role", "organizer"))
+                .andExpect(status().isOk());
+        verify(service).getOrganizerDetail(1L, 6);
+    }
+
+    @Test void getUserDetailWithUnknownRoleReturnsFailWithoutCallingService() throws Exception {
+        mvc.perform(get("/api/admin/users/1").param("role", "vip"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(400));
     }
 }
