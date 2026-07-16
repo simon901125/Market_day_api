@@ -88,10 +88,10 @@ public class VendorNotificationService {
             return Map.of("message", "This account is not a vendor");
         }
 
-        Map<String, Object> vendor = stallRepository.findVendorAccountByEmail(jwtService.getEmail(token))
+        Map<String, Object> vendor = stallRepository.findVendorDashboardProfileByEmail(jwtService.getEmail(token))
                 .orElse(null);
         if (vendor == null) {
-            return Map.of("message", "Vendor profile not found");
+            return Map.of("message", "Vendor account not found");
         }
         if (!"VENDOR".equals(vendor.get("role"))) {
             return Map.of("message", "This account is not a vendor");

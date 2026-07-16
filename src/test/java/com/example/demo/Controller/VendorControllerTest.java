@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.example.demo.Service.StallService;
+import com.example.demo.Service.VendorDashboardService;
 import com.example.demo.Service.VendorNotificationService;
 
 @ExtendWith(MockitoExtension.class)
@@ -17,6 +18,7 @@ class VendorControllerTest {
 
     @Mock StallService stallService;
     @Mock VendorNotificationService vendorNotificationService;
+    @Mock VendorDashboardService vendorDashboardService;
 
     private VendorController controller;
 
@@ -25,6 +27,7 @@ class VendorControllerTest {
         controller = new VendorController();
         ReflectionTestUtils.setField(controller, "stallService", stallService);
         ReflectionTestUtils.setField(controller, "vendorNotificationService", vendorNotificationService);
+        ReflectionTestUtils.setField(controller, "vendorDashboardService", vendorDashboardService);
     }
 
     @Test
@@ -32,5 +35,12 @@ class VendorControllerTest {
         controller.getVendorNotifications("Bearer token", "付款相關", 2, 10);
 
         verify(vendorNotificationService).getNotifications("Bearer token", "付款相關", 2, 10);
+    }
+
+    @Test
+    void dashboardEndpointDelegatesAuthorizationHeader() {
+        controller.initVendorDashboard("Bearer token");
+
+        verify(vendorDashboardService).initDashboard("Bearer token");
     }
 }
