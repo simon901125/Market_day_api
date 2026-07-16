@@ -1,6 +1,6 @@
 package com.example.demo.dto.response.admin;
 
-import com.example.demo.enums.status.EventStatus;
+import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.Role;
 
 /**
@@ -10,12 +10,12 @@ import com.example.demo.enums.type.Role;
  * @param status 更動後的狀態
  * @param description 此次操作說明
  * @param operator 操作人類型:操作人(ADMIN/ORGANIZER)
- * 
+ *
  * @see AdminEventDetailDto
  */
 public record StatusLog(
     String dateTime,
-    EventStatus status,
+    WorkflowStatus status,
     String description,
     String operator
 ) {}

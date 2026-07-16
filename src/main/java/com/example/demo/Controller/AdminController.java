@@ -19,6 +19,7 @@ import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 @RestController
 @RequestMapping("/api/admin")
 @Tag(name = "管理員API", description = "提供與管理員活動審核、使用者帳號停復用相關功能")
+@SecurityRequirement(name = "bearerAuth")
 public class AdminController {
     final AdminServiceInterface service;
 
@@ -123,6 +125,24 @@ public class AdminController {
     @GetMapping("/users/{id}")
     public ApiResponse<?> getUserDetail(@PathVariable String id) {
         // TODO:取得使用者詳細
+        return ApiResponse.success("ok");
+    }
+
+    @GetMapping("/users/{id}/venderReg")
+    public ApiResponse<?> getVenderRegLogs(@PathVariable String id) {
+        // TODO:取得攤主詳細: 活動報名紀錄
+        return ApiResponse.success("ok");
+    }
+
+    @GetMapping("/users/{id}/OrgEvent")
+    public ApiResponse<?> getOrgEventLogs(@PathVariable String id) {
+        // TODO:取得主辦方詳細 :活動管理紀錄
+        return ApiResponse.success("ok");
+    }
+
+    @GetMapping("/users/{id}/loginLog")
+    public ApiResponse<?> getUserLoginLogs(@PathVariable String id) {
+        // TODO:取得使用者詳細 :使用者登入紀錄
         return ApiResponse.success("ok");
     }
 

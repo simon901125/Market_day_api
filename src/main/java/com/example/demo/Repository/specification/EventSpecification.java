@@ -131,7 +131,7 @@ public class EventSpecification {
     }
 
     /**
-     * 計算活動目前報名攤位數(不計入被拒絕的攤位)，作法對應{@link com.example.demo.Repository.EventRepo#countRegBoothsByEventId}
+     * 計算活動目前報名攤位數(不計入被拒絕的攤位)，作法對應{@link com.example.demo.Repository.EventApplicationRepo#countRegBoothsByEventId}
      */
     public static Expression<Long> registeredBoothCountSubquery(
             Root<MarketEvent> root, CriteriaQuery<?> query, CriteriaBuilder cb) {

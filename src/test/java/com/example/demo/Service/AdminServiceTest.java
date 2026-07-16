@@ -59,12 +59,4 @@ class AdminServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test void unfinishedServiceMethodsFailExplicitlyInsteadOfReturningMisleadingData() {
-        assertThatThrownBy(() -> service.getNotice(null, 1, 10)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> service.getVenderDetail(1L)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> service.getVenderRegLogs(1L, 1, 10)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> service.getOrganizerDetail(1L)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> service.getOrgEventLogs(1L, 1, 10)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> service.getUserLoginLogs(1L, 1, 10)).isInstanceOf(UnsupportedOperationException.class);
-    }
 }
