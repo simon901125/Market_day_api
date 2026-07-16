@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.AdminService;
 import com.example.demo.Service.AdminServiceBase;
+import com.example.demo.Service.JwtService;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminEventSearchRequest;
 import com.example.demo.dto.request.admin.AdminLogSearchDto;
@@ -19,6 +20,7 @@ import com.example.demo.dto.request.admin.AdminUserSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
+import com.example.demo.enums.type.Role;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,9 +33,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 @Tag(name = "管理員API", description = "提供與管理員活動審核、使用者帳號停復用相關功能")
 public class AdminController {
     final AdminServiceBase service;
+    final JwtService jwtService;
 
-    AdminController(AdminService service) {
+    AdminController(AdminService service, JwtService jwtService) {
         this.service = service;
+        this.jwtService = jwtService;
     }
 
     private final int STANDARD_PAGE_SIZE = 6;
@@ -341,9 +345,25 @@ public class AdminController {
     @PostMapping("/users/{id}/disable")
     public ApiResponse<?> setUserAccountDisable(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable String id) {
-        // TODO:使用者帳號停用
-        return ApiResponse.success("ok");
+            @PathVariable Long id) {
+        if (id == null) {
+            return ApiResponse.fail("請提供使用者id");
+        }
+
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("驗證憑證無效或已過期");
+        }
+
+        try {
+            String operatorEmail = jwtService.getEmail(token);
+            Role operatorRole = Role.fromRole(jwtService.getRole(token));
+            return ApiResponse.success("ok", service.setUserAccountDisable(id, operatorEmail, operatorRole));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.fail("使用者帳號停用失敗");
+        }
     }
 
     @Operation(summary = "使用者帳號復原", description = "將指定使用者的帳號狀態由停用復原為正常。")

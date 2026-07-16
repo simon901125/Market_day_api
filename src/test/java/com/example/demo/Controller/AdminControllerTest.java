@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.example.demo.Service.AdminService;
+import com.example.demo.Service.JwtService;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminLogSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
@@ -25,10 +26,11 @@ import com.example.demo.dto.request.admin.AdminUserSearchDto;
 @ExtendWith(MockitoExtension.class)
 class AdminControllerTest {
     @Mock AdminService service;
+    @Mock JwtService jwtService;
     MockMvc mvc;
 
     @BeforeEach void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new AdminController(service)).build();
+        mvc = MockMvcBuilders.standaloneSetup(new AdminController(service, jwtService)).build();
     }
 
     @Test void implementedDashboardAndSearchEndpointsDelegate() throws Exception {

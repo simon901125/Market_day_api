@@ -22,6 +22,7 @@ import com.example.demo.dto.response.admin.AdminVenderRegDto;
 import com.example.demo.dto.response.admin.EventStatusChangeDto;
 import com.example.demo.dto.response.admin.StatusLog;
 import com.example.demo.dto.response.admin.UserStatusChangeDto;
+import com.example.demo.enums.type.Role;
 
 import jakarta.annotation.Nonnull;
 
@@ -69,21 +70,21 @@ public abstract class AdminServiceBase {
     public abstract PageResponse<AdminOperationLogDto> getLogs(AdminLogSearchDto request, int pageNumber, int pageSize);
 
     /** 設定使用者帳號停用 */
-    public abstract UserStatusChangeDto setUserAccountDisable(Long userId);
+    public abstract UserStatusChangeDto setUserAccountDisable(Long userId, String operatorEmail, Role operatorRole);
 
     /** 設定使用者帳號復原 */
-    public abstract UserStatusChangeDto setUserAccountRestore(Long userId);
+    public abstract UserStatusChangeDto setUserAccountRestore(Long userId, String operatorEmail, Role operatorRole);
 
     /** 設定活動審核通過 */
-    public abstract EventStatusChangeDto setEventApprove(Long userId);
+    public abstract EventStatusChangeDto setEventApprove(Long userId, String operatorEmail, Role operatorRole);
 
     /** 設定活動要求補件 */
-    public abstract EventStatusChangeDto setEventRevision(Long userId);
+    public abstract EventStatusChangeDto setEventRevision(Long userId, String operatorEmail, Role operatorRole);
 
     /** 設定地圖建置完成 */
-    public abstract EventStatusChangeDto setEventMapComplete(Long userId);
+    public abstract EventStatusChangeDto setEventMapComplete(Long userId, String operatorEmail, Role operatorRole);
 
     /** 設定確認活動下架 */
-    public abstract EventStatusChangeDto setEventUnpublish(Long userId);
+    public abstract EventStatusChangeDto setEventUnpublish(Long userId, String operatorEmail, Role operatorRole);
 
 }

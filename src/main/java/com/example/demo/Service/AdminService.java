@@ -15,6 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventApplicationRepo;
@@ -24,12 +25,14 @@ import com.example.demo.Repository.RequestLogRepo;
 import com.example.demo.Repository.StatusLogRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
+import com.example.demo.Repository.projection.admin.AdminLookupProjection;
 import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
 import com.example.demo.Repository.projection.admin.AdminOrganizerDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminVenderDetailProjection;
 import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
 import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
 import com.example.demo.Repository.projection.admin.RefundProjection;
+import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
 import com.example.demo.Repository.projection.admin.UserLoginLogProjection;
 import com.example.demo.Repository.projection.admin.VenderRegApplicationProjection;
 import com.example.demo.Repository.specification.AdminLogSpecification;
@@ -65,6 +68,7 @@ import com.example.demo.enums.status.ReviewStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
+import com.example.demo.enums.type.AdminTargetType;
 import com.example.demo.enums.type.AdminTargetTypeForFront;
 import com.example.demo.enums.type.Role;
 
@@ -607,37 +611,67 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
   
     @Override
-    public UserStatusChangeDto setUserAccountDisable(Long userId) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setUserAccountDisable'");
+    @Transactional
+    public UserStatusChangeDto setUserAccountDisable(Long userId, String operatorEmail, Role operatorRole) {
+        if (userId == null) {
+            throw new IllegalArgumentException("請提供使用者id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("找不到該管理員");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+
+        UserStatus newStatus = target.status();
+        if (target.status() == UserStatus.ACTIVE) {
+            userRepo.updateStatusIfCurrent(userId, UserStatus.ACTIVE, UserStatus.DISABLED);
+            newStatus = UserStatus.DISABLED;
+        }
+
+        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.ACCOUNT_DISABLED);
+        adminLog.setTargetType(AdminTargetType.USER);
+        adminLog.setTargetId(userId);
+        adminLog.setTargetLabel(targetLabel);
+        adminLog.setContent(admin.adminName() + "停用" + targetLabel + "的帳號");
+        logRepo.save(adminLog);
+
+        return new UserStatusChangeDto(target.contactName(), target.email(), newStatus);
     }
 
     @Override
-    public UserStatusChangeDto setUserAccountRestore(Long userId) {
+    public UserStatusChangeDto setUserAccountRestore(Long userId, String operatorEmail, Role operatorRole) {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'setUserAccountRestore'");
     }
 
     @Override
-    public EventStatusChangeDto setEventApprove(Long userId) {
+    public EventStatusChangeDto setEventApprove(Long userId, String operatorEmail, Role operatorRole) {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'setEventApprove'");
     }
 
     @Override
-    public EventStatusChangeDto setEventRevision(Long userId) {
+    public EventStatusChangeDto setEventRevision(Long userId, String operatorEmail, Role operatorRole) {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'setEventRevision'");
     }
 
     @Override
-    public EventStatusChangeDto setEventMapComplete(Long userId) {
+    public EventStatusChangeDto setEventMapComplete(Long userId, String operatorEmail, Role operatorRole) {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'setEventMapComplete'");
     }
 
     @Override
-    public EventStatusChangeDto setEventUnpublish(Long userId) {
+    public EventStatusChangeDto setEventUnpublish(Long userId, String operatorEmail, Role operatorRole) {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'setEventUnpublish'");
     }

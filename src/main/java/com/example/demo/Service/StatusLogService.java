@@ -46,7 +46,7 @@ public class StatusLogService {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private final List<StatusLogApi> statusLogApis = List.of(
+    private final List<StatusLogApi> statusLogApis = List.<StatusLogApi>of(
             new StatusLogApi(HttpMethod.POST.name(), "/api/stalls/select", this::buildStallSelectionLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/local-login", this::buildLoginLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/local-login", this::buildLoginLogs),
@@ -61,7 +61,8 @@ public class StatusLogService {
                             requestLogId, request, "/approve", "APPROVED")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject",
                     (requestLogId, request) -> buildOrganizerApplicationReviewLogs(
-                            requestLogId, request, "/reject", "REJECTED")));
+                            requestLogId, request, "/reject", "REJECTED")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/disable", this::buildAdminUserDisableLogs));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {
@@ -138,6 +139,11 @@ public class StatusLogService {
         return validEntries(List.of(
                 entry(requestLogId, "USER", userId, "users.status", "DISABLED"),
                 entry(requestLogId, "USER", userId, "users.isLogin", "0")));
+    }
+
+    private List<StatusLogEntry> buildAdminUserDisableLogs(Long requestLogId, HttpServletRequest request) {
+        Long userId = pathId(request.getRequestURI(), "/api/admin/users/", "/disable");
+        return validEntries(List.of(entry(requestLogId, "USER", userId, "users.status", "DISABLED")));
     }
 
     private List<StatusLogEntry> buildEmailVerifyLogs(Long requestLogId, HttpServletRequest request) {
