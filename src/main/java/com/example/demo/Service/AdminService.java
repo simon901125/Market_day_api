@@ -784,9 +784,50 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
-    public EventStatusChangeDto setEventMapComplete(Long userId, String operatorEmail, Role operatorRole) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setEventMapComplete'");
+    @Transactional
+    public EventStatusChangeDto setEventMapComplete(Long eventId, String operatorEmail, Role operatorRole) {
+        if (eventId == null) {
+            throw new IllegalArgumentException("請提供活動id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+
+        if (event.workflowStatus() != WorkflowStatus.MAP_BUILDING) {
+            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+
+        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.MAP_BUILDING, WorkflowStatus.READY_TO_PUBLISH);
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(event.organizerId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Event_Map_Complete");
+        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
+        notification.setTargetId(eventId);
+        notification.setTitle("地圖完成");
+        notification.setContent(event.title() + "攤位地圖已建置完成，可前往活動詳情確認");
+        notificationRepo.save(notification);
+
+        String organizerLabel = event.organizerContactName() != null ? event.organizerContactName() : "主辦方";
+        String eventTitleLabel = event.title() != null ? event.title() : "活動";
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.MAP_BUILD_COMPLETED);
+        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
+        adminLog.setTargetId(eventId);
+        adminLog.setTargetLabel(event.title());
+        adminLog.setContent(admin.adminName() + "通知主辦方" + organizerLabel + " " + eventTitleLabel + "地圖建置完成");
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(event.title(), EventStatus.READY_TO_PUBLISH);
     }
 
     @Override

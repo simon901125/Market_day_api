@@ -254,6 +254,21 @@ class StatusLogServiceTest {
     }
 
     @Test
+    void adminEventMapCompleteRecordsReadyToPublishStatus() {
+        MockHttpServletRequest request = post("/api/admin/events/30/map-complete");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{}");
+
+        statusLogService.recordForRequest(10L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("READY_TO_PUBLISH");
+    }
+
+    @Test
     void organizerApplicationRejectRecordsRejectedStatus() {
         MockHttpServletRequest request = post("/api/organizer/applications/10/reject");
         ContentCachingRequestWrapper wrapper = cachedJsonRequest(

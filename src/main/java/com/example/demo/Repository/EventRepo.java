@@ -136,15 +136,18 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             """)
     Optional<AdminEventDetailProjection> findEventDetailById(@Param("id") Long id);
 
-    /** 管理員後台: 活動審核:查詢操作對象目前活動狀態，只查id、流程狀態、活動名稱、主辦方id */
+    /** 管理員後台: 活動審核:查詢操作對象目前活動狀態，只查id、流程狀態、活動名稱、主辦方id、主辦方聯絡人姓名 */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.EventApprovalProjection(
                 market.id,
                 market.workflowStatus,
                 market.title,
-                market.user.id
+                market.user.id,
+                userProfile.contactName
             )
             FROM MarketEvent market
+            JOIN market.user user
+            LEFT JOIN user.userProfile userProfile
             WHERE market.id = :eventId
             """)
     Optional<EventApprovalProjection> findApprovalStatusById(@Param("eventId") Long eventId);

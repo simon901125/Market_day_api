@@ -274,7 +274,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L)));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L, "王小華")));
 
         assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -287,7 +287,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L)));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
         User adminRef = new User();
         User organizerRef = new User();
         when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
@@ -362,7 +362,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L)));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L, "王小華")));
 
         assertThatThrownBy(() -> service.setEventRevision(1L, "op@test.com", Role.ADMIN, "缺少營業執照"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -375,7 +375,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L)));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
         User adminRef = new User();
         User organizerRef = new User();
         when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
@@ -408,6 +408,99 @@ class AdminServiceTest {
         assertThat(savedLog.getTargetId()).isEqualTo(1L);
         assertThat(savedLog.getTargetLabel()).isEqualTo("夏日市集");
         assertThat(savedLog.getContent()).isEqualTo("管理員小明退回夏日市集申請, 原因:缺少營業執照");
+    }
+
+    @Test void setEventMapCompleteRejectsWhenOperatorRoleIsNotAdmin() {
+        assertThatThrownBy(() -> service.setEventMapComplete(1L, "op@test.com", Role.ORGANIZER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("權限不足，請重新登入管理員帳號再操作");
+        verifyNoInteractions(userRepo, eventRepo, logRepo, notificationRepo);
+    }
+
+    @Test void setEventMapCompleteThrowsWhenAdminNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEventMapComplete(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該管理員");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo);
+    }
+
+    @Test void setEventMapCompleteThrowsWhenEventNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEventMapComplete(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到指定的活動");
+        verifyNoInteractions(logRepo, notificationRepo);
+    }
+
+    @Test void setEventMapCompleteThrowsWhenEventNotMapBuilding() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+
+        assertThatThrownBy(() -> service.setEventMapComplete(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("夏日市集當前狀態不可執行此操作");
+        verify(eventRepo, never()).updateWorkflowStatusIfCurrent(any(), any(), any());
+        verifyNoInteractions(logRepo, notificationRepo);
+    }
+
+    @Test void setEventMapCompleteCompletesMapBuildingEventAndWritesNotificationAndOperationLog() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華")));
+        User adminRef = new User();
+        User organizerRef = new User();
+        when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
+        when(userRepo.getReferenceById(5L)).thenReturn(organizerRef);
+
+        var result = service.setEventMapComplete(1L, "op@test.com", Role.ADMIN);
+
+        verify(eventRepo).updateWorkflowStatusIfCurrent(1L, WorkflowStatus.MAP_BUILDING, WorkflowStatus.READY_TO_PUBLISH);
+        assertThat(result.eventName()).isEqualTo("夏日市集");
+        assertThat(result.newEventStatus()).isEqualTo(EventStatus.READY_TO_PUBLISH);
+
+        ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepo).save(notificationCaptor.capture());
+        Notification savedNotification = notificationCaptor.getValue();
+        assertThat(savedNotification.getUser()).isSameAs(organizerRef);
+        assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
+        assertThat(savedNotification.getType()).isEqualTo("Event_Map_Complete");
+        assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
+        assertThat(savedNotification.getTargetId()).isEqualTo(1L);
+        assertThat(savedNotification.getTitle()).isEqualTo("地圖完成");
+        assertThat(savedNotification.getContent()).isEqualTo("夏日市集攤位地圖已建置完成，可前往活動詳情確認");
+
+        ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
+        verify(logRepo).save(logCaptor.capture());
+        AdminOperationLog savedLog = logCaptor.getValue();
+        assertThat(savedLog.getUser()).isSameAs(adminRef);
+        assertThat(savedLog.getOperationType()).isEqualTo(AdminOperationType.MAP_BUILD_COMPLETED);
+        assertThat(savedLog.getTargetType()).isEqualTo(AdminTargetType.MARKET_EVENT);
+        assertThat(savedLog.getTargetId()).isEqualTo(1L);
+        assertThat(savedLog.getTargetLabel()).isEqualTo("夏日市集");
+        assertThat(savedLog.getContent()).isEqualTo("管理員小明通知主辦方王小華 夏日市集地圖建置完成");
+    }
+
+    @Test void setEventMapCompleteFallsBackToDefaultLabelsWhenOrganizerContactNameMissing() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, null)));
+        when(userRepo.getReferenceById(9L)).thenReturn(new User());
+        when(userRepo.getReferenceById(5L)).thenReturn(new User());
+
+        service.setEventMapComplete(1L, "op@test.com", Role.ADMIN);
+
+        ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
+        verify(logRepo).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getContent()).isEqualTo("管理員小明通知主辦方主辦方 夏日市集地圖建置完成");
     }
 
 }

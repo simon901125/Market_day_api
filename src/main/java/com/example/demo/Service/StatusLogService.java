@@ -73,7 +73,10 @@ public class StatusLogService {
                             requestLogId, request, "/approve", "MAP_BUILDING")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/request-revision",
                     (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
-                            requestLogId, request, "/request-revision", "REVISION_REQUIRED")));
+                            requestLogId, request, "/request-revision", "REVISION_REQUIRED")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/map-complete",
+                    (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
+                            requestLogId, request, "/map-complete", "READY_TO_PUBLISH")));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {

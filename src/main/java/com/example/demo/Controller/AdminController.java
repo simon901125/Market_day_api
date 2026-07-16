@@ -206,9 +206,25 @@ public class AdminController {
     @PostMapping("/events/{id}/map-complete")
     public ApiResponse<?> setEventMapComplete(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable String id) {
-        // TODO:地圖建置完成
-        return ApiResponse.success("ok");
+            @PathVariable Long id) {
+        if (id == null) {
+            return ApiResponse.fail("請提供活動id");
+        }
+
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("驗證憑證無效或已過期");
+        }
+
+        try {
+            String operatorEmail = jwtService.getEmail(token);
+            Role operatorRole = Role.fromRole(jwtService.getRole(token));
+            return ApiResponse.success("ok", service.setEventMapComplete(id, operatorEmail, operatorRole));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.fail("活動地圖建置完成失敗");
+        }
     }
 
     @Operation(summary = "確認活動下架", description = "確認將指定活動下架。")
