@@ -458,6 +458,8 @@ public class StallService {
                 "instagramUrl", nullIfBlank(body.getInstagramUrl()),
                 "facebookUrl", nullIfBlank(body.getFacebookUrl()),
                 "websiteUrl", nullIfBlank(body.getWebsiteUrl()),
+                "avatarImageUrl", nullIfBlank(body.getAvatarImageUrl()),
+                "coverImageUrl", nullIfBlank(body.getCoverImageUrl()),
                 "brandSummary", normalizeText(body.getBrandSummary()),
                 "brandDescription", normalizeText(body.getBrandDescription()));
 

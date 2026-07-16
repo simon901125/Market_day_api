@@ -58,17 +58,23 @@ class StallServiceVendorImageSaveTest {
     }
 
     @Test
-    void profileSaveDoesNotAttemptToOverwriteImageUrls() {
+    void profileSavePersistsSubmittedImageUrls() {
+        VendorStallSaveRequest request = validRequest();
+        request.setAvatarImageUrl("http://localhost:8081/images/vendor-avatar/new.png");
+        request.setCoverImageUrl("http://localhost:8081/images/vendor-cover/new.png");
+
         ApiResponse<MapBackedResponse> response = stallService.saveVendorStallProfile(
                 AUTHORIZATION,
-                validRequest());
+                request);
 
         assertThat(response.isSuccessStatus()).isTrue();
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> profileCaptor = ArgumentCaptor.forClass(Map.class);
         verify(stallRepository).updateVendorProfile(eq(10L), eq(20L), profileCaptor.capture());
         verify(stallRepository).replaceVendorProducts(20L, List.of());
-        assertThat(profileCaptor.getValue()).doesNotContainKeys("avatarImageUrl", "coverImageUrl");
+        assertThat(profileCaptor.getValue())
+                .containsEntry("avatarImageUrl", "http://localhost:8081/images/vendor-avatar/new.png")
+                .containsEntry("coverImageUrl", "http://localhost:8081/images/vendor-cover/new.png");
     }
 
     @Test

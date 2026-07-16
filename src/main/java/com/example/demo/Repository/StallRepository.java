@@ -262,6 +262,31 @@ public class StallRepository {
                 .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
+    /**
+     * Finds the account role and whether its vendor profile has been created.
+     * The left joins intentionally keep first-login vendor accounts that do not
+     * have user_profiles or vendor_profiles rows yet.
+     */
+    public Optional<Map<String, Object>> findVendorDashboardStatusByEmail(String email) {
+        String sql = """
+                SELECT
+                    u.id AS userId,
+                    u.role,
+                    u.email,
+                    up.id AS userProfileId,
+                    vp.id AS vendorProfileId,
+                    CAST(CASE WHEN vp.id IS NULL THEN 0 ELSE 1 END AS BIT) AS hasVendorProfile
+                FROM dbo.users u
+                LEFT JOIN dbo.user_profiles up ON up.user_id = u.id
+                    AND up.profile_type = N'VENDOR'
+                LEFT JOIN dbo.vendor_profiles vp ON vp.user_profile_id = up.id
+                WHERE u.email = :email
+                """;
+
+        return RepositoryResultMapper.normalizeOptional(
+                namedParameterJdbcTemplate.queryForList(sql, Map.of("email", email)).stream().findFirst());
+    }
+
     public Optional<Map<String, Object>> findVendorDashboardProfileByEmail(String email) {
         String sql = """
                 SELECT
@@ -384,6 +409,8 @@ public class StallRepository {
                     instagram_url = :instagramUrl,
                     facebook_url = :facebookUrl,
                     website_url = :websiteUrl,
+                    avatar_image_url = COALESCE(:avatarImageUrl, avatar_image_url),
+                    cover_image_url = COALESCE(:coverImageUrl, cover_image_url),
                     brand_summary = :brandSummary,
                     brand_description = :brandDescription
                 WHERE id = :vendorProfileId;
@@ -448,12 +475,14 @@ public class StallRepository {
                 INSERT INTO dbo.vendor_profiles (
                     user_profile_id, category_id, brand_name,
                     instagram_url, facebook_url, website_url,
+                    avatar_image_url, cover_image_url,
                     brand_summary, brand_description
                 )
                 OUTPUT INSERTED.id INTO @insertedVendorProfiles (id)
                 VALUES (
                     :userProfileId, :categoryId, :brandName,
                     :instagramUrl, :facebookUrl, :websiteUrl,
+                    :avatarImageUrl, :coverImageUrl,
                     :brandSummary, :brandDescription
                 );
 
