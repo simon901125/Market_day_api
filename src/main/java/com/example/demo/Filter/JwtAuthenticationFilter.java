@@ -55,7 +55,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall/{eventId}"),
             new ProtectedApi(HttpMethod.GET.name(), "/api/organizer/stall/{eventId}/{stallNo}"),
             new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/approve"),
-            new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject"));
+            new ProtectedApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/admin/dashboard/overview"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/notices/search"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/events/search"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/admin/events/{id}"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/events/{id}/approve"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/events/{id}/request-revision"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/events/{id}/map-complete"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/events/{id}/unpublish-confirm"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/users/search"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/admin/users/{id}/vender"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/admin/users/{id}/organizer"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/admin/users/{id}/venderReg"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/admin/users/{id}/OrgEvent"),
+            new ProtectedApi(HttpMethod.GET.name(), "/api/admin/users/{id}/loginLog"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/users/{id}/disable"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/users/{id}/restore"),
+            new ProtectedApi(HttpMethod.POST.name(), "/api/admin/logs/search"));
 
     public JwtAuthenticationFilter(
             JwtService jwtService,
