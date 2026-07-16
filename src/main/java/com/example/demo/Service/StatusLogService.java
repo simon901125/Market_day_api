@@ -67,7 +67,10 @@ public class StatusLogService {
                             requestLogId, request, "/disable", "DISABLED")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/restore",
                     (requestLogId, request) -> buildAdminUserAccountStatusLogs(
-                            requestLogId, request, "/restore", "ACTIVE")));
+                            requestLogId, request, "/restore", "ACTIVE")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/approve",
+                    (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
+                            requestLogId, request, "/approve", "MAP_BUILDING")));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {
@@ -150,6 +153,12 @@ public class StatusLogService {
             Long requestLogId, HttpServletRequest request, String suffix, String newStatus) {
         Long userId = pathId(request.getRequestURI(), "/api/admin/users/", suffix);
         return validEntries(List.of(entry(requestLogId, "USER", userId, "users.status", newStatus)));
+    }
+
+    private List<StatusLogEntry> buildAdminEventWorkflowStatusLogs(
+            Long requestLogId, HttpServletRequest request, String suffix, String newStatus) {
+        Long eventId = pathId(request.getRequestURI(), "/api/admin/events/", suffix);
+        return validEntries(List.of(entry(requestLogId, "EVENT", eventId, "workflow_status", newStatus)));
     }
 
     private List<StatusLogEntry> buildEmailVerifyLogs(Long requestLogId, HttpServletRequest request) {

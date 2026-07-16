@@ -139,9 +139,25 @@ public class AdminController {
     @PostMapping("/events/{id}/approve")
     public ApiResponse<?> setEventApprove(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable String id) {
-        // TODO:活動審核通過
-        return ApiResponse.success("ok");
+            @PathVariable Long id) {
+        if (id == null) {
+            return ApiResponse.fail("請提供活動id");
+        }
+
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("驗證憑證無效或已過期");
+        }
+
+        try {
+            String operatorEmail = jwtService.getEmail(token);
+            Role operatorRole = Role.fromRole(jwtService.getRole(token));
+            return ApiResponse.success("ok", service.setEventApprove(id, operatorEmail, operatorRole));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.fail("活動審核失敗");
+        }
     }
 
     @Operation(summary = "活動要求補件", description = "將指定活動的審核狀態設為要求補件。")

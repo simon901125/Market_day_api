@@ -21,15 +21,21 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.EventStallZoneRepo;
+import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminLookupProjection;
+import com.example.demo.Repository.projection.admin.EventApprovalProjection;
 import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
 import com.example.demo.entity.AdminOperationLog;
+import com.example.demo.entity.Notification;
 import com.example.demo.entity.User;
+import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
 import com.example.demo.enums.type.AdminTargetType;
+import com.example.demo.enums.type.NotificationCategory;
+import com.example.demo.enums.type.NotificationTargetType;
 import com.example.demo.enums.type.Role;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +44,7 @@ class AdminServiceTest {
     @Mock EventStallZoneRepo zoneRepo;
     @Mock UserRepo userRepo;
     @Mock AdminLogRepo logRepo;
+    @Mock NotificationRepo notificationRepo;
     AdminService service;
 
     @BeforeEach void setUp() {
@@ -46,6 +53,7 @@ class AdminServiceTest {
         ReflectionTestUtils.setField(service, "eventStallZoneRepo", zoneRepo);
         ReflectionTestUtils.setField(service, "userRepo", userRepo);
         ReflectionTestUtils.setField(service, "logRepo", logRepo);
+        ReflectionTestUtils.setField(service, "notificationRepo", notificationRepo);
     }
 
     @Test void dashboardAggregatesRepositoryCounters() {
@@ -74,7 +82,7 @@ class AdminServiceTest {
     @Test void setUserAccountDisableRejectsWhenOperatorRoleIsNotAdmin() {
         assertThatThrownBy(() -> service.setUserAccountDisable(1L, "op@test.com", Role.VENDOR))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("找不到該管理員");
+                .hasMessage("權限不足，請重新登入管理員帳號再操作");
         verifyNoInteractions(userRepo, logRepo);
     }
 
@@ -156,7 +164,7 @@ class AdminServiceTest {
     @Test void setUserAccountRestoreRejectsWhenOperatorRoleIsNotAdmin() {
         assertThatThrownBy(() -> service.setUserAccountRestore(1L, "op@test.com", Role.VENDOR))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("找不到該管理員");
+                .hasMessage("權限不足，請重新登入管理員帳號再操作");
         verifyNoInteractions(userRepo, logRepo);
     }
 
@@ -233,6 +241,84 @@ class AdminServiceTest {
         ArgumentCaptor<AdminOperationLog> captor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(captor.capture());
         assertThat(captor.getValue().getTargetLabel()).isEqualTo("vendor@test.com");
+    }
+
+    @Test void setEventApproveRejectsWhenOperatorRoleIsNotAdmin() {
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ORGANIZER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("權限不足，請重新登入管理員帳號再操作");
+        verifyNoInteractions(userRepo, eventRepo, logRepo, notificationRepo);
+    }
+
+    @Test void setEventApproveThrowsWhenAdminNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該管理員");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo);
+    }
+
+    @Test void setEventApproveThrowsWhenEventNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到指定的活動");
+        verifyNoInteractions(logRepo, notificationRepo);
+    }
+
+    @Test void setEventApproveThrowsWhenEventNotPendingReview() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L)));
+
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("夏日市集當前狀態不可執行此操作");
+        verify(eventRepo, never()).updateWorkflowStatusIfCurrent(any(), any(), any());
+        verifyNoInteractions(logRepo, notificationRepo);
+    }
+
+    @Test void setEventApproveApprovesPendingReviewEventAndWritesNotificationAndOperationLog() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L)));
+        User adminRef = new User();
+        User organizerRef = new User();
+        when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
+        when(userRepo.getReferenceById(5L)).thenReturn(organizerRef);
+
+        var result = service.setEventApprove(1L, "op@test.com", Role.ADMIN);
+
+        verify(eventRepo).updateWorkflowStatusIfCurrent(1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING);
+        assertThat(result.eventName()).isEqualTo("夏日市集");
+        assertThat(result.newEventStatus()).isEqualTo(EventStatus.MAP_BUILDING);
+
+        ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepo).save(notificationCaptor.capture());
+        Notification savedNotification = notificationCaptor.getValue();
+        assertThat(savedNotification.getUser()).isSameAs(organizerRef);
+        assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
+        assertThat(savedNotification.getType()).isEqualTo("Event_Approve");
+        assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
+        assertThat(savedNotification.getTargetId()).isEqualTo(1L);
+        assertThat(savedNotification.getTitle()).isEqualTo("審核通過");
+        assertThat(savedNotification.getContent()).isEqualTo("夏日市集審核通過，開始建置攤位地圖");
+
+        ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
+        verify(logRepo).save(logCaptor.capture());
+        AdminOperationLog savedLog = logCaptor.getValue();
+        assertThat(savedLog.getUser()).isSameAs(adminRef);
+        assertThat(savedLog.getOperationType()).isEqualTo(AdminOperationType.ACTIVITY_REVIEW);
+        assertThat(savedLog.getTargetType()).isEqualTo(AdminTargetType.MARKET_EVENT);
+        assertThat(savedLog.getTargetId()).isEqualTo(1L);
+        assertThat(savedLog.getTargetLabel()).isEqualTo("夏日市集");
+        assertThat(savedLog.getContent()).isEqualTo("管理員小明同意夏日市集申請");
     }
 
 }

@@ -3,11 +3,13 @@ package com.example.demo.Repository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
+import com.example.demo.Repository.projection.admin.EventApprovalProjection;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.enums.status.WorkflowStatus;
 
@@ -133,5 +135,27 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             WHERE market.id = :id
             """)
     Optional<AdminEventDetailProjection> findEventDetailById(@Param("id") Long id);
+
+    /** 管理員後台: 活動審核:查詢操作對象目前活動狀態，只查id、流程狀態、活動名稱、主辦方id */
+    @Query("""
+            SELECT new com.example.demo.Repository.projection.admin.EventApprovalProjection(
+                market.id,
+                market.workflowStatus,
+                market.title,
+                market.user.id
+            )
+            FROM MarketEvent market
+            WHERE market.id = :eventId
+            """)
+    Optional<EventApprovalProjection> findApprovalStatusById(@Param("eventId") Long eventId);
+
+    /** 管理員後台: 活動審核:僅當目前流程狀態符合預期時才更新狀態，回傳影響筆數 */
+    @Modifying
+    @Query("UPDATE MarketEvent market SET market.workflowStatus = :newStatus "
+            + "WHERE market.id = :eventId AND market.workflowStatus = :expectedStatus")
+    int updateWorkflowStatusIfCurrent(
+            @Param("eventId") Long eventId,
+            @Param("expectedStatus") WorkflowStatus expectedStatus,
+            @Param("newStatus") WorkflowStatus newStatus);
 
 }

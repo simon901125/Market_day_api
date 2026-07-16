@@ -21,6 +21,7 @@ import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventApplicationRepo;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.EventStallZoneRepo;
+import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.RequestLogRepo;
 import com.example.demo.Repository.StatusLogRepo;
 import com.example.demo.Repository.UserRepo;
@@ -30,6 +31,7 @@ import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
 import com.example.demo.Repository.projection.admin.AdminOrganizerDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminVenderDetailProjection;
 import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
+import com.example.demo.Repository.projection.admin.EventApprovalProjection;
 import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
 import com.example.demo.Repository.projection.admin.RefundProjection;
 import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
@@ -60,6 +62,7 @@ import com.example.demo.dto.response.admin.UserStatusChangeDto;
 import com.example.demo.entity.AdminOperationLog;
 import com.example.demo.entity.EventStallZone;
 import com.example.demo.entity.MarketEvent;
+import com.example.demo.entity.Notification;
 import com.example.demo.entity.User;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.PaymentStatus;
@@ -70,6 +73,8 @@ import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
 import com.example.demo.enums.type.AdminTargetType;
 import com.example.demo.enums.type.AdminTargetTypeForFront;
+import com.example.demo.enums.type.NotificationCategory;
+import com.example.demo.enums.type.NotificationTargetType;
 import com.example.demo.enums.type.Role;
 
 import jakarta.annotation.Nonnull;
@@ -97,6 +102,9 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
     @Autowired
     StatusLogRepo statusLogRepo;
+
+    @Autowired
+    NotificationRepo notificationRepo;
 
     @Autowired
     MessageSource messageSource;
@@ -617,7 +625,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException("請提供使用者id");
         }
         if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("找不到該管理員");
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
         }
 
         AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
@@ -653,7 +661,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException("請提供使用者id");
         }
         if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("找不到該管理員");
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
         }
 
         AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
@@ -683,9 +691,47 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
-    public EventStatusChangeDto setEventApprove(Long userId, String operatorEmail, Role operatorRole) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setEventApprove'");
+    @Transactional
+    public EventStatusChangeDto setEventApprove(Long eventId, String operatorEmail, Role operatorRole) {
+        if (eventId == null) {
+            throw new IllegalArgumentException("請提供活動id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+
+        if (event.workflowStatus() != WorkflowStatus.PENDING_REVIEW) {
+            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+
+        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING);
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(event.organizerId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Event_Approve");
+        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
+        notification.setTargetId(eventId);
+        notification.setTitle("審核通過");
+        notification.setContent(event.title() + "審核通過，開始建置攤位地圖");
+        notificationRepo.save(notification);
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.ACTIVITY_REVIEW);
+        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
+        adminLog.setTargetId(eventId);
+        adminLog.setTargetLabel(event.title());
+        adminLog.setContent(admin.adminName() + "同意" + event.title() + "申請");
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(event.title(), EventStatus.MAP_BUILDING);
     }
 
     @Override
