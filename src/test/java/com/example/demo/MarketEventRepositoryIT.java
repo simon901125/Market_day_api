@@ -29,14 +29,20 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
 
     @Test void publishedEventCanBeSearchedAndLoadedByCurrentSchema() {
         Long eventId = createPublishedEvent();
+        Long categoryId = jdbc.queryForObject(
+                "SELECT category_id FROM market_event_categories WHERE event_id = :eventId",
+                Map.of("eventId", eventId), Long.class);
         var request = new MarketSearchRequest("Integration Market", List.of("Taipei"),
-                List.of("UPCOMING"), LocalDate.now(), LocalDate.now().plusDays(30), null, "CURRENT");
+                List.of("UPCOMING"), LocalDate.now(), LocalDate.now().plusDays(30), List.of(categoryId), "CURRENT");
         var cards = repository.searchMarketEvents(request);
         assertThat(cards).extracting(card -> card.id()).contains(eventId);
+        assertThat(cards.stream().filter(card -> card.id().equals(eventId)).findFirst().orElseThrow().categories())
+                .extracting(category -> category.id()).containsExactly(categoryId);
         var detail = repository.findMarketEventDetailById(eventId).orElseThrow();
         assertThat(detail.title()).isEqualTo("Integration Market");
         assertThat(detail.startTime()).isNotNull();
         assertThat(detail.publishStatus()).isEqualTo("PUBLISHED");
+        assertThat(detail.categories()).extracting(category -> category.id()).containsExactly(categoryId);
     }
 
     @Test void draftEventIsNotPublic() {

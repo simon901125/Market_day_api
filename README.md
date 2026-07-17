@@ -12,6 +12,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 將活動與品牌分類由單一分類調整為多對多關聯；`MarketEvent`、`VendorProfile` 改用 `ManyToMany`，測試資料庫新增 `market_event_categories`、`vendor_profile_categories` 關聯表。
 - 攤主品牌儲存改以 `categoryIds` 接收多筆分類；品牌與攤主相關 Response 改回傳 `categories` 陣列，品牌分類篩選則以單一分類名稱輸入。
 - 分類相關列表採活動／品牌基本資料與分類集合分段查詢，避免 JOIN 多筆分類後產生重複活動或品牌。
+- 公開活動 API `POST /api/markets/search` 改以 `categoryIds` 篩選並回傳 `categories` 陣列；`GET /api/markets/{id}` 同步改為回傳完整分類集合。
 - 調整攤主市集列表卡片資料，補上報名剩餘天數及各活動日期剩餘攤位；移除對不存在的 `event_images`、`event_traffic_infos` 資料表查詢。
 - 補齊攤主市集詳情所需的多分類、每日攤位、費用、設備、用電、主辦方及交通資料；攤主報名流程與報名須知不列入此 API 回傳。
 - 新增主辦方通知中心 `GET /api/organizer/notices`，支援主辦方通知分類、未讀數、分頁及通知關聯資料，並串接既有報名與付款狀態異動。

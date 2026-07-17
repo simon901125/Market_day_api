@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Repository;
 import com.example.demo.dto.request.MarketSearchRequest;
 import com.example.demo.dto.response.MarketEventCardResponse;
 import com.example.demo.dto.response.MarketEventDetailResponse;
+import com.example.demo.dto.response.CategoryResponse;
 
 @Repository
 public class MarketEventRepository {
@@ -42,23 +44,27 @@ public class MarketEventRepository {
                     CAST(e.start_at AS DATE) AS start_date,
                     CAST(e.end_at AS DATE) AS end_date,
                     e.cover_image_url,
-                    e.workflow_status AS publish_status,
-                    c.name AS category_name
+                    e.workflow_status AS publish_status
                 FROM dbo.market_events e
-                INNER JOIN dbo.categories c ON c.id = e.category_id
                 WHERE e.workflow_status = N'PUBLISHED'
                 """);
 
         Map<String, Object> params = new HashMap<>();
         appendKeywordFilter(sql, params, request);
         appendCitiesFilter(sql, params, request);
-        appendCategoryNamesFilter(sql, params, request);
+        appendCategoryIdsFilter(sql, params, request);
         appendDateRangeFilter(sql, params, request);
         appendEventTypeFilter(sql, request);
         appendEventStatusesFilter(sql, params, request);
 
         sql.append(" ORDER BY e.start_at DESC, e.id DESC");
-        return namedParameterJdbcTemplate.query(sql.toString(), params, this::toMarketEventCardResponse);
+        List<MarketEventCardResponse> cards = namedParameterJdbcTemplate.query(
+                sql.toString(), params, this::toMarketEventCardResponse);
+        Map<Long, List<CategoryResponse>> categoriesByEventId = findCategoriesByEventIds(
+                cards.stream().map(MarketEventCardResponse::id).toList());
+        return cards.stream()
+                .map(card -> withCategories(card, categoriesByEventId.getOrDefault(card.id(), List.of())))
+                .toList();
     }
 
     public Optional<MarketEventDetailResponse> findMarketEventDetailById(Long id) {
@@ -86,10 +92,8 @@ public class MarketEventRepository {
                     e.map_image_url,
                     e.public_info_at,
                     e.workflow_status AS review_status,
-                    e.workflow_status AS publish_status,
-                    c.name AS category_name
+                    e.workflow_status AS publish_status
                 FROM dbo.market_events e
-                INNER JOIN dbo.categories c ON c.id = e.category_id
                 WHERE e.id = :id
                   AND e.workflow_status = N'PUBLISHED'
                 """;
@@ -97,7 +101,10 @@ public class MarketEventRepository {
         Map<String, Object> params = Map.of("id", id);
         return namedParameterJdbcTemplate.query(sql, params, this::toMarketEventDetailResponse)
                 .stream()
-                .findFirst();
+                .findFirst()
+                .map(detail -> withCategories(
+                        detail,
+                        findCategoriesByEventIds(List.of(detail.id())).getOrDefault(detail.id(), List.of())));
     }
 
     private void appendKeywordFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
@@ -129,13 +136,22 @@ public class MarketEventRepository {
         params.put("cities", cities);
     }
 
-    private void appendCategoryNamesFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
-        List<String> categoryNames = normalizeList(request == null ? null : request.categoryNames());
-        if (categoryNames.isEmpty()) {
+    private void appendCategoryIdsFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
+        List<Long> categoryIds = request == null || request.categoryIds() == null
+                ? List.of()
+                : request.categoryIds().stream().filter(id -> id != null && id > 0).distinct().toList();
+        if (categoryIds.isEmpty()) {
             return;
         }
-        sql.append(" AND c.name IN (:categoryNames)");
-        params.put("categoryNames", categoryNames);
+        sql.append("""
+                 AND EXISTS (
+                     SELECT 1
+                     FROM dbo.market_event_categories mec
+                     WHERE mec.event_id = e.id
+                       AND mec.category_id IN (:categoryIds)
+                 )
+                """);
+        params.put("categoryIds", categoryIds);
     }
 
     private void appendDateRangeFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
@@ -245,7 +261,7 @@ public class MarketEventRepository {
                 endDate,
                 rs.getString("cover_image_url"),
                 rs.getString("publish_status"),
-                toCategoryNames(rs.getString("category_name")),
+                List.of(),
                 resolveEventStatus(startDate, endDate));
     }
 
@@ -258,7 +274,7 @@ public class MarketEventRepository {
                 rs.getString("title"),
                 rs.getString("summary"),
                 rs.getString("description"),
-                toCategoryNames(rs.getString("category_name")),
+                List.of(),
                 rs.getString("location_name"),
                 rs.getString("city"),
                 rs.getString("district"),
@@ -293,9 +309,40 @@ public class MarketEventRepository {
         return timestamp == null ? null : timestamp.toLocalDateTime();
     }
 
-    private static List<String> toCategoryNames(String categoryName) {
-        String normalizedCategoryName = normalizeText(categoryName);
-        return normalizedCategoryName == null ? List.of() : List.of(normalizedCategoryName);
+    private Map<Long, List<CategoryResponse>> findCategoriesByEventIds(List<Long> eventIds) {
+        if (eventIds == null || eventIds.isEmpty()) {
+            return Map.of();
+        }
+        String sql = """
+                SELECT mec.event_id, c.id, c.name, c.slug
+                FROM dbo.market_event_categories mec
+                INNER JOIN dbo.categories c ON c.id = mec.category_id
+                WHERE mec.event_id IN (:eventIds)
+                ORDER BY mec.event_id, c.id
+                """;
+        Map<Long, List<CategoryResponse>> result = new LinkedHashMap<>();
+        namedParameterJdbcTemplate.query(sql, Map.of("eventIds", eventIds), rs -> {
+            result.computeIfAbsent(rs.getLong("event_id"), ignored -> new java.util.ArrayList<>())
+                    .add(new CategoryResponse(rs.getLong("id"), rs.getString("name"), rs.getString("slug")));
+        });
+        return result;
+    }
+
+    private static MarketEventCardResponse withCategories(
+            MarketEventCardResponse card, List<CategoryResponse> categories) {
+        return new MarketEventCardResponse(card.id(), card.title(), card.summary(), card.locationName(),
+                card.city(), card.district(), card.address(), card.startDate(), card.endDate(),
+                card.coverImageUrl(), card.publishStatus(), categories, card.eventStatus());
+    }
+
+    private static MarketEventDetailResponse withCategories(
+            MarketEventDetailResponse detail, List<CategoryResponse> categories) {
+        return new MarketEventDetailResponse(detail.id(), detail.title(), detail.summary(), detail.description(),
+                categories, detail.locationName(), detail.city(), detail.district(), detail.address(),
+                detail.trafficInfo(), detail.notice(), detail.startDate(), detail.endDate(), detail.startTime(),
+                detail.endTime(), detail.registrationStartAt(), detail.registrationEndAt(), detail.maxBooths(),
+                detail.baseFee(), detail.coverImageUrl(), detail.mapImageUrl(), detail.publicInfoAt(),
+                detail.reviewStatus(), detail.publishStatus(), detail.eventStatus());
     }
 
     private static String resolveEventStatus(LocalDate startDate, LocalDate endDate) {

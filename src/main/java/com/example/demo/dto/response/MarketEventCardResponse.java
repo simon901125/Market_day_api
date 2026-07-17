@@ -15,6 +15,6 @@ public record MarketEventCardResponse(
     LocalDate endDate,
     String coverImageUrl,
     String publishStatus,
-    List<String> categoryNames,
+    List<CategoryResponse> categories,
     String eventStatus) {
 }
