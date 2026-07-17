@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import com.example.demo.dto.notification.NotificationCreateCommand;
 import com.example.demo.dto.response.VendorNotificationItemResponse;
+import com.example.demo.dto.response.OrganizerNotificationItemResponse;
 import com.example.demo.enums.notification.NotificationCategory;
 
 @Repository
@@ -119,6 +121,74 @@ public class NotificationRepository {
         return count == null ? 0 : count;
     }
 
+    public List<OrganizerNotificationItemResponse> findOrganizerNotifications(
+            Long userId,
+            Set<NotificationCategory> categories,
+            boolean unreadOnly,
+            LocalDateTime retentionStart,
+            int offset,
+            int pageSize) {
+        boolean filterCategories = categories != null && !categories.isEmpty();
+        String sql = """
+                SELECT
+                    id,
+                    category,
+                    type,
+                    target_type,
+                    target_id,
+                    title,
+                    content,
+                    is_read,
+                    read_at,
+                    created_at
+                FROM dbo.notifications
+                WHERE user_id = :userId
+                  AND created_at >= :retentionStart
+                """ + (filterCategories ? "  AND category IN (:categories)\n" : "") + """
+                  AND (:unreadOnly = 0 OR is_read = 0)
+                ORDER BY is_read ASC, created_at DESC, id DESC
+                OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY
+                """;
+
+        return jdbcTemplate.query(
+                sql,
+                organizerQueryParameters(
+                        userId, categories, unreadOnly, retentionStart, offset, pageSize, filterCategories),
+                (resultSet, rowNumber) -> new OrganizerNotificationItemResponse(
+                        resultSet.getLong("id"),
+                        resultSet.getString("category"),
+                        resultSet.getString("type"),
+                        resultSet.getString("target_type"),
+                        nullableLong(resultSet.getObject("target_id")),
+                        resultSet.getString("title"),
+                        resultSet.getString("content"),
+                        resultSet.getBoolean("is_read"),
+                        nullableDateTime(resultSet.getTimestamp("read_at")),
+                        nullableDateTime(resultSet.getTimestamp("created_at"))));
+    }
+
+    public long countOrganizerNotifications(
+            Long userId,
+            Set<NotificationCategory> categories,
+            boolean unreadOnly,
+            LocalDateTime retentionStart) {
+        boolean filterCategories = categories != null && !categories.isEmpty();
+        String sql = """
+                SELECT COUNT_BIG(*)
+                FROM dbo.notifications
+                WHERE user_id = :userId
+                  AND created_at >= :retentionStart
+                """ + (filterCategories ? "  AND category IN (:categories)\n" : "") + """
+                  AND (:unreadOnly = 0 OR is_read = 0)
+                """;
+        Long count = jdbcTemplate.queryForObject(
+                sql,
+                organizerQueryParameters(
+                        userId, categories, unreadOnly, retentionStart, 0, 1, filterCategories),
+                Long.class);
+        return count == null ? 0 : count;
+    }
+
     private MapSqlParameterSource queryParameters(
             Long userId,
             NotificationCategory category,
@@ -133,6 +203,28 @@ public class NotificationRepository {
                 .addValue("retentionStart", retentionStart)
                 .addValue("offset", offset)
                 .addValue("pageSize", pageSize);
+    }
+
+    private MapSqlParameterSource organizerQueryParameters(
+            Long userId,
+            Set<NotificationCategory> categories,
+            boolean unreadOnly,
+            LocalDateTime retentionStart,
+            int offset,
+            int pageSize,
+            boolean filterCategories) {
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue("userId", userId)
+                .addValue("unreadOnly", unreadOnly ? 1 : 0)
+                .addValue("retentionStart", retentionStart)
+                .addValue("offset", offset)
+                .addValue("pageSize", pageSize);
+        if (filterCategories) {
+            parameters.addValue("categories", categories.stream()
+                    .map(NotificationCategory::name)
+                    .toList());
+        }
+        return parameters;
     }
 
     private Long nullableLong(Object value) {

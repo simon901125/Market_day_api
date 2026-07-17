@@ -37,7 +37,7 @@ class BrandRepositoryIT extends SqlServerIntegrationTestSupport {
         assertThat(repository.findProductSummaries(List.of(brandId))).hasSize(2);
         assertThat(repository.findBrandProducts(brandId)).hasSize(2);
         assertThat(repository.findBrandDetail(brandId)).isPresent();
-        assertThat(repository.findBrandCategoryNames()).isNotEmpty();
+        assertThat(repository.findBrandCategories()).isNotEmpty();
     }
 
     @Test void inactiveAccountIsExcludedFromSearchAndDetail() {

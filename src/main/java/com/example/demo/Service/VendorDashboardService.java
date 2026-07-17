@@ -62,8 +62,11 @@ public class VendorDashboardService {
         List<Map<String, Object>> products = vendorProfileId == null
                 ? List.of()
                 : stallRepository.findVendorProducts(vendorProfileId);
+        List<Map<String, Object>> categories = vendorProfileId == null
+                ? List.of()
+                : stallRepository.findVendorCategoriesByProfileIds(List.of(vendorProfileId));
 
-        if (isProfileIncomplete(vendor, products)) {
+        if (isProfileIncomplete(vendor, products, categories)) {
             return ApiResponse.success(
                     "攤主首次登入導引",
                     new VendorDashboardInitResponse(
@@ -100,7 +103,8 @@ public class VendorDashboardService {
 
     private boolean isProfileIncomplete(
             Map<String, Object> vendor,
-            List<Map<String, Object>> products) {
+            List<Map<String, Object>> products,
+            List<Map<String, Object>> categories) {
         if (isMissing(vendor.get("userProfileId"))
                 || isMissing(vendor.get("vendorProfileId"))
                 || isMissing(vendor.get("name"))
@@ -110,7 +114,6 @@ public class VendorDashboardService {
                 || isMissing(vendor.get("city"))
                 || isMissing(vendor.get("district"))
                 || isMissing(vendor.get("address"))
-                || isMissing(vendor.get("categoryId"))
                 || isMissing(vendor.get("avatarImageUrl"))
                 || isMissing(vendor.get("coverImageUrl"))
                 || isMissing(vendor.get("brandSummary"))
@@ -118,7 +121,9 @@ public class VendorDashboardService {
             return true;
         }
 
-        return products == null
+        return categories == null
+                || categories.isEmpty()
+                || products == null
                 || products.isEmpty()
                 || products.stream().anyMatch(product ->
                         isMissing(product.get("productName"))

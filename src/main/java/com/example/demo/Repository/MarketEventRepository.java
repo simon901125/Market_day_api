@@ -134,7 +134,6 @@ public class MarketEventRepository {
         if (categoryNames.isEmpty()) {
             return;
         }
-
         sql.append(" AND c.name IN (:categoryNames)");
         params.put("categoryNames", categoryNames);
     }

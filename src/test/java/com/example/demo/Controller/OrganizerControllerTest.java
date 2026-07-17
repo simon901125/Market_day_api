@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.example.demo.Service.OrganizerService;
+import com.example.demo.Service.OrganizerNotificationService;
 import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
@@ -25,6 +26,7 @@ import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 @ExtendWith(MockitoExtension.class)
 class OrganizerControllerTest {
     @Mock OrganizerService organizerService;
+    @Mock OrganizerNotificationService organizerNotificationService;
     @Mock StallService stallService;
     OrganizerController controller;
     static final String AUTH = "Bearer token";
@@ -32,7 +34,13 @@ class OrganizerControllerTest {
     @BeforeEach void setUp() {
         controller = new OrganizerController();
         ReflectionTestUtils.setField(controller, "organizerService", organizerService);
+        ReflectionTestUtils.setField(controller, "organizerNotificationService", organizerNotificationService);
         ReflectionTestUtils.setField(controller, "stallService", stallService);
+    }
+
+    @Test void notificationEndpointDelegatesAllFiltersAndPages() {
+        controller.getOrganizerNotifications(AUTH, "報名相關", 2, 10);
+        verify(organizerNotificationService).getNotifications(AUTH, "報名相關", 2, 10);
     }
 
     @Test void accountSearchDetailAndProfileEndpointsDelegate() {

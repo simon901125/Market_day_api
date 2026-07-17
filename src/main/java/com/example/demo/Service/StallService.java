@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -27,6 +28,7 @@ import com.example.demo.dto.request.VendorApplicationSubmitRequest;
 import com.example.demo.dto.request.VendorProductSaveRequest;
 import com.example.demo.dto.request.VendorStallSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
+import com.example.demo.dto.response.CategoryResponse;
 import com.example.demo.dto.response.EventStallStatusResponse;
 import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.MarketSearchResponse;
@@ -249,6 +251,11 @@ public class StallService {
                 vendorUserId,
                 applicationId,
                 stringValue(application.get("eventTitle")));
+        notificationService.notifyOrganizerStallSelectionCompleted(
+                ((Number) application.get("organizerUserId")).longValue(),
+                applicationId,
+                stringValue(application.get("eventTitle")),
+                stringValue(application.get("brandName")));
 
         return ApiResponse.success(
                 "Stall selection successful",
@@ -321,14 +328,11 @@ public class StallService {
                 vendor.get("city"),
                 vendor.get("district"),
                 vendor.get("address")));
-        account.put("categoryId", vendor.get("categoryId"));
-        account.put("categoryName", vendor.get("categoryName"));
-        account.put("categorySlug", vendor.get("categorySlug"));
         account.put("instagramUrl", vendor.get("instagramUrl"));
         account.put("facebookUrl", vendor.get("facebookUrl"));
         account.put("websiteUrl", vendor.get("websiteUrl"));
         account.put("brandDescription", vendor.get("brandDescription"));
-        account.put("brandType", vendor.get("brandType"));
+        account.put("categories", vendorCategories(toLong(vendor.get("vendorProfileId"))));
         account.put("brandSummary", vendor.get("brandSummary"));
         return ApiResponse.success("Vendor account retrieved successfully", new VendorAccountResponse(account));
     }
@@ -381,10 +385,12 @@ public class StallService {
             productSnapshots.add(productMap(product));
         }
 
-        Long categoryId = stallRepository.findActiveCategoryIdByName(normalizeText(body.getBrandType()))
-                .orElse(null);
-        if (categoryId == null) {
-            return ApiResponse.fail("Brand type is invalid");
+        List<Long> categoryIds = normalizeCategoryIds(body.getCategoryIds());
+        if (categoryIds.isEmpty()) {
+            return ApiResponse.fail("Brand categories are required");
+        }
+        if (stallRepository.findActiveCategoriesByIds(categoryIds).size() != categoryIds.size()) {
+            return ApiResponse.fail("Brand categories are invalid");
         }
 
         Long userId = toLong(vendor.get("userId"));
@@ -399,7 +405,6 @@ public class StallService {
                 "city", normalizeText(body.getCity()),
                 "district", normalizeText(body.getDistrict()),
                 "address", normalizeText(body.getAddress()),
-                "categoryId", categoryId,
                 "instagramUrl", nullIfBlank(body.getInstagramUrl()),
                 "facebookUrl", nullIfBlank(body.getFacebookUrl()),
                 "websiteUrl", nullIfBlank(body.getWebsiteUrl()),
@@ -412,6 +417,7 @@ public class StallService {
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
                 return ApiResponse.fail("Vendor profile save failed");
             }
+            stallRepository.replaceVendorCategories(vendorProfileId, categoryIds);
             int savedProducts = stallRepository.replaceVendorProducts(vendorProfileId, productSnapshots);
             if (savedProducts != productSnapshots.size()) {
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -616,6 +622,8 @@ public class StallService {
         }
 
         List<Map<String, Object>> allStallRows = stallRepository.findEventStallsMap(eventId, targetDate);
+        Map<Long, List<CategoryResponse>> categoriesByVendorProfileId = vendorCategoriesByProfileId(
+                allStallRows.stream().map(row -> toLong(row.get("vendorProfileId"))).toList());
         long selectedStallCount = allStallRows.stream()
                 .filter(stall -> "SELECTED".equals(stringValue(stall.get("status"))))
                 .count();
@@ -627,7 +635,7 @@ public class StallService {
         }
 
         List<Map<String, Object>> stallRows = allStallRows.stream()
-                .map(this::withDisplayBoothStatus)
+                .map(row -> withDisplayBoothStatus(row, categoriesByVendorProfileId))
                 .filter(stall -> matchesStallKeyword(stall, keyword))
                 .filter(stall -> matchesStallStatus(stall, status))
                 .toList();
@@ -694,6 +702,7 @@ public class StallService {
         }
 
         Map<String, Object> applicationData = applicationData(detail);
+        List<CategoryResponse> vendorCategories = vendorCategories(toLong(detail.get("vendorProfileId")));
 
         Map<String, Object> stall = new LinkedHashMap<>();
         stall.put("stallId", detail.get("stallId"));
@@ -714,7 +723,7 @@ public class StallService {
                 "vendor", applicationData == null ? null
                         : orderedMap(
                                 "brandName", detail.get("brandName"),
-                                "brandType", detail.get("categoryName"),
+                                "categories", vendorCategories,
                                 "vendorOwnerName", detail.get("vendorOwnerName"),
                                 "vendorPhone", detail.get("vendorPhone"),
                                 "vendorEmail", detail.get("vendorEmail")));
@@ -812,8 +821,31 @@ public class StallService {
                 "coverImageUrl", vendor.get("coverImageUrl"),
                 "brandSummary", vendor.get("brandSummary"),
                 "brandDescription", vendor.get("brandDescription"),
-                "brandType", vendor.get("brandType"),
+                "categories", vendorCategories(vendorProfileId),
                 "products", stallRepository.findVendorProducts(vendorProfileId));
+    }
+
+    private List<Long> normalizeCategoryIds(List<Long> categoryIds) {
+        if (categoryIds == null) {
+            return List.of();
+        }
+        return categoryIds.stream()
+                .filter(Objects::nonNull)
+                .filter(id -> id > 0)
+                .distinct()
+                .toList();
+    }
+
+    private List<CategoryResponse> vendorCategories(Long vendorProfileId) {
+        if (vendorProfileId == null || vendorProfileId <= 0) {
+            return List.of();
+        }
+        return stallRepository.findVendorCategoriesByProfileIds(List.of(vendorProfileId)).stream()
+                .map(row -> new CategoryResponse(
+                        toLong(row.get("id")),
+                        stringValue(row.get("name")),
+                        stringValue(row.get("slug"))))
+                .toList();
     }
 
     private String validateVendorProfile(VendorStallSaveRequest body) {
@@ -868,8 +900,8 @@ public class StallService {
         if (normalizeText(body.getBrandDescription()).isEmpty()) {
             return "Brand description is required";
         }
-        if (normalizeText(body.getBrandType()).isEmpty()) {
-            return "Brand type is required";
+        if (normalizeCategoryIds(body.getCategoryIds()).isEmpty()) {
+            return "Brand categories are required";
         }
         return null;
     }
@@ -964,21 +996,42 @@ public class StallService {
         };
     }
 
-    private Map<String, Object> withDisplayBoothStatus(Map<String, Object> stall) {
+    private Map<String, Object> withDisplayBoothStatus(
+            Map<String, Object> stall,
+            Map<Long, List<CategoryResponse>> categoriesByVendorProfileId) {
         Map<String, Object> response = new LinkedHashMap<>(stall);
         response.put("status", displayBoothStatus(stall.get("status")));
         if (stall.get("selectedApplicationId") != null) {
             response.put("selectedVendor", orderedMap(
                     "name", stall.get("vendorName"),
-                    "type", stall.get("brandType"),
+                    "categories", categoriesByVendorProfileId.getOrDefault(
+                            toLong(stall.get("vendorProfileId")), List.of()),
                     "ownerName", stall.get("vendorOwnerName"),
                     "selectedAt", stall.get("selectedAt")));
         }
         response.remove("vendorName");
-        response.remove("brandType");
+        response.remove("vendorProfileId");
         response.remove("vendorOwnerName");
         response.remove("selectedAt");
         return response;
+    }
+
+    private Map<String, Object> withDisplayBoothStatus(Map<String, Object> stall) {
+        return withDisplayBoothStatus(stall, Map.of());
+    }
+
+    private Map<Long, List<CategoryResponse>> vendorCategoriesByProfileId(List<Long> profileIds) {
+        Map<Long, List<CategoryResponse>> result = new LinkedHashMap<>();
+        List<Long> ids = profileIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return result;
+        }
+        for (Map<String, Object> row : stallRepository.findVendorCategoriesByProfileIds(ids)) {
+            Long profileId = toLong(row.get("vendorProfileId"));
+            result.computeIfAbsent(profileId, ignored -> new ArrayList<>()).add(new CategoryResponse(
+                    toLong(row.get("id")), stringValue(row.get("name")), stringValue(row.get("slug"))));
+        }
+        return result;
     }
 
     private Map<String, Object> withCurrentApplyDate(Map<String, Object> stall, LocalDate applyDate) {
@@ -1248,15 +1301,20 @@ public class StallService {
             Integer page,
             Integer pageSize) {
 
-        List<MarketSummaryResponse> markets = stallRepository
-                .findMarkets(
+        List<Map<String, Object>> marketRows = stallRepository.findMarkets(
                         keyword,
                         city,
                         district,
                         status,
                         eventStartAt,
-                        eventEndAt)
-                .stream()
+                        eventEndAt);
+        Map<Long, List<CategoryResponse>> categoriesByEventId = eventCategoriesByEventId(
+                marketRows.stream().map(row -> toLong(row.get("eventId"))).toList());
+        Map<Long, List<Map<String, Object>>> availabilityByEventId = marketAvailabilityByEventId(
+                marketRows.stream().map(row -> toLong(row.get("eventId"))).toList());
+        List<MarketSummaryResponse> markets = marketRows.stream()
+                .map(row -> withCategories(row, "eventId", categoriesByEventId))
+                .map(row -> withDailyAvailability(row, availabilityByEventId))
                 .map(MarketSummaryResponse::new)
                 .toList();
 
@@ -1285,13 +1343,82 @@ public class StallService {
 
         // 使用 LinkedHashMap 固定 JSON 區塊順序，方便前端依畫面區塊直接取用。
         Map<String, Object> response = new LinkedHashMap<>(event);
-        response.put("dailyAvailability", stallRepository.findMarketDailyAvailability(eventId));
+        response.put("categories", eventCategoriesByEventId(List.of(eventId))
+                .getOrDefault(eventId, List.of()));
+        List<Map<String, Object>> dailyAvailability = stallRepository.findMarketDailyAvailability(eventId);
+        boolean isFullyBooked = !dailyAvailability.isEmpty()
+                && dailyAvailability.stream().allMatch(day -> toLong(day.get("remainingStalls")) <= 0);
+        response.put("dailyAvailability", dailyAvailability);
+        response.put("isFullyBooked", isFullyBooked);
+        if (isFullyBooked && "OPEN".equals(stringValue(response.get("registrationStatus")))) {
+            response.put("registrationStatus", "FULL");
+        }
         response.put("equipments", stallRepository.findPublishedMarketEquipments(eventId));
         response.put("trafficInfos", stallRepository.findPublishedMarketTrafficInfos(eventId));
 
         return ApiResponse.success(
                 "Market event detail retrieved successfully",
                 new VendorMarketDetailResponse(response));
+    }
+
+    private Map<Long, List<CategoryResponse>> eventCategoriesByEventId(List<Long> eventIds) {
+        Map<Long, List<CategoryResponse>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : stallRepository.findEventCategoriesByEventIds(eventIds.stream()
+                .filter(Objects::nonNull)
+                .filter(id -> id > 0)
+                .distinct()
+                .toList())) {
+            Long eventId = toLong(row.get("eventId"));
+            grouped.computeIfAbsent(eventId, id -> new ArrayList<>())
+                    .add(new CategoryResponse(
+                            toLong(row.get("id")),
+                            stringValue(row.get("name")),
+                            stringValue(row.get("slug"))));
+        }
+        return grouped;
+    }
+
+    private Map<Long, List<Map<String, Object>>> marketAvailabilityByEventId(List<Long> eventIds) {
+        List<Long> ids = eventIds.stream()
+                .filter(Objects::nonNull)
+                .filter(id -> id > 0)
+                .distinct()
+                .toList();
+        Map<Long, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : stallRepository.findMarketDailyAvailabilities(ids)) {
+            Long eventId = toLong(row.get("eventId"));
+            Map<String, Object> availability = orderedMap(
+                    "applyDate", row.get("applyDate"),
+                    "totalStalls", row.get("totalStalls"),
+                    "remainingStalls", row.get("remainingStalls"));
+            grouped.computeIfAbsent(eventId, ignored -> new ArrayList<>()).add(availability);
+        }
+        return grouped;
+    }
+
+    private Map<String, Object> withDailyAvailability(
+            Map<String, Object> source,
+            Map<Long, List<Map<String, Object>>> availabilityByEventId) {
+        Map<String, Object> values = new LinkedHashMap<>(source);
+        List<Map<String, Object>> dailyAvailability = availabilityByEventId.getOrDefault(
+                toLong(source.get("eventId")), List.of());
+        boolean isFullyBooked = !dailyAvailability.isEmpty()
+                && dailyAvailability.stream().allMatch(day -> toLong(day.get("remainingStalls")) <= 0);
+        values.put("dailyAvailability", dailyAvailability);
+        values.put("isFullyBooked", isFullyBooked);
+        if (isFullyBooked && "OPEN".equals(stringValue(values.get("registrationStatus")))) {
+            values.put("registrationStatus", "FULL");
+        }
+        return values;
+    }
+
+    private Map<String, Object> withCategories(
+            Map<String, Object> source,
+            String idKey,
+            Map<Long, List<CategoryResponse>> categoriesById) {
+        Map<String, Object> values = new LinkedHashMap<>(source);
+        values.put("categories", categoriesById.getOrDefault(toLong(source.get(idKey)), List.of()));
+        return values;
     }
 
     /**
@@ -1421,7 +1548,7 @@ public class StallService {
 
         BigDecimal baseFee = toBigDecimal(event.get("baseFee"));
         BigDecimal applicationFee = baseFee.multiply(BigDecimal.valueOf(applyDates.size()));
-        BigDecimal depositAmount = BigDecimal.ZERO;
+        BigDecimal depositAmount = toBigDecimal(event.get("depositAmount"));
         BigDecimal totalAmount = applicationFee.add(equipmentTotal).add(depositAmount);
         String applicationNo = nextApplicationNo(event);
         LocalDateTime paymentDueAt = now.plusDays(3);
@@ -1463,6 +1590,11 @@ public class StallService {
                     vendorUserId,
                     applicationId,
                     stringValue(event.get("eventTitle")));
+            notificationService.notifyOrganizerApplicationSubmitted(
+                    ((Number) event.get("organizerUserId")).longValue(),
+                    applicationId,
+                    stringValue(event.get("eventTitle")),
+                    stringValue(vendor.get("name")));
 
             Map<String, Object> response = orderedMap(
                     "applicationId", applicationId,

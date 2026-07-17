@@ -13,6 +13,7 @@ import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.BrandDetailResponse;
 import com.example.demo.dto.response.BrandSearchResponse;
 import com.example.demo.dto.response.BrandSummaryResponse;
+import com.example.demo.dto.response.CategoryResponse;
 import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.PageResponse;
 
@@ -28,7 +29,7 @@ public class BrandService {
 
     public ApiResponse<MapBackedResponse> getBrandScrollOptions() {
         Map<String, Object> options = orderedMap(
-                "categoryNames", brandRepository.findBrandCategoryNames(),
+                "categories", brandRepository.findBrandCategories(),
                 "marketNames", brandRepository.findParticipatedMarketNames());
 
         return ApiResponse.success(
@@ -44,9 +45,11 @@ public class BrandService {
         List<Map<String, Object>> rows = brandRepository.searchBrands(request, offset, pageSize);
         long totalItems = rows.isEmpty() ? 0 : numberValue(rows.get(0).get("totalRows")).longValue();
         Map<Long, List<Map<String, Object>>> productsByBrandId = productsByBrandId(rows);
+        Map<Long, List<CategoryResponse>> categoriesByBrandId = categoriesByBrandId(rows);
         List<BrandSummaryResponse> brands = rows.stream()
                 .map(this::withoutTotalRows)
                 .map(row -> withRepresentativeProducts(row, productsByBrandId))
+                .map(row -> withCategories(row, categoriesByBrandId))
                 .map(BrandSummaryResponse::new)
                 .toList();
 
@@ -70,8 +73,7 @@ public class BrandService {
                 "mainImageUrl", brand.get("mainImageUrl"),
                 "avatarImageUrl", brand.get("avatarImageUrl"),
                 "brandName", brand.get("brandName"),
-                "categoryId", brand.get("categoryId"),
-                "categoryName", brand.get("categoryName"),
+                "categories", categoriesByBrandId(List.of(brand)).getOrDefault(brandId, List.of()),
                 "brandSummary", brand.get("brandSummary"),
                 "participatedMarketCount", brand.get("participatedMarketCount"),
                 "brandDescription", brand.get("brandDescription"),
@@ -98,6 +100,35 @@ public class BrandService {
         Long brandId = longValue(values.get("brandId"));
         values.put("representativeProducts", productsByBrandId.getOrDefault(brandId, List.of()));
         return values;
+    }
+
+    private Map<String, Object> withCategories(
+            Map<String, Object> brand,
+            Map<Long, List<CategoryResponse>> categoriesByBrandId) {
+        Map<String, Object> values = new LinkedHashMap<>(brand);
+        Long brandId = longValue(values.get("brandId"));
+        values.put("categories", categoriesByBrandId.getOrDefault(brandId, List.of()));
+        return values;
+    }
+
+    private Map<Long, List<CategoryResponse>> categoriesByBrandId(List<Map<String, Object>> brands) {
+        List<Long> brandIds = brands.stream()
+                .map(row -> longValue(row.get("brandId")))
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, List<CategoryResponse>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : brandRepository.findCategoriesByBrandIds(brandIds)) {
+            Long brandId = longValue(row.get("brandId"));
+            if (brandId != null) {
+                grouped.computeIfAbsent(brandId, id -> new java.util.ArrayList<>())
+                        .add(new CategoryResponse(
+                                longValue(row.get("id")),
+                                String.valueOf(row.get("name")),
+                                String.valueOf(row.get("slug"))));
+            }
+        }
+        return grouped;
     }
 
     private Map<Long, List<Map<String, Object>>> productsByBrandId(List<Map<String, Object>> brands) {

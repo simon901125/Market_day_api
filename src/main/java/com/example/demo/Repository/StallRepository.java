@@ -136,6 +136,8 @@ public class StallRepository {
                     a.application_no AS applicationNo,
                     a.event_id AS eventId,
                     e.title AS eventTitle,
+                    e.user_id AS organizerUserId,
+                    vp.brand_name AS brandName,
                     a.user_id AS userId,
                     a.vendor_profile_id AS vendorProfileId,
                     a.review_status AS reviewStatus,
@@ -145,6 +147,7 @@ public class StallRepository {
                     date_counts.selectedStallCount
                 FROM dbo.event_applications a
                 INNER JOIN dbo.market_events e ON e.id = a.event_id
+                INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
                 OUTER APPLY (
                     SELECT
                         COUNT(*) AS applicationDateCount,
@@ -233,22 +236,17 @@ public class StallRepository {
                     up.city,
                     up.district,
                     up.address,
-                    vp.category_id AS categoryId,
-                    c.name AS categoryName,
-                    c.slug AS categorySlug,
                     vp.instagram_url AS instagramUrl,
                     vp.facebook_url AS facebookUrl,
                     vp.website_url AS websiteUrl,
                     vp.avatar_image_url AS avatarImageUrl,
                     vp.cover_image_url AS coverImageUrl,
                     vp.brand_description AS brandDescription,
-                    c.name AS brandType,
                     vp.brand_summary AS brandSummary
                 FROM dbo.users u
                 INNER JOIN dbo.user_profiles up ON up.user_id = u.id
                     AND up.profile_type = N'VENDOR'
                 INNER JOIN dbo.vendor_profiles vp ON vp.user_profile_id = up.id
-                INNER JOIN dbo.categories c ON c.id = vp.category_id
                 WHERE u.email = :email
                 """;
 
@@ -274,7 +272,6 @@ public class StallRepository {
                     up.city,
                     up.district,
                     up.address,
-                    vp.category_id AS categoryId,
                     vp.avatar_image_url AS avatarImageUrl,
                     vp.cover_image_url AS coverImageUrl,
                     vp.brand_summary AS brandSummary,
@@ -346,18 +343,38 @@ public class StallRepository {
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
     }
 
-    public Optional<Long> findActiveCategoryIdByName(String categoryName) {
+    public List<Map<String, Object>> findActiveCategoriesByIds(List<Long> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return List.of();
+        }
         String sql = """
-                SELECT TOP 1 id
+                SELECT id, name, slug
                 FROM dbo.categories
-                WHERE name = :categoryName
+                WHERE id IN (:categoryIds)
                   AND is_active = 1
                 ORDER BY id ASC
                 """;
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("categoryIds", categoryIds)));
+    }
 
-        Map<String, Object> map = new HashMap<>();
-        map.put("categoryName", categoryName);
-        return namedParameterJdbcTemplate.queryForList(sql, map, Long.class).stream().findFirst();
+    public List<Map<String, Object>> findVendorCategoriesByProfileIds(List<Long> vendorProfileIds) {
+        if (vendorProfileIds == null || vendorProfileIds.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT
+                    vpc.vendor_profile_id AS vendorProfileId,
+                    c.id,
+                    c.name,
+                    c.slug
+                FROM dbo.vendor_profile_categories vpc
+                INNER JOIN dbo.categories c ON c.id = vpc.category_id
+                WHERE vpc.vendor_profile_id IN (:vendorProfileIds)
+                ORDER BY vpc.vendor_profile_id, c.id
+                """;
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("vendorProfileIds", vendorProfileIds)));
     }
 
     public int updateVendorProfile(Long userId, Long vendorProfileId, Map<String, Object> profile) {
@@ -376,8 +393,7 @@ public class StallRepository {
                   AND vp.id = :vendorProfileId;
 
                 UPDATE dbo.vendor_profiles
-                SET category_id = :categoryId,
-                    brand_name = :brandName,
+                SET brand_name = :brandName,
                     instagram_url = :instagramUrl,
                     facebook_url = :facebookUrl,
                     website_url = :websiteUrl,
@@ -390,6 +406,26 @@ public class StallRepository {
         map.put("userId", userId);
         map.put("vendorProfileId", vendorProfileId);
         return namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public void replaceVendorCategories(Long vendorProfileId, List<Long> categoryIds) {
+        namedParameterJdbcTemplate.update(
+                "DELETE FROM dbo.vendor_profile_categories WHERE vendor_profile_id = :vendorProfileId",
+                Map.of("vendorProfileId", vendorProfileId));
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return;
+        }
+        String sql = """
+                INSERT INTO dbo.vendor_profile_categories (vendor_profile_id, category_id)
+                VALUES (:vendorProfileId, :categoryId)
+                """;
+        org.springframework.jdbc.core.namedparam.SqlParameterSource[] batch = categoryIds.stream()
+                .distinct()
+                .map(categoryId -> new MapSqlParameterSource()
+                        .addValue("vendorProfileId", vendorProfileId)
+                        .addValue("categoryId", categoryId))
+                .toArray(org.springframework.jdbc.core.namedparam.SqlParameterSource[]::new);
+        namedParameterJdbcTemplate.batchUpdate(sql, batch);
     }
 
     public int replaceVendorProducts(Long vendorProfileId, List<Map<String, Object>> products) {
@@ -610,8 +646,8 @@ public class StallRepository {
                         ELSE N'AVAILABLE'
                     END AS status,
                     selected_application.id AS selectedApplicationId,
+                    selected_vp.id AS vendorProfileId,
                     selected_vp.brand_name AS vendorName,
-                    selected_category.name AS brandType,
                     selected_vendor.contact_name AS vendorOwnerName,
                     selected_at.selectedAt
                 FROM dbo.event_stalls s
@@ -622,7 +658,6 @@ public class StallRepository {
                 LEFT JOIN dbo.event_applications selected_application ON selected_application.id = selected_date.application_id
                     AND selected_application.is_cancelled = 0
                 LEFT JOIN dbo.vendor_profiles selected_vp ON selected_vp.id = selected_application.vendor_profile_id
-                LEFT JOIN dbo.categories selected_category ON selected_category.id = selected_vp.category_id
                 LEFT JOIN dbo.user_profiles selected_vendor ON selected_vendor.id = selected_vp.user_profile_id
                 OUTER APPLY (
                     SELECT TOP 1 rl.created_at AS selectedAt
@@ -649,6 +684,7 @@ public class StallRepository {
         String sql = """
                 SELECT
                     e.id AS eventId,
+                    e.user_id AS organizerUserId,
                     e.title AS eventTitle,
                     e.location_name AS locationName,
                     e.city,
@@ -753,12 +789,12 @@ public class StallRepository {
                     a.total_amount AS totalAmount,
                     a.created_at AS appliedAt,
                     selected_at.selectedAt,
+                    vp.id AS vendorProfileId,
                     vp.brand_name AS brandName,
                     up.contact_name AS vendorOwnerName,
                     up.contact_phone AS vendorPhone,
                     up.contact_email AS vendorEmail,
                     vp.brand_description AS brandDescription,
-                    c.name AS categoryName,
                     refund_data.refundStatus
                 FROM dbo.event_stalls s
                 INNER JOIN dbo.event_stall_zones z ON z.id = s.zone_id
@@ -769,7 +805,6 @@ public class StallRepository {
                     AND a.is_cancelled = 0
                 LEFT JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
                 LEFT JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
-                LEFT JOIN dbo.categories c ON c.id = vp.category_id
                 OUTER APPLY (
                     SELECT TOP 1 r.refund_status AS refundStatus
                     FROM dbo.refunds r
@@ -889,15 +924,15 @@ public class StallRepository {
                     e.end_at AS endAt,
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
+                    CASE
+                        WHEN GETDATE() > e.registration_end_at THEN 0
+                        ELSE DATEDIFF(DAY, CONVERT(date, GETDATE()), CONVERT(date, e.registration_end_at))
+                    END AS registrationDaysRemaining,
                     e.base_fee AS baseFee,
 
-                    t.traffic_title AS trafficTitle,
-                    t.traffic_details AS trafficDetail,
-
-                    c.name AS categoryName,
                     op.organizer_name AS organizerName,
 
-                    COALESCE(e.cover_image_url, first_image.image_url) AS imageUrl,
+                    e.cover_image_url AS imageUrl,
 
                     CASE
                         WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
@@ -907,34 +942,12 @@ public class StallRepository {
 
                 FROM dbo.market_events AS e
 
-                OUTER APPLY
-                (
-                    SELECT TOP (1)
-                        ti.traffic_title,
-                        ti.traffic_details
-                    FROM dbo.event_traffic_infos AS ti
-                    WHERE ti.event_id = e.id
-                    ORDER BY ti.id ASC
-                ) AS t
-
-                LEFT JOIN dbo.categories AS c
-                    ON c.id = e.category_id
-
                 LEFT JOIN dbo.user_profiles AS up
                     ON up.user_id = e.user_id
                    AND up.profile_type = N'ORGANIZER'
 
                 LEFT JOIN dbo.organizer_profiles AS op
                     ON op.user_profile_id = up.id
-
-                OUTER APPLY
-                (
-                    SELECT TOP (1)
-                        ei.image_url
-                    FROM dbo.event_images AS ei
-                    WHERE ei.event_id = e.id
-                    ORDER BY ei.id ASC
-                ) AS first_image
 
                 WHERE e.workflow_status = N'PUBLISHED'
                         AND e.registration_end_at >= GETDATE()
@@ -997,16 +1010,19 @@ public class StallRepository {
                     e.city,
                     e.district,
                     e.address,
-                    e.notice,
                     e.start_at AS startAt,
                     e.end_at AS endAt,
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
+                    CASE
+                        WHEN GETDATE() > e.registration_end_at THEN 0
+                        ELSE DATEDIFF(DAY, CONVERT(date, GETDATE()), CONVERT(date, e.registration_end_at))
+                    END AS registrationDaysRemaining,
                     e.max_booths AS maxBooths,
                     e.base_fee AS baseFee,
-                    COALESCE(e.cover_image_url, first_image.image_url) AS coverImageUrl,
+                    e.deposit_amount AS depositAmount,
+                    e.cover_image_url AS coverImageUrl,
                     e.map_image_url AS mapImageUrl,
-                    c.name AS categoryName,
                     op.organizer_name AS organizerName,
                     op.company_name AS companyName,
                     op.service_days AS serviceDays,
@@ -1015,36 +1031,97 @@ public class StallRepository {
                     up.contact_name AS contactName,
                     up.contact_phone AS contactPhone,
                     up.contact_email AS contactEmail,
-                    stall_size.width AS stallWidth,
-                    stall_size.length AS stallLength,
-                    stall_size.height AS stallHeight,
+                    e.stall_width AS stallWidth,
+                    e.stall_length AS stallLength,
+                    NULL AS stallHeight,
                     CASE
                         WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
                         WHEN GETDATE() <= e.registration_end_at THEN N'OPEN'
                         ELSE N'CLOSED'
                     END AS registrationStatus
                 FROM dbo.market_events e
-                INNER JOIN dbo.categories c ON c.id = e.category_id
                 LEFT JOIN dbo.user_profiles up
                     ON up.user_id = e.user_id AND up.profile_type = N'ORGANIZER'
                 LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
-                OUTER APPLY (
-                    SELECT TOP 1 image_url
-                    FROM dbo.event_images
-                    WHERE event_id = e.id
-                    ORDER BY id
-                ) first_image
-                OUTER APPLY (
-                    SELECT TOP 1 width, length, height
-                    FROM dbo.event_stalls
-                    WHERE event_id = e.id AND status <> N'DISABLED'
-                    ORDER BY id
-                ) stall_size
                 WHERE e.id = :eventId
                   AND e.workflow_status = N'PUBLISHED'
                 """;
         return RepositoryResultMapper.normalizeOptional(
                 namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)).stream().findFirst());
+    }
+
+    public List<Map<String, Object>> findEventCategoriesByEventIds(List<Long> eventIds) {
+        if (eventIds == null || eventIds.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT
+                    mec.event_id AS eventId,
+                    c.id,
+                    c.name,
+                    c.slug
+                FROM dbo.market_event_categories mec
+                INNER JOIN dbo.categories c ON c.id = mec.category_id
+                WHERE mec.event_id IN (:eventIds)
+                ORDER BY mec.event_id, c.id
+                """;
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("eventIds", eventIds)));
+    }
+
+    public List<Map<String, Object>> findMarketDailyAvailabilities(List<Long> eventIds) {
+        if (eventIds == null || eventIds.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+                WITH event_dates AS (
+                    SELECT
+                        e.id AS eventId,
+                        CONVERT(date, e.start_at) AS applyDate,
+                        CONVERT(date, e.end_at) AS endDate,
+                        e.max_booths AS maxBooths
+                    FROM dbo.market_events e
+                    WHERE e.id IN (:eventIds)
+
+                    UNION ALL
+
+                    SELECT
+                        eventId,
+                        DATEADD(DAY, 1, applyDate),
+                        endDate,
+                        maxBooths
+                    FROM event_dates
+                    WHERE applyDate < endDate
+                )
+                SELECT
+                    d.eventId,
+                    d.applyDate,
+                    COALESCE(NULLIF(stall_count.totalStalls, 0), d.maxBooths) AS totalStalls,
+                    COALESCE(NULLIF(stall_count.totalStalls, 0), d.maxBooths)
+                        - COUNT(DISTINCT selected_stall.id) AS remainingStalls
+                FROM event_dates d
+                OUTER APPLY (
+                    SELECT COUNT(*) AS totalStalls
+                    FROM dbo.event_stalls s
+                    WHERE s.event_id = d.eventId
+                      AND s.status <> N'DISABLED'
+                ) stall_count
+                LEFT JOIN dbo.application_dates ad ON ad.apply_date = d.applyDate
+                LEFT JOIN dbo.event_applications a
+                    ON a.id = ad.application_id
+                    AND a.event_id = d.eventId
+                    AND a.is_cancelled = 0
+                    AND a.review_status <> N'REJECTED'
+                LEFT JOIN dbo.event_stalls selected_stall
+                    ON selected_stall.id = ad.selected_stall_id
+                    AND selected_stall.event_id = d.eventId
+                    AND a.id IS NOT NULL
+                GROUP BY d.eventId, d.applyDate, d.maxBooths, stall_count.totalStalls
+                ORDER BY d.eventId, d.applyDate
+                OPTION (MAXRECURSION 366)
+                """;
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("eventIds", eventIds)));
     }
 
     /**
@@ -1056,18 +1133,22 @@ public class StallRepository {
     public List<Map<String, Object>> findMarketDailyAvailability(Long eventId) {
         String sql = """
                 WITH event_dates AS (
-                    SELECT CAST(start_at AS DATE) AS applyDate, CAST(end_at AS DATE) AS endDate
+                    SELECT
+                        CAST(start_at AS DATE) AS applyDate,
+                        CAST(end_at AS DATE) AS endDate,
+                        max_booths AS maxBooths
                     FROM dbo.market_events
                     WHERE id = :eventId
                     UNION ALL
-                    SELECT DATEADD(DAY, 1, applyDate), endDate
+                    SELECT DATEADD(DAY, 1, applyDate), endDate, maxBooths
                     FROM event_dates
                     WHERE applyDate < endDate
                 )
                 SELECT
                     d.applyDate,
-                    stall_count.totalStalls,
-                    stall_count.totalStalls - COUNT(DISTINCT selected_stall.id) AS remainingStalls
+                    COALESCE(NULLIF(stall_count.totalStalls, 0), d.maxBooths) AS totalStalls,
+                    COALESCE(NULLIF(stall_count.totalStalls, 0), d.maxBooths)
+                        - COUNT(DISTINCT selected_stall.id) AS remainingStalls
                 FROM event_dates d
                 CROSS APPLY (
                     SELECT COUNT(*) AS totalStalls
@@ -1084,7 +1165,7 @@ public class StallRepository {
                     ON selected_stall.id = ad.selected_stall_id
                     AND selected_stall.event_id = :eventId
                     AND a.id IS NOT NULL
-                GROUP BY d.applyDate, stall_count.totalStalls
+                GROUP BY d.applyDate, d.maxBooths, stall_count.totalStalls
                 ORDER BY d.applyDate
                 OPTION (MAXRECURSION 366)
                 """;
@@ -1124,10 +1205,19 @@ public class StallRepository {
     /** 取得活動的交通方式說明。 */
     public List<Map<String, Object>> findPublishedMarketTrafficInfos(Long eventId) {
         String sql = """
-                SELECT id, traffic_title AS trafficTitle, traffic_details AS trafficDetails
-                FROM dbo.event_traffic_infos
-                WHERE event_id = :eventId
-                ORDER BY id
+                SELECT
+                    traffic_info.trafficId AS id,
+                    traffic_info.trafficTitle,
+                    traffic_info.trafficDetails
+                FROM dbo.market_events e
+                CROSS APPLY (VALUES
+                    (1, N'捷運', e.traffic_info_metro),
+                    (2, N'公車', e.traffic_info_bus),
+                    (3, N'開車', e.traffic_info_driving)
+                ) traffic_info(trafficId, trafficTitle, trafficDetails)
+                WHERE e.id = :eventId
+                  AND NULLIF(LTRIM(RTRIM(traffic_info.trafficDetails)), N'') IS NOT NULL
+                ORDER BY traffic_info.trafficId
                 """;
         return RepositoryResultMapper.normalizeList(
                 namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)));
@@ -1146,7 +1236,8 @@ public class StallRepository {
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
                     e.workflow_status AS workflowStatus,
-                    e.base_fee AS baseFee
+                    e.base_fee AS baseFee,
+                    e.deposit_amount AS depositAmount
                 FROM dbo.market_events e
                 WHERE e.id = :eventId
                 """;

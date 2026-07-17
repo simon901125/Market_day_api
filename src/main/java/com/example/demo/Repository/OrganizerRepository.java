@@ -16,6 +16,25 @@ public class OrganizerRepository {
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
+    public List<Map<String, Object>> findVendorCategoriesByProfileIds(List<Long> vendorProfileIds) {
+        if (vendorProfileIds == null || vendorProfileIds.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT
+                    vpc.vendor_profile_id AS vendorProfileId,
+                    c.id,
+                    c.name,
+                    c.slug
+                FROM dbo.vendor_profile_categories vpc
+                INNER JOIN dbo.categories c ON c.id = vpc.category_id
+                WHERE vpc.vendor_profile_id IN (:vendorProfileIds)
+                ORDER BY vpc.vendor_profile_id, c.id
+                """;
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("vendorProfileIds", vendorProfileIds)));
+    }
+
     public Optional<Map<String, Object>> findOrganizerAccountByEmail(String email) {
         String sql = """
                 SELECT
@@ -362,15 +381,14 @@ public class OrganizerRepository {
                     p.status AS paymentStatus,
                     p.paid_at AS paidAt,
                     p.created_at AS paymentCreatedAt,
+                    vp.id AS vendorProfileId,
                     vp.brand_name AS brandName,
                     vendor_up.contact_name AS contactName,
-                    c.name AS brandType,
                     COALESCE(refund_data.refundAmount, 0) AS refundAmount,
                     refund_data.refundStatus
                 FROM dbo.payments p
                 INNER JOIN dbo.event_applications a ON a.id = p.application_id
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
-                INNER JOIN dbo.categories c ON c.id = vp.category_id
                 INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
                 OUTER APPLY (
                     SELECT
@@ -630,9 +648,9 @@ public class OrganizerRepository {
                     ) AS eventTime,
                     e.start_at AS eventStartAt,
                     e.end_at AS eventEndAt,
+                    vp.id AS vendorProfileId,
                     vp.brand_name AS vendorName,
                     vendor_up.contact_name AS vendorOwnerName,
-                    c.name AS brandType,
                     a.created_at AS appliedAt,
                     application_dates.applyDates,
                     application_dates.applicationDateCount,
@@ -645,7 +663,6 @@ public class OrganizerRepository {
                 FROM dbo.event_applications a
                 INNER JOIN dbo.market_events e ON e.id = a.event_id
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
-                INNER JOIN dbo.categories c ON c.id = vp.category_id
                 INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
                 OUTER APPLY (
                     SELECT
@@ -739,13 +756,11 @@ public class OrganizerRepository {
                     vendor_up.district AS vendorDistrict,
                     vendor_up.address AS vendorAddress,
                     vp.id AS vendorProfileId,
-                    c.name AS brandType,
                     vp.brand_description AS brandDescription,
                     vp.brand_summary AS brandSummary,
                     vp.instagram_url AS instagramUrl,
                     vp.facebook_url AS facebookUrl,
                     vp.website_url AS websiteUrl,
-                    c.name AS categoryName,
                     vp.avatar_image_url AS vendorAvatarUrl,
                     selected_stall_summary.selectedStallId,
                     selected_stall_summary.selectedStallNo,
@@ -783,7 +798,6 @@ public class OrganizerRepository {
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
                 INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
                 INNER JOIN dbo.users vendor_user ON vendor_user.id = vendor_up.user_id
-                INNER JOIN dbo.categories c ON c.id = vp.category_id
                 OUTER APPLY (
                     SELECT TOP 1
                         ad.selected_stall_id AS selectedStallId,

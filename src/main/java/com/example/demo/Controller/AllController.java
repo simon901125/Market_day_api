@@ -93,12 +93,12 @@ public class AllController {
         return brandService.getBrandScrollOptions();
     }
 
-    @Operation(summary = "搜尋品牌列表", description = "依關鍵字、分類名稱、參與市集名稱搜尋品牌")
+    @Operation(summary = "搜尋品牌列表", description = "依關鍵字、單一分類名稱、參與市集名稱搜尋品牌")
     @GetMapping("/api/brands/search")
     public ApiResponse<BrandSearchResponse> searchBrands(
             @Parameter(description = "關鍵字，可搜尋品牌、簡述、介紹與商品內容")
             @RequestParam(value = "keyword", required = false) String keyword,
-            @Parameter(description = "分類名稱")
+            @Parameter(description = "分類名稱，由分類下拉選單傳入單一名稱", example = "文創手作")
             @RequestParam(value = "categoryName", required = false) String categoryName,
             @Parameter(description = "參與市集名稱")
             @RequestParam(value = "marketName", required = false) String marketName,

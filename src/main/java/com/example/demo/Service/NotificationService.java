@@ -83,6 +83,21 @@ public class NotificationService {
                 eventName + " 已收到您的報名申請"));
     }
 
+    public void notifyOrganizerApplicationSubmitted(
+            Long organizerUserId,
+            Long applicationId,
+            String eventTitle,
+            String brandName) {
+        create(new NotificationCreateCommand(
+                organizerUserId,
+                NotificationCategory.REGISTRATION,
+                NotificationType.APPLICATION_SUBMITTED,
+                NotificationTargetType.EVENT_APPLICATION,
+                applicationId,
+                "新報名",
+                brandName(brandName) + "送出報名申請：" + eventName(eventTitle)));
+    }
+
     public void notifyApplicationReviewed(
             Long userId,
             Long applicationId,
@@ -129,6 +144,24 @@ public class NotificationService {
         }
     }
 
+    public void notifyOrganizerPaymentStatusChanged(
+            Long organizerUserId,
+            Long applicationId,
+            String eventTitle,
+            String brandName,
+            boolean paid) {
+        create(new NotificationCreateCommand(
+                organizerUserId,
+                NotificationCategory.PAYMENT,
+                paid ? NotificationType.PAYMENT_PAID : NotificationType.PAYMENT_FAILED,
+                NotificationTargetType.EVENT_APPLICATION,
+                applicationId,
+                paid ? "付款完成" : "付款失敗",
+                brandName(brandName)
+                        + (paid ? "已完成付款：" : "付款失敗：")
+                        + eventName(eventTitle)));
+    }
+
     public void notifyStallSelectionCompleted(Long userId, Long applicationId, String eventTitle) {
         create(new NotificationCreateCommand(
                 userId,
@@ -138,6 +171,21 @@ public class NotificationService {
                 applicationId,
                 "報名完成",
                 eventName(eventTitle) + " 已完成選位"));
+    }
+
+    public void notifyOrganizerStallSelectionCompleted(
+            Long organizerUserId,
+            Long applicationId,
+            String eventTitle,
+            String brandName) {
+        create(new NotificationCreateCommand(
+                organizerUserId,
+                NotificationCategory.STALL_ASSIGNMENT,
+                NotificationType.STALL_SELECTION_COMPLETED,
+                NotificationTargetType.EVENT_APPLICATION,
+                applicationId,
+                "完成選位",
+                brandName(brandName) + "已完成攤位選擇：" + eventName(eventTitle)));
     }
 
     private void validate(NotificationCreateCommand command) {
@@ -167,6 +215,10 @@ public class NotificationService {
 
     private String eventName(String eventTitle) {
         return isBlank(eventTitle) ? "活動" : eventTitle.trim();
+    }
+
+    private String brandName(String brandName) {
+        return isBlank(brandName) ? "攤主" : "品牌「" + brandName.trim() + "」";
     }
 
     private List<NotificationCreateCommand> commandsForUsers(

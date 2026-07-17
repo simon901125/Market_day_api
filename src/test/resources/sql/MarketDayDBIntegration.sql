@@ -126,7 +126,6 @@ CREATE TABLE dbo.vendor_profiles
 (
     id BIGINT IDENTITY(1,1) NOT NULL,
     user_profile_id BIGINT NOT NULL,
-    category_id BIGINT NOT NULL,
     brand_name NVARCHAR(150) NULL,
     avatar_image_url NVARCHAR(500) NULL,
     cover_image_url NVARCHAR(500) NULL,
@@ -137,12 +136,22 @@ CREATE TABLE dbo.vendor_profiles
     brand_description NVARCHAR(MAX) NULL,
     CONSTRAINT PK_vendor_profiles PRIMARY KEY (id),
     CONSTRAINT UQ_vendor_profiles_user_profile UNIQUE (user_profile_id),
-    CONSTRAINT FK_vendor_profiles_user_profiles FOREIGN KEY (user_profile_id) REFERENCES dbo.user_profiles(id),
-    CONSTRAINT FK_vendor_profiles_categories FOREIGN KEY (category_id) REFERENCES dbo.categories(id)
+    CONSTRAINT FK_vendor_profiles_user_profiles FOREIGN KEY (user_profile_id) REFERENCES dbo.user_profiles(id)
 );
 GO
 
-CREATE INDEX IX_vendor_profiles_category ON dbo.vendor_profiles(category_id);
+CREATE TABLE dbo.vendor_profile_categories
+(
+    vendor_profile_id BIGINT NOT NULL,
+    category_id BIGINT NOT NULL,
+    CONSTRAINT PK_vendor_profile_categories PRIMARY KEY (vendor_profile_id, category_id),
+    CONSTRAINT FK_vendor_profile_categories_vendor_profiles FOREIGN KEY (vendor_profile_id) REFERENCES dbo.vendor_profiles(id) ON DELETE CASCADE,
+    CONSTRAINT FK_vendor_profile_categories_categories FOREIGN KEY (category_id) REFERENCES dbo.categories(id)
+);
+GO
+
+CREATE INDEX IX_vendor_profile_categories_category
+ON dbo.vendor_profile_categories(category_id, vendor_profile_id);
 GO
 
 CREATE TABLE dbo.organizer_profiles
@@ -251,7 +260,6 @@ CREATE TABLE dbo.market_events
 (
     id BIGINT IDENTITY(1,1) NOT NULL,
     user_id BIGINT NOT NULL,
-    category_id BIGINT NOT NULL,
     title NVARCHAR(200) NOT NULL,
     summary NVARCHAR(300) NOT NULL,
     description NVARCHAR(MAX) NOT NULL,
@@ -268,6 +276,7 @@ CREATE TABLE dbo.market_events
     stall_width DECIMAL(6,2) NULL,
     stall_length DECIMAL(6,2) NULL,
     base_fee DECIMAL(10,2) NOT NULL,
+    deposit_amount DECIMAL(10,2) NOT NULL CONSTRAINT DF_market_events_deposit_amount DEFAULT 0,
     traffic_info_driving NVARCHAR(MAX) NULL,
     traffic_info_bus NVARCHAR(MAX) NULL,
     traffic_info_metro NVARCHAR(MAX) NULL,
@@ -280,7 +289,6 @@ CREATE TABLE dbo.market_events
     create_at DATETIME2(0) NOT NULL CONSTRAINT DF_market_events_create_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_market_events PRIMARY KEY (id),
     CONSTRAINT FK_market_events_users FOREIGN KEY (user_id) REFERENCES dbo.users(id),
-    CONSTRAINT FK_market_events_categories FOREIGN KEY (category_id) REFERENCES dbo.categories(id),
     CONSTRAINT CK_market_events_date_range CHECK (end_at >= start_at),
     CONSTRAINT CK_market_events_registration_range CHECK (registration_end_at >= registration_start_at),
     CONSTRAINT CK_market_events_workflow_status CHECK (workflow_status IN (N'DRAFT', N'PENDING_REVIEW', N'REVISION_REQUIRED', N'MAP_BUILDING', N'READY_TO_PUBLISH', N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED', N'UNPUBLISHED', N'CANCELLED'))
@@ -289,8 +297,22 @@ GO
 
 CREATE INDEX IX_market_events_user ON dbo.market_events(user_id);
 CREATE INDEX IX_market_events_dates ON dbo.market_events(start_at, end_at);
-CREATE INDEX IX_market_events_city_category ON dbo.market_events(city, category_id);
+CREATE INDEX IX_market_events_city ON dbo.market_events(city);
 CREATE INDEX IX_market_events_workflow_status ON dbo.market_events(workflow_status);
+GO
+
+CREATE TABLE dbo.market_event_categories
+(
+    event_id BIGINT NOT NULL,
+    category_id BIGINT NOT NULL,
+    CONSTRAINT PK_market_event_categories PRIMARY KEY (event_id, category_id),
+    CONSTRAINT FK_market_event_categories_events FOREIGN KEY (event_id) REFERENCES dbo.market_events(id) ON DELETE CASCADE,
+    CONSTRAINT FK_market_event_categories_categories FOREIGN KEY (category_id) REFERENCES dbo.categories(id)
+);
+GO
+
+CREATE INDEX IX_market_event_categories_category
+ON dbo.market_event_categories(category_id, event_id);
 GO
 
 CREATE TABLE dbo.event_unpublish_requests
@@ -790,7 +812,6 @@ EXEC dbo.usp_add_column_description N'user_profiles', N'address', N'詳細地址
 
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'id', N'攤主品牌資料 ID';
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'user_profile_id', N'共用個人資料 ID';
-EXEC dbo.usp_add_column_description N'vendor_profiles', N'category_id', N'品牌分類 ID';
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'brand_name', N'品牌名稱';
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'avatar_image_url', N'攤主頭像圖片路徑';
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'cover_image_url', N'攤主封面圖片路徑';
@@ -823,7 +844,6 @@ EXEC dbo.usp_add_column_description N'vendor_products', N'image_url', N'商品�
 
 EXEC dbo.usp_add_column_description N'market_events', N'id', N'活動 ID';
 EXEC dbo.usp_add_column_description N'market_events', N'user_id', N'主辦方 ID';
-EXEC dbo.usp_add_column_description N'market_events', N'category_id', N'活動分類';
 EXEC dbo.usp_add_column_description N'market_events', N'title', N'活動名稱';
 EXEC dbo.usp_add_column_description N'market_events', N'summary', N'活動摘要';
 EXEC dbo.usp_add_column_description N'market_events', N'description', N'活動介紹';
@@ -840,6 +860,7 @@ EXEC dbo.usp_add_column_description N'market_events', N'max_booths', N'攤位總
 EXEC dbo.usp_add_column_description N'market_events', N'stall_width', N'本活動固定攤位寬度';
 EXEC dbo.usp_add_column_description N'market_events', N'stall_length', N'本活動固定攤位長度';
 EXEC dbo.usp_add_column_description N'market_events', N'base_fee', N'基本攤位費';
+EXEC dbo.usp_add_column_description N'market_events', N'deposit_amount', N'每攤保證金';
 EXEC dbo.usp_add_column_description N'market_events', N'traffic_info_driving', N'開車交通資訊';
 EXEC dbo.usp_add_column_description N'market_events', N'traffic_info_bus', N'公車交通資訊';
 EXEC dbo.usp_add_column_description N'market_events', N'traffic_info_metro', N'捷運交通資訊';

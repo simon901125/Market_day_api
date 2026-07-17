@@ -3,6 +3,8 @@ package com.example.demo.entity;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -19,6 +21,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.JoinTable;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
@@ -57,12 +61,15 @@ public class MarketEvent {
     /** 活動類型 */
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_categories"))
-    private Category category;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "market_event_categories",
+            joinColumns = @JoinColumn(name = "event_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id"))
+    private Set<Category> categories = new HashSet<>();
 
     public void addCategory(Category category){
-        this.category = category;
+        this.categories.add(category);
     }
 
     /** 活動名稱 */
@@ -128,6 +135,9 @@ public class MarketEvent {
     /** 基本攤位費用 */
     @Column(name = "base_fee", precision = 10, scale = 2, nullable = false)
     private BigDecimal baseFee;
+
+    @Column(name = "deposit_amount", precision = 10, scale = 2, nullable = false)
+    private BigDecimal depositAmount = BigDecimal.ZERO;
 
     /** 開車交通資訊 */
     @Column(name = "traffic_info_driving", columnDefinition = "nvarchar(max)")

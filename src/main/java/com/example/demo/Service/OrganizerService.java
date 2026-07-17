@@ -35,6 +35,7 @@ import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
+import com.example.demo.dto.response.CategoryResponse;
 import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.OrganizerAccountResponse;
 import com.example.demo.dto.response.OrganizerApplicationDetailResponse;
@@ -363,12 +364,14 @@ public class OrganizerService {
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
         LocalDateTime appliedStartAt = registrationStartAt == null ? null : registrationStartAt.atStartOfDay();
         LocalDateTime appliedEndExclusive = registrationEndAt == null ? null : registrationEndAt.plusDays(1).atStartOfDay();
-        List<OrganizerApplicationSummaryResponse> applications = organizerRepository
-                .findOrganizerApplications(organizerUserId, eventTitle, brandName, appliedStartAt, appliedEndExclusive)
+        List<Map<String, Object>> applicationRows = organizerRepository
+                .findOrganizerApplications(organizerUserId, eventTitle, brandName, appliedStartAt, appliedEndExclusive);
+        Map<Long, List<CategoryResponse>> categoriesByVendorProfileId = categoriesByVendorProfileId(applicationRows);
+        List<OrganizerApplicationSummaryResponse> applications = applicationRows
                 .stream()
                 .map(this::withDisplayApplicationStatus)
                 .filter(application -> matchesApplicationStatus(application, status))
-                .map(this::toApplicationSummaryResponse)
+                .map(application -> toApplicationSummaryResponse(application, categoriesByVendorProfileId))
                 .map(OrganizerApplicationSummaryResponse::new)
                 .toList();
         return ApiResponse.success(
@@ -1179,13 +1182,16 @@ public class OrganizerService {
         return rowsByApplication;
     }
 
-    private Map<String, Object> toApplicationSummaryResponse(Map<String, Object> application) {
+    private Map<String, Object> toApplicationSummaryResponse(
+            Map<String, Object> application,
+            Map<Long, List<CategoryResponse>> categoriesByVendorProfileId) {
         return orderedMap(
                 "applicationId", application.get("applicationId"),
                 "eventTitle", application.get("eventTitle"),
                 "eventTime", application.get("eventTime"),
                 "vendorName", application.get("vendorName"),
-                "brandType", application.get("brandType"),
+                "categories", categoriesByVendorProfileId.getOrDefault(
+                        toLong(application.get("vendorProfileId")), List.of()),
                 "vendorOwnerName", application.get("vendorOwnerName"),
                 "appliedAt", formatAppliedAt(application),
                 "applicationStatus", application.get("applicationStatus"));
@@ -1230,7 +1236,7 @@ public class OrganizerService {
 
         response.put("brand", orderedMap(
                 "brandName", application.get("vendorName"),
-                "categoryName", application.get("categoryName"),
+                "categories", vendorCategories(toLong(application.get("vendorProfileId"))),
                 "brandDescription", application.get("brandDescription")));
 
         response.put("applicationdetail", orderedMap(
@@ -1238,7 +1244,6 @@ public class OrganizerService {
                 "width", application.get("stallWidth"),
                 "length", application.get("stallLength"),
                 "stallZone", application.get("stallZoneName"),
-                "stallCategory", application.get("categoryName"),
                 "vehicleNo", application.get("vehicleNo"),
                 "applicantNote", application.get("applicantNote"),
                 "reviewNote", application.get("reviewNote"),
@@ -1284,6 +1289,33 @@ public class OrganizerService {
                 applicationDays));
 
         return response;
+    }
+
+    private List<CategoryResponse> vendorCategories(Long vendorProfileId) {
+        if (vendorProfileId == null) {
+            return List.of();
+        }
+        return categoriesByVendorProfileId(List.of(Map.of("vendorProfileId", vendorProfileId)))
+                .getOrDefault(vendorProfileId, List.of());
+    }
+
+    private Map<Long, List<CategoryResponse>> categoriesByVendorProfileId(List<Map<String, Object>> rows) {
+        List<Long> ids = rows.stream()
+                .map(row -> toLong(row.get("vendorProfileId")))
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, List<CategoryResponse>> result = new LinkedHashMap<>();
+        if (ids.isEmpty()) {
+            return result;
+        }
+        for (Map<String, Object> row : organizerRepository.findVendorCategoriesByProfileIds(ids)) {
+            Long profileId = toLong(row.get("vendorProfileId"));
+            result.computeIfAbsent(profileId, ignored -> new ArrayList<>()).add(new CategoryResponse(
+                    toLong(row.get("id")), Objects.toString(row.get("name"), ""),
+                    Objects.toString(row.get("slug"), "")));
+        }
+        return result;
     }
 
     private String displayEventStatus(Map<String, Object> application) {

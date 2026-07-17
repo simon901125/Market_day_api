@@ -46,6 +46,9 @@ class VendorDashboardServiceTest {
         when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(incomplete));
         when(stallRepository.findVendorProducts(20L)).thenReturn(completeProducts());
+        when(stallRepository.findVendorCategoriesByProfileIds(List.of(20L)))
+                .thenReturn(List.of(Map.of(
+                        "vendorProfileId", 20L, "id", 1L, "name", "Food", "slug", "food")));
 
         var response = service.initDashboard("Bearer token");
 
@@ -64,6 +67,9 @@ class VendorDashboardServiceTest {
         when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(completeVendor()));
         when(stallRepository.findVendorProducts(20L)).thenReturn(completeProducts());
+        when(stallRepository.findVendorCategoriesByProfileIds(List.of(20L)))
+                .thenReturn(List.of(Map.of(
+                        "vendorProfileId", 20L, "id", 1L, "name", "Food", "slug", "food")));
         when(stallRepository.findVendorDashboardApplicationCounts(7L)).thenReturn(Map.of(
                 "pendingReviewCount", 12,
                 "pendingPaymentCount", 6,

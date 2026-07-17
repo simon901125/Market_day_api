@@ -80,6 +80,28 @@ class NotificationServiceTest {
     }
 
     @Test
+    void organizerHelpersCreateRecipientSpecificNotifications() {
+        notificationService.notifyOrganizerApplicationSubmitted(30L, 20L, "夏日市集", "森日甜點");
+        notificationService.notifyOrganizerPaymentStatusChanged(30L, 20L, "夏日市集", "森日甜點", true);
+        notificationService.notifyOrganizerStallSelectionCompleted(30L, 20L, "夏日市集", "森日甜點");
+
+        ArgumentCaptor<NotificationCreateCommand> captor = ArgumentCaptor.forClass(NotificationCreateCommand.class);
+        verify(notificationRepository, times(3)).create(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(NotificationCreateCommand::type)
+                .containsExactly(
+                        NotificationType.APPLICATION_SUBMITTED,
+                        NotificationType.PAYMENT_PAID,
+                        NotificationType.STALL_SELECTION_COMPLETED);
+        assertThat(captor.getAllValues())
+                .allSatisfy(command -> {
+                    assertThat(command.userId()).isEqualTo(30L);
+                    assertThat(command.targetId()).isEqualTo(20L);
+                    assertThat(command.content()).contains("森日甜點", "夏日市集");
+                });
+    }
+
+    @Test
     void blankEventTitleUsesSafeDisplayName() {
         notificationService.notifyPaymentStatusChanged(10L, 20L, " ", false);
 

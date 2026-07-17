@@ -18,7 +18,7 @@ public class VendorStallSaveRequest {
     private String coverImageUrl;
     private String brandSummary;
     private String brandDescription;
-    private String brandType;
+    private List<Long> categoryIds;
     private List<VendorProductSaveRequest> products;
 
     public String getBrandName() {
@@ -133,12 +133,12 @@ public class VendorStallSaveRequest {
         this.brandDescription = brandDescription;
     }
 
-    public String getBrandType() {
-        return brandType;
+    public List<Long> getCategoryIds() {
+        return categoryIds;
     }
 
-    public void setBrandType(String brandType) {
-        this.brandType = brandType;
+    public void setCategoryIds(List<Long> categoryIds) {
+        this.categoryIds = categoryIds;
     }
 
     public List<VendorProductSaveRequest> getProducts() {
