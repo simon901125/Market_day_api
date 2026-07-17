@@ -9,7 +9,7 @@ public record MarketSearchRequest (
     List<String> eventStatuses,
     LocalDate startDate,
     LocalDate endDate,
-    List<String> categoryNames,
+    List<Long> categoryIds,
     String eventType
 ){
 }

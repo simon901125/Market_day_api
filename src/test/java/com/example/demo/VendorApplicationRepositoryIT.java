@@ -115,43 +115,50 @@ class VendorApplicationRepositoryIT extends SqlServerIntegrationTestSupport {
                 "SELECT id FROM user_profiles WHERE user_id = :userId AND profile_type = N'VENDOR'",
                 Map.of("userId", userId), Long.class);
         jdbc.update("""
-                INSERT INTO vendor_profiles (user_profile_id, category_id, brand_name)
-                VALUES (:userProfileId, :categoryId, :brandName)
+                INSERT INTO vendor_profiles (user_profile_id, brand_name)
+                VALUES (:userProfileId, :brandName)
                 """, new MapSqlParameterSource()
                 .addValue("userProfileId", userProfileId)
-                .addValue("categoryId", categoryId)
                 .addValue("brandName", brandName));
         Long vendorProfileId = jdbc.queryForObject(
                 "SELECT id FROM vendor_profiles WHERE user_profile_id = :userProfileId",
                 Map.of("userProfileId", userProfileId), Long.class);
+        jdbc.update("""
+                INSERT INTO vendor_profile_categories (vendor_profile_id, category_id)
+                VALUES (:vendorProfileId, :categoryId)
+                """, Map.of("vendorProfileId", vendorProfileId, "categoryId", categoryId));
         return new Vendor(userId, vendorProfileId);
     }
 
     private Long createEvent(Long organizerId, String title, LocalDateTime startAt) {
         Long categoryId = jdbc.queryForObject("SELECT TOP 1 id FROM categories ORDER BY id", Map.of(), Long.class);
         LocalDateTime endAt = startAt.plusDays(1);
-        return jdbc.queryForObject("""
+        Long eventId = jdbc.queryForObject("""
                 INSERT INTO market_events (
-                    user_id, category_id, title, summary, description,
+                    user_id, title, summary, description,
                     location_name, city, address,
                     start_at, end_at, registration_start_at, registration_end_at,
                     max_booths, base_fee, cover_image_url, workflow_status
                 )
                 OUTPUT INSERTED.id
                 VALUES (
-                    :organizerId, :categoryId, :title, N'Integration summary', N'Integration description',
+                    :organizerId, :title, N'Integration summary', N'Integration description',
                     N'Integration Venue', N'台北市', N'Integration address',
                     :startAt, :endAt, :registrationStartAt, :registrationEndAt,
                     20, 1000, N'/images/integration-event.jpg', N'PUBLISHED'
                 )
                 """, new MapSqlParameterSource()
                 .addValue("organizerId", organizerId)
-                .addValue("categoryId", categoryId)
                 .addValue("title", title)
                 .addValue("startAt", startAt)
                 .addValue("endAt", endAt)
                 .addValue("registrationStartAt", startAt.minusMonths(2))
                 .addValue("registrationEndAt", startAt.minusDays(1)), Long.class);
+        jdbc.update("""
+                INSERT INTO market_event_categories (event_id, category_id)
+                VALUES (:eventId, :categoryId)
+                """, Map.of("eventId", eventId, "categoryId", categoryId));
+        return eventId;
     }
 
     private Long createApplication(String applicationNo, Long eventId, Vendor vendor, LocalDateTime createdAt) {

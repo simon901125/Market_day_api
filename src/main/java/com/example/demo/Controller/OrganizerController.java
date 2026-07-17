@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.OrganizerService;
+import com.example.demo.Service.OrganizerNotificationService;
 import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
@@ -29,6 +30,7 @@ import com.example.demo.dto.response.OrganizerAccountingSearchResponse;
 import com.example.demo.dto.response.OrganizerApplicationDetailResponse;
 import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
 import com.example.demo.dto.response.OrganizerDashboardInitResponse;
+import com.example.demo.dto.response.OrganizerNotificationSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 
@@ -43,6 +45,9 @@ public class OrganizerController {
     private OrganizerService organizerService;
 
     @Autowired
+    private OrganizerNotificationService organizerNotificationService;
+
+    @Autowired
     private StallService stallService;
 
     @Operation(summary = "初始化主辦方後台", description = "登入後判斷目前主辦方是否需要填寫基本資料")
@@ -50,6 +55,16 @@ public class OrganizerController {
     public ApiResponse<OrganizerDashboardInitResponse> initOrganizerDashboard(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         return organizerService.initOrganizerDashboard(authorizationHeader);
+    }
+
+    @Operation(summary = "取得主辦方通知中心", description = "查詢目前登入主辦方通知；支援全部、未讀、報名相關、付款相關、活動異動及系統公告分類，未讀通知優先。")
+    @GetMapping("/api/organizer/notices")
+    public ApiResponse<OrganizerNotificationSearchResponse> getOrganizerNotifications(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestParam(value = "filter", defaultValue = "全部") String filter,
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+        return organizerNotificationService.getNotifications(authorizationHeader, filter, page, pageSize);
     }
 
     @Operation(summary = "查詢主辦方帳務活動列表", description = "依活動名稱、狀態、活動日期與分頁查詢主辦方帳務活動。")

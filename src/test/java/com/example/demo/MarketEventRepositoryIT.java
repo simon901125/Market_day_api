@@ -29,14 +29,20 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
 
     @Test void publishedEventCanBeSearchedAndLoadedByCurrentSchema() {
         Long eventId = createPublishedEvent();
+        Long categoryId = jdbc.queryForObject(
+                "SELECT category_id FROM market_event_categories WHERE event_id = :eventId",
+                Map.of("eventId", eventId), Long.class);
         var request = new MarketSearchRequest("Integration Market", List.of("Taipei"),
-                List.of("UPCOMING"), LocalDate.now(), LocalDate.now().plusDays(30), null, "CURRENT");
+                List.of("UPCOMING"), LocalDate.now(), LocalDate.now().plusDays(30), List.of(categoryId), "CURRENT");
         var cards = repository.searchMarketEvents(request);
         assertThat(cards).extracting(card -> card.id()).contains(eventId);
+        assertThat(cards.stream().filter(card -> card.id().equals(eventId)).findFirst().orElseThrow().categories())
+                .extracting(category -> category.id()).containsExactly(categoryId);
         var detail = repository.findMarketEventDetailById(eventId).orElseThrow();
         assertThat(detail.title()).isEqualTo("Integration Market");
         assertThat(detail.startTime()).isNotNull();
         assertThat(detail.publishStatus()).isEqualTo("PUBLISHED");
+        assertThat(detail.categories()).extracting(category -> category.id()).containsExactly(categoryId);
     }
 
     @Test void draftEventIsNotPublic() {
@@ -51,17 +57,22 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
         Long organizerId = userRepository.createLocalUser("ORGANIZER", email, "hash");
         userRepository.markEmailVerified(organizerId);
         LocalDateTime now = LocalDateTime.now().withNano(0);
-        return jdbc.queryForObject("""
+        Long eventId = jdbc.queryForObject("""
                 INSERT INTO market_events (
-                    user_id, category_id, title, summary, description, location_name, city, district, address,
+                    user_id, title, summary, description, location_name, city, district, address,
                     start_at, end_at, registration_start_at, registration_end_at, max_booths, base_fee,
                     workflow_status, traffic_info_metro)
                 OUTPUT INSERTED.id
-                VALUES (:userId, :categoryId, N'Integration Market', N'Summary', N'Description', N'Location',
+                VALUES (:userId, N'Integration Market', N'Summary', N'Description', N'Location',
                     N'Taipei', N'District', N'Address', :startAt, :endAt, :regStart, :regEnd, 10, 500,
                     N'PUBLISHED', N'Metro')
-                """, new MapSqlParameterSource().addValue("userId", organizerId).addValue("categoryId", categoryId)
+                """, new MapSqlParameterSource().addValue("userId", organizerId)
                         .addValue("startAt", now.plusDays(10).withHour(10)).addValue("endAt", now.plusDays(11).withHour(18))
                         .addValue("regStart", now.minusDays(1)).addValue("regEnd", now.plusDays(5)), Long.class);
+        jdbc.update("""
+                INSERT INTO market_event_categories (event_id, category_id)
+                VALUES (:eventId, :categoryId)
+                """, Map.of("eventId", eventId, "categoryId", categoryId));
+        return eventId;
     }
 }

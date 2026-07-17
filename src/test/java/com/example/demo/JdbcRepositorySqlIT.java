@@ -3,6 +3,7 @@ package com.example.demo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
         assertThat(stall.findApplicationDatesForSelection(-1L)).isEmpty();
         assertThat(stall.findVendorAccountByEmail("none@example.test")).isEmpty();
         assertThat(stall.findVendorProducts(-1L)).isEmpty();
-        assertThat(stall.findActiveCategoryIdByName("NONE")).isEmpty();
+        assertThat(stall.findActiveCategoriesByIds(List.of(-1L))).isEmpty();
         assertThat(stall.findSelectedStallApplication("NONE", LocalDate.now(), "NONE")).isEmpty();
         assertThat(stall.findSelectedApplicationDates("NONE")).isEmpty();
         assertThat(stall.findVendorStallMapApplication("NONE", LocalDate.now())).isEmpty();

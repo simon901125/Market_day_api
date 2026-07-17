@@ -11,7 +11,7 @@ public record MarketEventDetailResponse(
         String title,
         String summary,
         String description,
-        List<String> categoryNames,
+        List<CategoryResponse> categories,
         String locationName,
         String city,
         String district,

@@ -264,6 +264,12 @@ public class NewebPayService {
                     applicationId,
                     stringValue(payment.get("eventTitle")),
                     true);
+            notificationService.notifyOrganizerPaymentStatusChanged(
+                    toLong(payment.get("organizerUserId")),
+                    applicationId,
+                    stringValue(payment.get("eventTitle")),
+                    stringValue(payment.get("brandName")),
+                    true);
         }
     }
 
@@ -340,6 +346,12 @@ public class NewebPayService {
                         applicationId,
                         stringValue(payment.get("eventTitle")),
                         true);
+                notificationService.notifyOrganizerPaymentStatusChanged(
+                        toLong(payment.get("organizerUserId")),
+                        applicationId,
+                        stringValue(payment.get("eventTitle")),
+                        stringValue(payment.get("brandName")),
+                        true);
             }
         } else if (!"PAID".equals(currentPaymentStatus)) {
             paymentRepository.markPaymentFailed(paymentNo, providerTradeNo);
@@ -349,6 +361,12 @@ public class NewebPayService {
                         toLong(payment.get("userId")),
                         applicationId,
                         stringValue(payment.get("eventTitle")),
+                        false);
+                notificationService.notifyOrganizerPaymentStatusChanged(
+                        toLong(payment.get("organizerUserId")),
+                        applicationId,
+                        stringValue(payment.get("eventTitle")),
+                        stringValue(payment.get("brandName")),
                         false);
             }
         }

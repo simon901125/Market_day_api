@@ -44,7 +44,6 @@ class VendorDashboardServiceTest {
         incomplete.put("coverImageUrl", null);
         when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(incomplete));
-
         var response = service.initDashboard("Bearer token");
 
         assertThat(response.isSuccessStatus()).isTrue();
@@ -61,6 +60,9 @@ class VendorDashboardServiceTest {
         authenticateVendor();
         when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(completeVendor()));
+        when(stallRepository.findVendorCategoriesByProfileIds(List.of(20L)))
+                .thenReturn(List.of(Map.of(
+                        "vendorProfileId", 20L, "id", 1L, "name", "Food", "slug", "food")));
         when(stallRepository.findVendorDashboardApplicationCounts(7L)).thenReturn(Map.of(
                 "pendingReviewCount", 12,
                 "pendingPaymentCount", 6,
@@ -96,6 +98,9 @@ class VendorDashboardServiceTest {
         authenticateVendor();
         when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(completeVendor()));
+        when(stallRepository.findVendorCategoriesByProfileIds(List.of(20L)))
+                .thenReturn(List.of(Map.of(
+                        "vendorProfileId", 20L, "id", 1L, "name", "Food", "slug", "food")));
         when(stallRepository.findVendorDashboardApplicationCounts(7L)).thenReturn(Map.of(
                 "pendingReviewCount", 0,
                 "pendingPaymentCount", 0,

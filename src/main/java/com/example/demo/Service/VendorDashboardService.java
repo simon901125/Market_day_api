@@ -58,8 +58,15 @@ public class VendorDashboardService {
         }
 
         Long userId = toLong(vendor.get("userId"));
+        Long vendorProfileId = nullableLong(vendor.get("vendorProfileId"));
+        boolean profileIncomplete = isProfileIncomplete(vendor);
+        if (!profileIncomplete) {
+            List<Map<String, Object>> categories = stallRepository
+                    .findVendorCategoriesByProfileIds(List.of(vendorProfileId));
+            profileIncomplete = categories.isEmpty();
+        }
 
-        if (isProfileIncomplete(vendor)) {
+        if (profileIncomplete) {
             return ApiResponse.success(
                     "攤主首次登入導引",
                     new VendorDashboardInitResponse(
@@ -104,7 +111,6 @@ public class VendorDashboardService {
                 || isMissing(vendor.get("city"))
                 || isMissing(vendor.get("district"))
                 || isMissing(vendor.get("address"))
-                || isMissing(vendor.get("categoryId"))
                 || isMissing(vendor.get("avatarImageUrl"))
                 || isMissing(vendor.get("coverImageUrl"))
                 || isMissing(vendor.get("brandSummary"))
@@ -117,6 +123,10 @@ public class VendorDashboardService {
 
     private String text(Object value) {
         return value == null ? null : value.toString();
+    }
+
+    private Long nullableLong(Object value) {
+        return value == null ? null : toLong(value);
     }
 
     private Long toLong(Object value) {
