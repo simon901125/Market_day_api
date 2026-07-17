@@ -172,6 +172,7 @@ public class ApiResponse<T> {
             case "Payment status retrieved successfully" -> "\u4ed8\u6b3e\u72c0\u614b\u53d6\u5f97\u6210\u529f";
             case "NewebPay trade queried successfully" -> "\u85cd\u65b0\u4ea4\u6613\u67e5\u8a62\u6210\u529f";
             case "Image saved successfully" -> "\u5716\u7247\u5df2\u5132\u5b58\u4e26\u7d81\u5b9a\u8cc7\u6599";
+            case "Notification marked as read" -> "\u901a\u77e5\u5df2\u6a19\u8a18\u70ba\u5df2\u8b80";
             default -> isLikelyEnglish(message) ? "\u64cd\u4f5c\u6210\u529f" : message;
         };
     }
@@ -370,6 +371,8 @@ public class ApiResponse<T> {
             case "Verification code is required" -> "\u8acb\u8f38\u5165\u9a57\u8b49\u78bc";
             case "Verification code must be 6 digits" -> "\u9a57\u8b49\u78bc\u5fc5\u9808\u70ba 6 \u4f4d\u6578\u5b57";
             case "6-digit verification code is required" -> "\u8acb\u8f38\u5165 6 \u4f4d\u6578\u9a57\u8b49\u78bc";
+            case "Notification not found" -> "\u627e\u4e0d\u5230\u901a\u77e5";
+            case "Notification does not belong to this account" -> "\u6b64\u901a\u77e5\u4e0d\u5c6c\u65bc\u76ee\u524d\u767b\u5165\u5e33\u865f";
             default -> isLikelyEnglish(message) ? "\u64cd\u4f5c\u5931\u6557" : message;
         };
     }
