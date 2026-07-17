@@ -248,7 +248,7 @@ class AdminServiceTest {
     }
 
     @Test void setEventApproveRejectsWhenOperatorRoleIsNotAdmin() {
-        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ORGANIZER))
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ORGANIZER, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("權限不足，請重新登入管理員帳號再操作");
         verifyNoInteractions(userRepo, eventRepo, logRepo, notificationRepo);
@@ -257,7 +257,7 @@ class AdminServiceTest {
     @Test void setEventApproveThrowsWhenAdminNotFound() {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN))
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("找不到該管理員");
         verifyNoInteractions(eventRepo, logRepo, notificationRepo);
@@ -268,7 +268,7 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN))
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("找不到指定的活動");
         verifyNoInteractions(logRepo, notificationRepo);
@@ -280,7 +280,7 @@ class AdminServiceTest {
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L, "王小華")));
 
-        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN))
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("夏日市集當前狀態不可執行此操作");
         verify(eventRepo, never()).updateWorkflowStatusIfCurrent(any(), any(), any());
@@ -297,9 +297,10 @@ class AdminServiceTest {
         when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
         when(userRepo.getReferenceById(5L)).thenReturn(organizerRef);
 
-        var result = service.setEventApprove(1L, "op@test.com", Role.ADMIN);
+        var result = service.setEventApprove(1L, "op@test.com", Role.ADMIN, null);
 
         verify(eventRepo).updateWorkflowStatusIfCurrent(1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING);
+        verify(eventRepo, never()).updateWorkflowStatusAndReviewNoteIfCurrent(any(), any(), any(), any());
         assertThat(result.eventName()).isEqualTo("夏日市集");
         assertThat(result.newEventStatus()).isEqualTo(EventStatus.MAP_BUILDING);
 
@@ -323,6 +324,21 @@ class AdminServiceTest {
         assertThat(savedLog.getTargetId()).isEqualTo(1L);
         assertThat(savedLog.getTargetLabel()).isEqualTo("夏日市集");
         assertThat(savedLog.getContent()).isEqualTo("管理員小明同意夏日市集申請");
+    }
+
+    @Test void setEventApproveWithNoteUpdatesMarketEventReviewNote() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+        when(userRepo.getReferenceById(9L)).thenReturn(new User());
+        when(userRepo.getReferenceById(5L)).thenReturn(new User());
+
+        service.setEventApprove(1L, "op@test.com", Role.ADMIN, "已補充審查資料");
+
+        verify(eventRepo).updateWorkflowStatusAndReviewNoteIfCurrent(
+                1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING, "已補充審查資料");
+        verify(eventRepo, never()).updateWorkflowStatusIfCurrent(any(), any(), any());
     }
 
     @Test void setEventRevisionRejectsWhenOperatorRoleIsNotAdmin() {

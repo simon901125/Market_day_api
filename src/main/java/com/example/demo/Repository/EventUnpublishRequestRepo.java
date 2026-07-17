@@ -7,11 +7,30 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.example.demo.Repository.projection.admin.EventUnpublishReasonProjection;
 import com.example.demo.entity.EventUnpublishRequest;
 import com.example.demo.entity.User;
 import com.example.demo.enums.status.UnpublishRequestStatus;
 
 public interface EventUnpublishRequestRepo extends JpaRepository<EventUnpublishRequest, Long> {
+
+    /** 管理員後台: 活動詳細:查詢指定活動、指定狀態中，申請時間最新的一筆下架申請id與原因 */
+    @Query("""
+            SELECT new com.example.demo.Repository.projection.admin.EventUnpublishReasonProjection(
+                r.id,
+                r.reason
+            )
+            FROM EventUnpublishRequest r
+            WHERE r.event.id = :eventId
+                AND r.status = :status
+                AND r.requestedAt = (
+                    SELECT MAX(r2.requestedAt)
+                    FROM EventUnpublishRequest r2
+                    WHERE r2.event.id = :eventId AND r2.status = :status
+                )
+            """)
+    Optional<EventUnpublishReasonProjection> findLatestReasonByEventIdAndStatus(
+            @Param("eventId") Long eventId, @Param("status") UnpublishRequestStatus status);
 
     /** 管理員後台: 確認活動下架:查詢指定活動、指定狀態中，申請時間最新的一筆下架申請id */
     @Query("""

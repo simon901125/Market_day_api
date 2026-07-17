@@ -40,6 +40,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param boothPrice 攤位價格
  * @param boothZones 攤位分區清單 分區名稱&分區攤位數量
  * @param boothLayoutImage 攤位地圖底圖url
+ * @param unpublishRequestId 下架申請id，僅當eventStatus=UNPUBLISH_REQUESTED時有值，否則為null
+ * @param unpublishReason 下架申請原因，僅當eventStatus=UNPUBLISH_REQUESTED時有值，否則為null
  * @param logs 活動狀態logs
  */
 @Schema(description = "管理員活動詳細頁面")
@@ -80,7 +82,11 @@ public record AdminEventDetailDto(
     BigDecimal boothPrice,
     List<BoothZone> boothZones,
     String boothLayoutImage,
-    
+
+    //----------活動下架申請----------
+    Long unpublishRequestId,
+    String unpublishReason,
+
     //----------活動狀態Logs----------
     PageResponse<StatusLog> logs
 ) {}

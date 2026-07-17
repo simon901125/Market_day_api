@@ -34,6 +34,7 @@ import com.example.demo.Repository.projection.admin.AdminVenderDetailProjection;
 import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
 import com.example.demo.Repository.projection.admin.EventApprovalProjection;
 import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
+import com.example.demo.Repository.projection.admin.EventUnpublishReasonProjection;
 import com.example.demo.Repository.projection.admin.RefundProjection;
 import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
 import com.example.demo.Repository.projection.admin.UserLoginLogProjection;
@@ -214,6 +215,12 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
         List<EventStallZone> zones = eventStallZoneRepo.findByMarketEventId(eventId);
         int registeredBoothCount = eventApplicationRepo.countRegBoothsByEventId(eventId);
+        // 活動狀態=UNPUBLISH_REQUESTED時，多查一筆待審核下架申請的id與原因
+        EventUnpublishReasonProjection unpublishReason = event.workflowStatus() != WorkflowStatus.UNPUBLISH_REQUESTED
+                ? null
+                : eventUnpublishRequestRepo
+                        .findLatestReasonByEventIdAndStatus(eventId, UnpublishRequestStatus.PENDING)
+                        .orElse(null);
 
         // ----------塞資料----------
         String eventTime = String.format(
@@ -256,7 +263,6 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         List<BoothZone> boothZones = zones.stream()
                 .map(zone -> new BoothZone(zone.getZoneName(), zone.getStallCount()))
                 .toList();
-                
 
         return new AdminEventDetailDto(
                 event.eventId(),
@@ -286,8 +292,9 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 event.boothFee(),
                 boothZones,
                 event.mapImg(),
-                getEventStatusLogs(eventId, 1, pageSize)
-        );
+                unpublishReason == null ? null : unpublishReason.id(),
+                unpublishReason == null ? null : unpublishReason.reason(),
+                getEventStatusLogs(eventId, 1, pageSize));
     }
 
     // 設定管理員後台: 活動詳細:活動狀態變動紀錄
@@ -435,7 +442,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         return new PageResponse<>(dtoList, pageNumber, pageSize, total);
     }
 
-    //設定管理員後台: 主辦方詳細
+    // 設定管理員後台: 主辦方詳細
     @Override
     public AdminOrgDetailDto getOrganizerDetail(Long userId, int pageSize) {
         // ----------撈資料----------
@@ -539,7 +546,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
     // 設定管理員後台: 使用者詳細 :使用者登入紀錄
     @Override
-    public PageResponse<AdminUserLoginDto> getUserLoginLogs(Long userId, int pageNumber, int pageSize) throws IllegalArgumentException{
+    public PageResponse<AdminUserLoginDto> getUserLoginLogs(Long userId, int pageNumber, int pageSize)
+            throws IllegalArgumentException {
         // ----------撈資料----------
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
@@ -598,31 +606,6 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         return response;
     }
 
-    /**
-     * 將MarketEvent轉換成EventStatus
-     * 
-     * @param data :MarketEvent
-     * @return EventStatus
-     * @throws IllegalArgumentException 型別不符時拋出
-     */
-    @Override
-    public EventStatus changeToEventStatus(Object data) throws IllegalArgumentException {
-        if (data instanceof MarketEvent) {
-            MarketEvent entity = (MarketEvent) data;
-
-            return checkEventStatus(
-                    entity.getWorkflowStatus(),
-                    entity.getRegistrationStartAt(),
-                    entity.getRegistrationEndAt(),
-                    entity.getBrandPublicAt(),
-                    entity.getStartAt(),
-                    entity.getEndAt(),
-                    entity.getMaxBooths(),
-                    entity.getEventApplications() == null ? 0 : entity.getEventApplications().size());
-        }
-        throw new IllegalArgumentException("data須符合型別類型MarketEvent");
-    }
-  
     @Override
     @Transactional
     public UserStatusChangeDto setUserAccountDisable(Long userId, String operatorEmail, Role operatorRole) {
@@ -660,7 +643,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
-    @Transactional
+    @Transactional 
     public UserStatusChangeDto setUserAccountRestore(Long userId, String operatorEmail, Role operatorRole) {
         if (userId == null) {
             throw new IllegalArgumentException("請提供使用者id");
@@ -697,7 +680,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
     @Override
     @Transactional
-    public EventStatusChangeDto setEventApprove(Long eventId, String operatorEmail, Role operatorRole) {
+    public EventStatusChangeDto setEventApprove(Long eventId, String operatorEmail, Role operatorRole, String note) {
         if (eventId == null) {
             throw new IllegalArgumentException("請提供活動id");
         }
@@ -715,7 +698,12 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
         }
 
-        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING);
+        if (note == null || note.isBlank()) {
+            eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING);
+        } else {
+            eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+                    eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING, note);
+        }
 
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(event.organizerId()));
@@ -740,7 +728,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
-    @Transactional
+    @Transactional //TODO: 前端會傳送EventUnpublishRequestId過來, 如果EventUnpublishRequestId!=null，
     public EventStatusChangeDto setEventRevision(Long eventId, String operatorEmail, Role operatorRole, String note) {
         if (eventId == null) {
             throw new IllegalArgumentException("請提供活動id");
@@ -875,7 +863,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException("找不到該活動的下架申請");
         }
 
-        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.UNPUBLISHED);
+        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.UNPUBLISH_REQUESTED,
+                WorkflowStatus.UNPUBLISHED);
 
         eventUnpublishRequestRepo.reviewIfCurrent(
                 unpublishRequestId, adminRef, UnpublishRequestStatus.PENDING, UnpublishRequestStatus.APPROVED, note);
@@ -902,7 +891,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         return new EventStatusChangeDto(event.title(), EventStatus.UNPUBLISHED);
     }
 
-    //處理活動狀態變動紀錄:說明的文字映射
+    // 處理活動狀態變動紀錄:說明的文字映射
     private StatusLog toStatusLog(EventStatusLogProjection log) {
         String dateTime = log.reqAt() == null ? null : log.reqAt().format(DATE_TIME_FORMATTER);
         WorkflowStatus status = log.newStatus() == null ? null : WorkflowStatus.valueOf(log.newStatus());
@@ -955,5 +944,30 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             return hasRefundedAt ? RefundStatus.REFUNDED.getStatus() : RefundStatus.REFUNDING.getStatus();
         }
         return paymentStatus == null ? null : paymentStatus.getStatus();
+    }
+
+    /**
+     * 將MarketEvent轉換成EventStatus
+     * 
+     * @param data :MarketEvent
+     * @return EventStatus
+     * @throws IllegalArgumentException 型別不符時拋出
+     */
+    @Override
+    public EventStatus changeToEventStatus(Object data) throws IllegalArgumentException {
+        if (data instanceof MarketEvent) {
+            MarketEvent entity = (MarketEvent) data;
+
+            return checkEventStatus(
+                    entity.getWorkflowStatus(),
+                    entity.getRegistrationStartAt(),
+                    entity.getRegistrationEndAt(),
+                    entity.getBrandPublicAt(),
+                    entity.getStartAt(),
+                    entity.getEndAt(),
+                    entity.getMaxBooths(),
+                    entity.getEventApplications() == null ? 0 : entity.getEventApplications().size());
+        }
+        throw new IllegalArgumentException("data須符合型別類型MarketEvent");
     }
 }

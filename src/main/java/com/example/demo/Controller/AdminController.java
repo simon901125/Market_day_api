@@ -140,13 +140,15 @@ public class AdminController {
      * <b>API路徑</b>: /api/admin/events/{id}/approve<br>
      * @param authorizationHeader
      * @param id
+     * @param note 審核備註，可為null
      * @return 活動名稱、活動新狀態
      */
     @Operation(summary = "活動審核通過", description = "將指定活動的審核狀態設為通過。")
     @PostMapping("/events/{id}/approve")
     public ApiResponse<?> setEventApprove(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @RequestBody(required = false) String note) {
         if (id == null) {
             return ApiResponse.fail("請提供活動id");
         }
@@ -159,7 +161,7 @@ public class AdminController {
         try {
             String operatorEmail = jwtService.getEmail(token);
             Role operatorRole = Role.fromRole(jwtService.getRole(token));
-            return ApiResponse.success("ok", service.setEventApprove(id, operatorEmail, operatorRole));
+            return ApiResponse.success("ok", service.setEventApprove(id, operatorEmail, operatorRole, note));
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         } catch (Exception e) {
