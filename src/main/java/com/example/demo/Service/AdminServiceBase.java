@@ -1,8 +1,5 @@
 package com.example.demo.Service;
 
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-
 import org.springframework.lang.NonNull;
 
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
@@ -12,6 +9,7 @@ import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.dto.response.admin.AdminEventDetailDto;
 import com.example.demo.dto.response.admin.AdminEventListDto;
+import com.example.demo.dto.response.admin.AdminNoticeDto;
 import com.example.demo.dto.response.admin.AdminOperationLogDto;
 import com.example.demo.dto.response.admin.AdminOrgDetailDto;
 import com.example.demo.dto.response.admin.AdminOrgEventManagementDto;
@@ -33,7 +31,7 @@ public abstract class AdminServiceBase {
         public abstract AdminDashboardDto getDashboardResponse();
 
         /** 取得管理員後台: 通知中心 */
-        public abstract Object getNotice(NotificationCategory bookMark, int pageNumber, int pageSize);
+        public abstract PageResponse<AdminNoticeDto> getNotice(NotificationCategory category, int pageNumber, int pageSize, String operatorEmail);
 
         /** 取得管理員後台: 活動搜尋 */
         public abstract PageResponse<AdminEventListDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize);

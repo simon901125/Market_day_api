@@ -1,7 +1,5 @@
 package com.example.demo.Controller;
 
-import java.util.Map;
-
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -16,16 +14,17 @@ import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.dto.request.admin.AdminEventSearchRequest;
 import com.example.demo.dto.request.admin.AdminLogSearchDto;
 import com.example.demo.dto.request.admin.AdminLogsSearchRequest;
+import com.example.demo.dto.request.admin.AdminNoticeSearchRequest;
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchRequest;
 import com.example.demo.dto.request.admin.EventRevisionRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.dto.response.admin.EventStatusChangeDto;
+import com.example.demo.enums.notification.NotificationCategory;
 import com.example.demo.enums.type.Role;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -46,6 +45,7 @@ public class AdminController {
     }
 
     private final int STANDARD_PAGE_SIZE = 6;
+    private final int STANDARD_NOTIFICATION_PAGE_SIZE = 8;
 
     /**
      * 用來獲取管理員後台: 首頁資料統計部分<br>
@@ -62,14 +62,36 @@ public class AdminController {
         return ApiResponse.success("ok", response);
     }
 
-    @Operation(summary = "查詢通知列表", description = "查詢管理員後台的通知列表。")
+    /**
+     * 用來獲取管理員後台: 通知中心列表資料<br>
+     * <b>API路徑</b>: /api/admin/notices/search<br>
+     *
+     * @param authorizationHeader 管理員驗證憑證
+     * @param request 通知分類與分頁參數；category 為 null 時查詢全部分類，pageNumber/pageSize 為 null 時使用預設值
+     * @return ApiResponse<PageResponse<AdminNoticeDto>>
+     */
+    @Operation(summary = "查詢通知列表", description = "查詢管理員後台的通知列表，可依分類篩選，支援分頁；category 為 null 時查詢全部分類。")
     @PostMapping("/notices/search")
     public ApiResponse<?> getNotices(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @RequestBody Map<String, Object> data) {
-        // TODO:取得通知列表
+            @RequestBody(required = false) AdminNoticeSearchRequest request) {
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("驗證憑證無效或已過期");
+        }
 
-        return ApiResponse.success("ok");
+        NotificationCategory category = request == null ? null : request.category();
+        int pageNumber = request == null || request.pageNumber() == null ? 1 : request.pageNumber();
+        int pageSize = request == null || request.pageSize() == null ? STANDARD_NOTIFICATION_PAGE_SIZE : request.pageSize();
+
+        try {
+            String operatorEmail = jwtService.getEmail(token);
+            return ApiResponse.success("ok", service.getNotice(category, pageNumber, pageSize, operatorEmail));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.fail("取得通知列表失敗");
+        }
     }
 
     /**
@@ -132,7 +154,7 @@ public class AdminController {
                 return ApiResponse.success("ok", service.getEventStatusLogs(id, number, pageSize));
             }
 
-            return ApiResponse.success("ok", service.getEventDetail(id, 6));
+            return ApiResponse.success("ok", service.getEventDetail(id, STANDARD_PAGE_SIZE));
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         } catch (Exception e) {

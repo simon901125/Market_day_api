@@ -28,6 +28,7 @@ import com.example.demo.Repository.StatusLogRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminLookupProjection;
+import com.example.demo.Repository.projection.admin.AdminNoticeProjection;
 import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
 import com.example.demo.Repository.projection.admin.AdminOrganizerDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminVenderDetailProjection;
@@ -50,6 +51,7 @@ import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.dto.response.admin.AdminEventDetailDto;
 import com.example.demo.dto.response.admin.AdminEventListDto;
+import com.example.demo.dto.response.admin.AdminNoticeDto;
 import com.example.demo.dto.response.admin.AdminOperationLogDto;
 import com.example.demo.dto.response.admin.AdminOrgDetailDto;
 import com.example.demo.dto.response.admin.AdminOrgEventManagementDto;
@@ -150,10 +152,30 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 eventRepo.countByEventStatusIsACTIVE(now));
     }
 
+    /**
+     * 設定管理員後台: 通知中心，查詢指定管理員的通知列表，依未讀優先、時間新到舊排序<br>
+     * @param category 通知分類，為 null 時查詢全部分類
+     * @param pageNumber 頁碼，從1開始計算
+     * @param pageSize 每頁筆數
+     * @param operatorEmail 操作者(管理員)email
+     * @return 通知列表分頁結果
+     * @throws IllegalArgumentException 找不到指定的管理員時拋出
+     */
     @Override
-    public Object getNotice(NotificationCategory bookMark, int pageNumber, int pageSize) {
-        // TODO:for 管理員後台通知中心
-        throw new UnsupportedOperationException("Unimplemented method 'setNotice'");
+    public PageResponse<AdminNoticeDto> getNotice(
+            NotificationCategory category, int pageNumber, int pageSize, String operatorEmail) {
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
+        List<AdminNoticeProjection> notices = notificationRepo.findAdminNotices(admin.id(), category, pageRequest);
+        long total = notificationRepo.countAdminNotices(admin.id(), category);
+
+        List<AdminNoticeDto> items = notices.stream()
+                .map(this::toAdminNoticeDto)
+                .toList();
+
+        return new PageResponse<>(items, pageNumber, pageSize, total);
     }
 
     // 設定管理員後台: 活動搜尋
@@ -966,6 +988,21 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         logRepo.save(adminLog);
 
         return new EventStatusChangeDto(review.eventName(), EventStatus.PUBLISHED);
+    }
+
+    // 處理通知中心:通知建立時間格式映射
+    private AdminNoticeDto toAdminNoticeDto(AdminNoticeProjection notice) {
+        String time = notice.createdAt() == null ? null : notice.createdAt().format(DATE_TIME_FORMATTER);
+
+        return new AdminNoticeDto(
+                notice.id(),
+                notice.type(),
+                notice.targetType(),
+                notice.targetId(),
+                notice.title(),
+                notice.content(),
+                notice.isRead(),
+                time);
     }
 
     // 處理活動狀態變動紀錄:說明的文字映射
