@@ -33,7 +33,10 @@ public enum NotificationTargetType {
     MARKET_EVENT("marketEvent", "活動"),
 
     /**攤位申請 */
-    EVENT_APPLICATION("eventApplication", "攤位申請");
+    EVENT_APPLICATION("eventApplication", "攤位申請"),
+
+    /**活動下架申請單 */
+    EVENT_UNPUBLISH_REQUEST("eventUnpublishRequest", "活動下架申請單");
 
     @JsonValue
     private final String type; //序列化

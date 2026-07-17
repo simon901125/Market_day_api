@@ -22,6 +22,7 @@ import com.example.demo.dto.response.admin.AdminVenderRegDto;
 import com.example.demo.dto.response.admin.EventStatusChangeDto;
 import com.example.demo.dto.response.admin.StatusLog;
 import com.example.demo.dto.response.admin.UserStatusChangeDto;
+import com.example.demo.enums.type.NotificationCategory;
 import com.example.demo.enums.type.Role;
 
 import jakarta.annotation.Nonnull;
@@ -32,7 +33,7 @@ public abstract class AdminServiceBase {
         public abstract AdminDashboardDto getDashboardResponse();
 
         /** 取得管理員後台: 通知中心 */
-        public abstract Object getNotice(String bookMark, int pageNumber, int pageSize);
+        public abstract Object getNotice(NotificationCategory bookMark, int pageNumber, int pageSize);
 
         /** 取得管理員後台: 活動搜尋 */
         public abstract PageResponse<AdminEventListDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize);
@@ -75,6 +76,9 @@ public abstract class AdminServiceBase {
 
         /** 設定活動要求補件 */
         public abstract EventStatusChangeDto setEventRevision(Long userId, String operatorEmail, Role operatorRole, String note);
+
+        /** 設定活動下架申請退回(要求補件) */
+        public abstract EventStatusChangeDto setEventUnpublishRequestReject(Long unpublishRequestId, String operatorEmail, Role operatorRole, String note);
 
         /** 設定地圖建置完成 */
         public abstract EventStatusChangeDto setEventMapComplete(Long userId, String operatorEmail, Role operatorRole);

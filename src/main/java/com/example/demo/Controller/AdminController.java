@@ -18,8 +18,10 @@ import com.example.demo.dto.request.admin.AdminLogSearchDto;
 import com.example.demo.dto.request.admin.AdminLogsSearchRequest;
 import com.example.demo.dto.request.admin.AdminUserSearchDto;
 import com.example.demo.dto.request.admin.AdminUserSearchRequest;
+import com.example.demo.dto.request.admin.EventRevisionRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
+import com.example.demo.dto.response.admin.EventStatusChangeDto;
 import com.example.demo.enums.type.Role;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -173,22 +175,23 @@ public class AdminController {
     }
 
     /**
-     * 設定:活動審核通過，將指定活動的workflowStatus設為<br>
+     * 設定:活動要求補件，將指定活動的workflowStatus設為REVISION_REQUIRED；
+     * 若isUnpublish為true，則{id}改為EventUnpublishRequest.id，改為退回該下架申請單(要求補件)<br>
      * <b>API路徑</b>: /api/admin/events/{id}/request-revision<br>
      * @param authorizationHeader
-     * @param id
-     * @param note 補件原因
+     * @param id isUnpublish為false時為活動id，為true時為下架申請單id
+     * @param request isUnpublish 是否為下架申請退回；note 補件原因
      * @return 活動名稱、活動新狀態
      */
-    @Operation(summary = "活動要求補件", description = "將指定活動的審核狀態設為要求補件。")
+    @Operation(summary = "活動要求補件", description = "將指定活動的審核狀態設為要求補件，或退回指定的下架申請單。")
     @PostMapping("/events/{id}/request-revision")
     public ApiResponse<?> setEventRevision(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable Long id,
-            @RequestBody(required = false) String note
+            @RequestBody(required = false) EventRevisionRequest request
         ) {
         if (id == null) {
-            return ApiResponse.fail("請提供活動id");
+            return ApiResponse.fail("請提供id");
         }
 
         String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
@@ -196,10 +199,19 @@ public class AdminController {
             return ApiResponse.fail("驗證憑證無效或已過期");
         }
 
+        String note = request == null ? null : request.note();
+        if (note == null || note.isBlank()) {
+            return ApiResponse.fail("請提供補件原因");
+        }
+
         try {
             String operatorEmail = jwtService.getEmail(token);
             Role operatorRole = Role.fromRole(jwtService.getRole(token));
-            return ApiResponse.success("ok", service.setEventRevision(id, operatorEmail, operatorRole, note));
+            boolean isUnpublish = request != null && Boolean.TRUE.equals(request.isUnpublish());
+            EventStatusChangeDto result = isUnpublish
+                    ? service.setEventUnpublishRequestReject(id, operatorEmail, operatorRole, note)
+                    : service.setEventRevision(id, operatorEmail, operatorRole, note);
+            return ApiResponse.success("ok", result);
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         } catch (Exception e) {

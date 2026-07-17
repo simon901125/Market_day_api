@@ -35,6 +35,7 @@ import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
 import com.example.demo.Repository.projection.admin.EventApprovalProjection;
 import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
 import com.example.demo.Repository.projection.admin.EventUnpublishReasonProjection;
+import com.example.demo.Repository.projection.admin.EventUnpublishReviewProjection;
 import com.example.demo.Repository.projection.admin.RefundProjection;
 import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
 import com.example.demo.Repository.projection.admin.UserLoginLogProjection;
@@ -149,7 +150,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
-    public Object getNotice(String bookMark, int pageNumber, int pageSize) {
+    public Object getNotice(NotificationCategory bookMark, int pageNumber, int pageSize) {
         // TODO:for 管理員後台通知中心
         throw new UnsupportedOperationException("Unimplemented method 'setNotice'");
     }
@@ -728,7 +729,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     }
 
     @Override
-    @Transactional //TODO: 前端會傳送EventUnpublishRequestId過來, 如果EventUnpublishRequestId!=null，
+    @Transactional
     public EventStatusChangeDto setEventRevision(Long eventId, String operatorEmail, Role operatorRole, String note) {
         if (eventId == null) {
             throw new IllegalArgumentException("請提供活動id");
@@ -889,6 +890,81 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         logRepo.save(adminLog);
 
         return new EventStatusChangeDto(event.title(), EventStatus.UNPUBLISHED);
+    }
+
+    /**
+     * 設定:活動下架申請退回(要求補件)，將指定下架申請單狀態設為REJECTED，
+     * 並依活動品牌是否已公開過，將活動流程狀態改回PUBLISHED(尚未公開過)或FINAL_REVIEW(已公開過)<br>
+     * <b>API路徑</b>: /api/admin/events/{id}/request-revision (isUnpublish=true)<br>
+     * @param unpublishRequestId 下架申請單id
+     * @param operatorEmail 操作者(管理員)email
+     * @param operatorRole 操作者角色，須為{@link Role#ADMIN}
+     * @param note 補件原因
+     * @return 活動名稱、活動新狀態
+     */
+    @Override
+    @Transactional
+    public EventStatusChangeDto setEventUnpublishRequestReject(
+            Long unpublishRequestId, String operatorEmail, Role operatorRole, String note) {
+        if (unpublishRequestId == null) {
+            throw new IllegalArgumentException("請提供下架申請id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        if (note == null || note.isBlank()) {
+            throw new IllegalArgumentException("請提供補件原因");
+        }
+
+        EventUnpublishReviewProjection review = eventUnpublishRequestRepo.findReviewInfoById(unpublishRequestId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的下架申請"));
+
+        if (review.requestStatus() != UnpublishRequestStatus.PENDING) {
+            throw new IllegalArgumentException("該下架申請單不可進行此操作");
+        }
+        if (review.eventId() == null) {
+            throw new IllegalArgumentException("找不到該下架申請對應的活動");
+        }
+        if (review.eventStatus() != WorkflowStatus.UNPUBLISH_REQUESTED) {
+            throw new IllegalArgumentException(review.eventName() + "當前狀態不可執行此操作");
+        }
+
+        User adminRef = userRepo.getReferenceById(admin.id());
+        WorkflowStatus newWorkflowStatus = review.brandPublicAt() == null
+                ? WorkflowStatus.PUBLISHED
+                : WorkflowStatus.FINAL_REVIEW;
+
+        eventRepo.updateWorkflowStatusIfCurrent(
+                review.eventId(), WorkflowStatus.UNPUBLISH_REQUESTED, newWorkflowStatus);
+
+        eventUnpublishRequestRepo.reviewIfCurrent(
+                unpublishRequestId, adminRef, UnpublishRequestStatus.PENDING, UnpublishRequestStatus.REJECTED, note);
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(review.userId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Unpublish_Request_Revision");
+        notification.setTargetType(NotificationTargetType.EVENT_UNPUBLISH_REQUEST);
+        notification.setTargetId(unpublishRequestId);
+        notification.setTitle("補件通知");
+        notification.setContent(
+                review.eventName() + "的下架申請需要補件，請修改後重新送出審核，若有問題請洽公司聯絡電話");
+        notificationRepo.save(notification);
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(adminRef);
+        adminLog.setOperationType(AdminOperationType.REQUEST_REVISION);
+        adminLog.setTargetType(AdminTargetType.EVENT_UNPUBLISH_REQUEST);
+        adminLog.setTargetId(unpublishRequestId);
+        adminLog.setTargetLabel(review.eventName());
+        adminLog.setContent(admin.adminName() + "退回" + review.eventName() + "下架申請, 原因:" + note);
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(review.eventName(), EventStatus.PUBLISHED);
     }
 
     // 處理活動狀態變動紀錄:說明的文字映射
