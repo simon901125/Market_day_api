@@ -32,14 +32,15 @@ import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
 import com.example.demo.entity.AdminOperationLog;
 import com.example.demo.entity.Notification;
 import com.example.demo.entity.User;
+import com.example.demo.enums.notification.NotificationCategory;
+import com.example.demo.enums.notification.NotificationTargetType;
+import com.example.demo.enums.notification.NotificationType;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.UnpublishRequestStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
 import com.example.demo.enums.type.AdminTargetType;
-import com.example.demo.enums.type.NotificationCategory;
-import com.example.demo.enums.type.NotificationTargetType;
 import com.example.demo.enums.type.Role;
 
 @ExtendWith(MockitoExtension.class)
@@ -311,7 +312,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Event_Approve");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_APPROVED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("審核通過");
@@ -415,7 +416,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Event_Revision");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_REVISION_REQUIRED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("補件通知");
@@ -493,7 +494,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Event_Map_Complete");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_MAP_COMPLETED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("地圖完成");
@@ -587,7 +588,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(adminRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EXCEPTION);
-        assertThat(savedNotification.getType()).isEqualTo("System_EXCEPTION");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.SYSTEM_EXCEPTION);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("活動狀態異常");
@@ -619,7 +620,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Event_Unpublish");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_UNPUBLISHED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("活動下架");
@@ -741,7 +742,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Unpublish_Request_Revision");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.EVENT_UNPUBLISH_REQUEST);
         assertThat(savedNotification.getTargetId()).isEqualTo(77L);
         assertThat(savedNotification.getTitle()).isEqualTo("補件通知");

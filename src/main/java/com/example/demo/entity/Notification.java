@@ -4,8 +4,9 @@ import java.time.LocalDateTime;
 
 import org.hibernate.annotations.CreationTimestamp;
 
-import com.example.demo.enums.type.NotificationCategory;
-import com.example.demo.enums.type.NotificationTargetType;
+import com.example.demo.enums.notification.NotificationCategory;
+import com.example.demo.enums.notification.NotificationTargetType;
+import com.example.demo.enums.notification.NotificationType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -50,8 +51,9 @@ public class Notification {
     private NotificationCategory category;
 
     /** 通知事件類型，例如 APPLICATION_APPROVED/PAYMENT_PAID/EVENT_UPDATED (對應API實際操作行為分類)*/
+    @Enumerated(EnumType.STRING)
     @Column(name = "type", length = 50, nullable = false)
-    private String type;
+    private NotificationType type;
 
     /** 通知關聯對象類型(對應API的操作對象類型) */
     @Enumerated(EnumType.STRING)

@@ -22,7 +22,7 @@ import com.example.demo.dto.response.admin.AdminVenderRegDto;
 import com.example.demo.dto.response.admin.EventStatusChangeDto;
 import com.example.demo.dto.response.admin.StatusLog;
 import com.example.demo.dto.response.admin.UserStatusChangeDto;
-import com.example.demo.enums.type.NotificationCategory;
+import com.example.demo.enums.notification.NotificationCategory;
 import com.example.demo.enums.type.Role;
 
 import jakarta.annotation.Nonnull;

@@ -77,8 +77,9 @@ import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
 import com.example.demo.enums.type.AdminTargetType;
 import com.example.demo.enums.type.AdminTargetTypeForFront;
-import com.example.demo.enums.type.NotificationCategory;
-import com.example.demo.enums.type.NotificationTargetType;
+import com.example.demo.enums.notification.NotificationCategory;
+import com.example.demo.enums.notification.NotificationTargetType;
+import com.example.demo.enums.notification.NotificationType;
 import com.example.demo.enums.type.Role;
 
 import jakarta.annotation.Nonnull;
@@ -709,7 +710,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(event.organizerId()));
         notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType("Event_Approve");
+        notification.setType(NotificationType.EVENT_APPROVED);
         notification.setTargetType(NotificationTargetType.MARKET_EVENT);
         notification.setTargetId(eventId);
         notification.setTitle("審核通過");
@@ -758,7 +759,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(event.organizerId()));
         notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType("Event_Revision");
+        notification.setType(NotificationType.EVENT_REVISION_REQUIRED);
         notification.setTargetType(NotificationTargetType.MARKET_EVENT);
         notification.setTargetId(eventId);
         notification.setTitle("補件通知");
@@ -802,7 +803,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(event.organizerId()));
         notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType("Event_Map_Complete");
+        notification.setType(NotificationType.EVENT_MAP_COMPLETED);
         notification.setTargetType(NotificationTargetType.MARKET_EVENT);
         notification.setTargetId(eventId);
         notification.setTitle("地圖完成");
@@ -854,7 +855,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             Notification exceptionNotification = new Notification();
             exceptionNotification.setUser(adminRef);
             exceptionNotification.setCategory(NotificationCategory.EXCEPTION);
-            exceptionNotification.setType("System_EXCEPTION");
+            exceptionNotification.setType(NotificationType.SYSTEM_EXCEPTION);
             exceptionNotification.setTargetType(NotificationTargetType.MARKET_EVENT);
             exceptionNotification.setTargetId(eventId);
             exceptionNotification.setTitle("活動狀態異常");
@@ -873,7 +874,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(event.organizerId()));
         notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType("Event_Unpublish");
+        notification.setType(NotificationType.EVENT_UNPUBLISHED);
         notification.setTargetType(NotificationTargetType.MARKET_EVENT);
         notification.setTargetId(eventId);
         notification.setTitle("活動下架");
@@ -947,7 +948,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(review.userId()));
         notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType("Unpublish_Request_Revision");
+        notification.setType(NotificationType.EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED);
         notification.setTargetType(NotificationTargetType.EVENT_UNPUBLISH_REQUEST);
         notification.setTargetId(unpublishRequestId);
         notification.setTitle("補件通知");
