@@ -557,18 +557,56 @@ CREATE TABLE dbo.notifications
 (
     id BIGINT IDENTITY(1,1) NOT NULL,
     user_id BIGINT NOT NULL,
+    category NVARCHAR(30) NOT NULL,
     type NVARCHAR(50) NOT NULL,
+    target_type NVARCHAR(30) NOT NULL,
+    target_id BIGINT NULL,
     title NVARCHAR(150) NOT NULL,
     content NVARCHAR(MAX) NOT NULL,
     is_read BIT NOT NULL CONSTRAINT DF_notifications_is_read DEFAULT 0,
     read_at DATETIME2(0) NULL,
+    created_at DATETIME2(0) NOT NULL CONSTRAINT DF_notifications_created_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_notifications PRIMARY KEY (id),
-    CONSTRAINT FK_notifications_users FOREIGN KEY (user_id) REFERENCES dbo.users(id)
+    CONSTRAINT FK_notifications_users FOREIGN KEY (user_id) REFERENCES dbo.users(id),
+    CONSTRAINT CK_notifications_category CHECK (category IN (
+        N'APPLICATION_REVIEW',
+        N'REGISTRATION',
+        N'PAYMENT',
+        N'STALL_ASSIGNMENT',
+        N'EVENT_CHANGE',
+        N'ORGANIZER_MANAGEMENT',
+        N'EVENT_MANAGEMENT',
+        N'SYSTEM',
+        N'EXCEPTION'
+    )),
+    CONSTRAINT CK_notifications_target_type CHECK (target_type IN (
+        N'EVENT_APPLICATION',
+        N'MARKET_EVENT',
+        N'USER',
+        N'ORGANIZER_PROFILE',
+        N'PAYMENT',
+        N'REFUND',
+        N'SYSTEM'
+    )),
+    CONSTRAINT CK_notifications_target_reference CHECK (
+        (target_type = N'SYSTEM' AND target_id IS NULL)
+        OR (target_type <> N'SYSTEM' AND target_id IS NOT NULL)
+    ),
+    CONSTRAINT CK_notifications_read_state CHECK (
+        (is_read = 0 AND read_at IS NULL)
+        OR (is_read = 1 AND read_at IS NOT NULL)
+    )
 );
 GO
 
-CREATE INDEX IX_notifications_user ON dbo.notifications(user_id);
-CREATE INDEX IX_notifications_user_is_read ON dbo.notifications(user_id, is_read);
+CREATE INDEX IX_notifications_user_created
+ON dbo.notifications(user_id, created_at DESC, id DESC);
+
+CREATE INDEX IX_notifications_user_is_read_created
+ON dbo.notifications(user_id, is_read, created_at DESC, id DESC);
+
+CREATE INDEX IX_notifications_user_category_is_read_created
+ON dbo.notifications(user_id, category, is_read, created_at DESC, id DESC);
 GO
 
 CREATE TABLE dbo.admin_operation_logs
@@ -916,11 +954,15 @@ EXEC dbo.usp_add_column_description N'refunds', N'refunded_at', N'實際退款�
 
 EXEC dbo.usp_add_column_description N'notifications', N'id', N'通知 ID';
 EXEC dbo.usp_add_column_description N'notifications', N'user_id', N'接收者';
-EXEC dbo.usp_add_column_description N'notifications', N'type', N'通知類型';
+EXEC dbo.usp_add_column_description N'notifications', N'category', N'通知中心分類（攤主、主辦方及管理員共用）';
+EXEC dbo.usp_add_column_description N'notifications', N'type', N'通知事件類型，例如 APPLICATION_APPROVED/PAYMENT_PAID/EVENT_UPDATED';
+EXEC dbo.usp_add_column_description N'notifications', N'target_type', N'通知關聯對象類型（EVENT_APPLICATION/MARKET_EVENT/USER/ORGANIZER_PROFILE/PAYMENT/REFUND/SYSTEM）';
+EXEC dbo.usp_add_column_description N'notifications', N'target_id', N'通知關聯資料 ID；SYSTEM 類型為 NULL';
 EXEC dbo.usp_add_column_description N'notifications', N'title', N'通知標題';
 EXEC dbo.usp_add_column_description N'notifications', N'content', N'通知內容';
 EXEC dbo.usp_add_column_description N'notifications', N'is_read', N'是否已讀';
 EXEC dbo.usp_add_column_description N'notifications', N'read_at', N'閱讀時間';
+EXEC dbo.usp_add_column_description N'notifications', N'created_at', N'通知建立時間';
 
 EXEC dbo.usp_add_column_description N'admin_operation_logs', N'id', N'管理員操作紀錄 ID';
 EXEC dbo.usp_add_column_description N'admin_operation_logs', N'admin_user_id', N'執行操作的管理員使用者 ID';

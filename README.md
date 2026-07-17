@@ -2,9 +2,30 @@
 
 Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登入註冊、攤主資料、主辦資料、活動查詢、攤位選位、主辦後台管理、設備統計與帳務匯出等功能。
 
-最後更新：2026-07-15
 
 ## 更新紀錄
+
+### 2026-07-16
+
+#### yushuan branch
+
+- 調整攤主藍新金流建立付款流程，`POST /api/vendor/payments/newebpay` 回傳資料補上 `applicationId`、`applicationNo`、`paymentId`、`merchantOrderNo`，讓前端能明確對應報名單、付款紀錄與藍新商店訂單編號。
+- 調整付款狀態查詢 API，`GET /api/vendor/payments/{applicationNo}/status` 回傳資料補上 `applicationId`、`paymentId`、`merchantOrderNo`，並保留 `paymentNo`、`providerTradeNo`、`paymentRecordStatus`、`paidAt` 等付款結果欄位。
+- 調整藍新付款完成導回流程，`POST /api/newebpay/return` redirect 至前端時補上 `applicationNo`，方便前端回到報名紀錄頁後重新查詢該筆報名付款狀態。
+- 修正付款建立查詢只查金流必要欄位，不再為了聯絡人名稱查詢 `user_profiles.contact_name`，避免 `up.contact_name` 未 join 造成 SQL compile error。
+- 保留藍新背景通知流程，`POST /api/newebpay/notify` 仍負責驗章、解密、比對金額，並更新 `payments.status` 與 `event_applications.payment_status`。
+- 更新 `NewebPayServiceTest`，移除已不再使用的 `StallRepository` 測試注入，讓金流服務測試符合目前付款流程依賴。
+
+#### simon branch
+
+- 新增攤主首頁初始化 API：`GET /api/vendor/dashboard/init`，需攜帶有效的 Vendor Bearer Token。
+- 初始化時依攤主必填資料完整度判斷 `needsProfile`；品牌、聯絡資訊、地址、分類、品牌頭像、品牌封面、品牌介紹及至少一筆商品任一缺漏時，回傳首次設定導引提示，由前端顯示固定導引內容。
+- Instagram、Facebook、官方網站及商品圖片維持選填，不影響攤主資料完整度判斷。
+- 攤主資料完整時，首頁回傳聯絡人名稱、待審核報名數、待付款報名數及待選位報名數；待付款包含 `PENDING`、`FAILED`，待選位為審核通過且付款完成但仍有參加日期尚未選位的報名。
+- 攤主首頁回傳最近一年內最多 6 筆通知，依未讀優先、建立時間新到舊、通知 ID 大到小排序，不提供通知中心的分類與分頁參數。
+- 修正新註冊攤主尚未建立 `vendor_profiles` 時呼叫 `GET /api/vendor/notices` 回傳「找不到攤主資料」的問題；現在會正常回傳未讀數 0、總筆數 0 與空通知陣列。
+- Swagger 將原「攤主選位 API」合併至「攤主專區 API」，統一顯示攤主首頁、通知、報名、帳號與選位功能，既有 API 路徑不變。
+- 新增攤主首頁、空通知與 Controller 委派測試，並通過完整單元測試及 Spring Boot 啟動冒煙測試。
 
 ### 2026-07-15
 
@@ -20,11 +41,27 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 新增 `ResendRegistrationVerificationRequest`，驗證重新寄送註冊驗證碼時的 Email 必填與格式。
 - 建立 `user_profiles` 時同步儲存註冊名稱與聯絡 Email；尚未建立攤主或主辦 profile 時，使用 `user_profiles.contact_name` 作為帳號顯示名稱。
 - 補充重新寄送驗證碼與本地帳號不存在的中文 API 訊息，並同步更新主辦方資料欄位文件。
-最後更新：2026-07-14
+
+#### simon branch
+
+- 建立共用 `NotificationService`、通知 Repository、通知建立指令與分類／事件／關聯對象 enum，讓現有與後續 API 能以統一入口建立單人、多人或系統通知。
+- 將攤主送出報名、主辦方審核通過／不通過、藍新付款成功／失敗與攤位選擇完成等狀態變更納入站內通知寫入流程。
+- 新增攤主通知中心 API：`GET /api/vendor/notices`，限目前登入攤主查詢，支援中文篩選、分頁及未讀總數。
+- 通知篩選值統一為「全部、未讀、報名審核、付款相關、攤位分配、活動異動」；結果依未讀優先、建立時間新到舊、通知 ID 大到小排序。
+- 通知預設僅查詢最近一年，可透過 `notification.retention-years` 調整，且至少保留一年。
+- 補上攤主通知 Controller、Service 與查詢規則測試，包含中文篩選值與錯誤篩選值驗證。
+- 強化既有管理員登入端點 `POST /api/admin/local-login`：登入成功簽發包含 `role=ADMIN` 的 JWT，並在 Swagger 補上管理員帳密登入範例。
+- 管理員登入以外的全部 `/api/admin/**` 端點皆須攜帶有效 Bearer Token；無效或逾期工作階段回傳 401，VENDOR／ORGANIZER token 回傳 403。
+- `JwtAuthenticationFilter` 由逐支維護 `protectedApis` 改為「受保護路徑前綴＋明確公開端點白名單」；`/api/vendor/**`、`/api/organizer/**`、`/api/admin/**`、`/api/auth/**`、`/api/account/**`、`/api/images**` 與 `/api/stalls/**` 預設需要 JWT。
+- 登入、註冊、信箱驗證、密碼重設、公開市集查詢與藍新回呼維持公開；所有 CORS `OPTIONS` 預檢請求亦直接放行。新增前綴保護、公開白名單、管理員角色及 CORS 測試。
+
+最後更新：2026-07-16
 
 ## 更新紀錄
 
 ### 2026-07-14
+
+- `GET /api/vendor/dashboard/init`：登入後判斷目前攤主是否需要填寫攤位資料；該使用者沒有 `vendor_profiles` 時回傳 `needsProfileSetup: true`。
 
 #### simon branch
 
@@ -156,18 +193,18 @@ demo/
 
 `run-local.cmd` 會設定本機開發常用環境變數並啟動 Spring Boot。
 
-| 變數 | 說明 |
-| --- | --- |
-| `DB_URL` | SQL Server JDBC URL |
-| `DB_USERNAME` | SQL Server 帳號 |
-| `DB_PASSWORD` | SQL Server 密碼 |
-| `GOOGLE_CLIENT_ID` | Google OAuth Client ID |
-| `MAIL_USERNAME` | 寄信帳號 |
-| `MAIL_PASSWORD` | 寄信密碼或 App Password |
-| `JWT_SECRET` | JWT secret |
-| `JWT_EXPIRATION_MS` | JWT 有效時間 |
-| `ADMIN_EMAIL` | 預設管理員 email |
-| `ADMIN_PASSWORD` | 預設管理員密碼 |
+| 變數                  | 說明                    |
+| --------------------- | ----------------------- |
+| `DB_URL`            | SQL Server JDBC URL     |
+| `DB_USERNAME`       | SQL Server 帳號         |
+| `DB_PASSWORD`       | SQL Server 密碼         |
+| `GOOGLE_CLIENT_ID`  | Google OAuth Client ID  |
+| `MAIL_USERNAME`     | 寄信帳號                |
+| `MAIL_PASSWORD`     | 寄信密碼或 App Password |
+| `JWT_SECRET`        | JWT secret              |
+| `JWT_EXPIRATION_MS` | JWT 有效時間            |
+| `ADMIN_EMAIL`       | 預設管理員 email        |
+| `ADMIN_PASSWORD`    | 預設管理員密碼          |
 
 ## 啟動與測試
 
@@ -246,11 +283,9 @@ Authorization: Bearer {token}
 - `GET /api/auth/me`
 - `POST /api/account/deactivate`
 - `GET /api/vendor/account`
+- `GET /api/vendor/notices`
 - `GET /api/vendor/stall/load`
 - `POST /api/vendor/stall/save`
-- `POST /api/vendor/stall/addproduct`
-- `POST /api/vendor/stall/edituct/{id}`
-- `POST /api/vendor/stall/deleteproduct/{id}`
 - `GET /api/vendor/stall-map/{applicationNo}`
 - `POST /api/stalls/select`
 - `GET /api/organizer/profile/load`
@@ -266,52 +301,52 @@ Authorization: Bearer {token}
 
 ## 公開 API
 
-| Method | API | 說明 |
-| --- | --- | --- |
-| GET | `/api/eventsMap/{eventId}/stallsStatus` | 公開攤位狀態地圖 |
-| GET | `/api/brands/scroll-options` | 品牌列表篩選選項 |
-| GET | `/api/brands/search` | 品牌列表查詢 |
-| GET | `/api/brands/{id}` | 品牌詳情 |
-| POST | `/api/markets/search` | 市集列表查詢 |
-| GET | `/api/markets/{id}` | 市集詳情 |
+| Method | API                                       | 說明             |
+| ------ | ----------------------------------------- | ---------------- |
+| GET    | `/api/eventsMap/{eventId}/stallsStatus` | 公開攤位狀態地圖 |
+| GET    | `/api/brands/scroll-options`            | 品牌列表篩選選項 |
+| GET    | `/api/brands/search`                    | 品牌列表查詢     |
+| GET    | `/api/brands/{id}`                      | 品牌詳情         |
+| POST   | `/api/markets/search`                   | 市集列表查詢     |
+| GET    | `/api/markets/{id}`                     | 市集詳情         |
 
 ## 帳號 API
 
-| Method | API | 說明 |
-| --- | --- | --- |
-| POST | `/api/vendor/local-register` | 攤主本地註冊 |
-| POST | `/api/organizer/local-register` | 主辦本地註冊 |
-| POST | `/api/vendor/google-register` | 攤主 Google 註冊 |
-| POST | `/api/organizer/google-register` | 主辦 Google 註冊 |
-| POST | `/api/vendor/local-login` | 攤主本地登入 |
-| POST | `/api/organizer/local-login` | 主辦本地登入 |
-| POST | `/api/admin/local-login` | 管理員登入 |
-| POST | `/api/vendor/google-login` | 攤主 Google 登入 |
-| POST | `/api/organizer/google-login` | 主辦 Google 登入 |
-| POST | `/api/auth/google-bind` | 登入後綁定 Google |
-| POST | `/api/auth/createAccount/emailVerify` | 註冊信箱驗證 |
-| POST | `/api/auth/resetPassword/request` | 申請重設密碼 |
-| POST | `/api/auth/resetPassword/emailVerify` | 重設密碼信箱驗證 |
-| POST | `/api/auth/resetPassword/reset` | 重設密碼 |
-| POST | `/api/auth/logout` | 登出 |
-| GET | `/api/auth/me` | 目前登入使用者 |
-| POST | `/api/account/deactivate` | 停用目前帳號 |
+| Method | API                                     | 說明              |
+| ------ | --------------------------------------- | ----------------- |
+| POST   | `/api/vendor/local-register`          | 攤主本地註冊      |
+| POST   | `/api/organizer/local-register`       | 主辦本地註冊      |
+| POST   | `/api/vendor/google-register`         | 攤主 Google 註冊  |
+| POST   | `/api/organizer/google-register`      | 主辦 Google 註冊  |
+| POST   | `/api/vendor/local-login`             | 攤主本地登入      |
+| POST   | `/api/organizer/local-login`          | 主辦本地登入      |
+| POST   | `/api/admin/local-login`              | 管理員登入        |
+| POST   | `/api/vendor/google-login`            | 攤主 Google 登入  |
+| POST   | `/api/organizer/google-login`         | 主辦 Google 登入  |
+| POST   | `/api/auth/google-bind`               | 登入後綁定 Google |
+| POST   | `/api/auth/createAccount/emailVerify` | 註冊信箱驗證      |
+| POST   | `/api/auth/resetPassword/request`     | 申請重設密碼      |
+| POST   | `/api/auth/resetPassword/emailVerify` | 重設密碼信箱驗證  |
+| POST   | `/api/auth/resetPassword/reset`       | 重設密碼          |
+| POST   | `/api/auth/logout`                    | 登出              |
+| GET    | `/api/auth/me`                        | 目前登入使用者    |
+| POST   | `/api/account/deactivate`             | 停用目前帳號      |
 
 ## 攤主金流 API
 
-| Method | API | Request DTO | JWT | 說明 |
-| ------ | --- | ----------- | --- | ---- |
-| POST | `/api/vendor/payments/newebpay` | `VendorPaymentRequest` | 是 | 攤主建立藍新付款資料，後端檢查申請單狀態並回傳藍新付款表單欄位。 |
-| GET | `/api/vendor/payments/{applicationNo}/status` | - | 是 | 查詢指定申請單的本地付款狀態。 |
-| POST | `/api/vendor/payments/{applicationNo}/newebpay-query` | - | 是 | 向藍新補查交易狀態，用於除錯或 Notify 未收到時補正狀態。 |
+| Method | API                                                     | Request DTO              | JWT | 說明                                                             |
+| ------ | ------------------------------------------------------- | ------------------------ | --- | ---------------------------------------------------------------- |
+| POST   | `/api/vendor/payments/newebpay`                       | `VendorPaymentRequest` | 是  | 攤主建立藍新付款資料，後端檢查申請單狀態並回傳藍新付款表單欄位。 |
+| GET    | `/api/vendor/payments/{applicationNo}/status`         | -                        | 是  | 查詢指定申請單的本地付款狀態。                                   |
+| POST   | `/api/vendor/payments/{applicationNo}/newebpay-query` | -                        | 是  | 向藍新補查交易狀態，用於除錯或 Notify 未收到時補正狀態。         |
 
 ## 藍新金流回呼 API
 
-| Method | API | Request | JWT | 說明 |
-| ------ | --- | ------- | --- | ---- |
-| POST | `/api/newebpay/notify` | 藍新回傳表單資料 | 否 | 藍新背景通知付款結果，後端驗章、解密、比對金額並更新付款狀態。 |
-| POST | `/api/newebpay/return` | 藍新回傳表單資料 | 否 | 使用者付款完成後由藍新導回，後端處理後導回前端付款結果頁。 |
-| GET | `/api/newebpay/return` | Query params | 否 | ReturnURL 備用/測試入口，供瀏覽器直接開啟時導回前端。 |
+| Method | API                      | Request          | JWT | 說明                                                           |
+| ------ | ------------------------ | ---------------- | --- | -------------------------------------------------------------- |
+| POST   | `/api/newebpay/notify` | 藍新回傳表單資料 | 否  | 藍新背景通知付款結果，後端驗章、解密、比對金額並更新付款狀態。 |
+| POST   | `/api/newebpay/return` | 藍新回傳表單資料 | 否  | 使用者付款完成後由藍新導回，後端處理後導回前端付款結果頁。     |
+| GET    | `/api/newebpay/return` | Query params     | 否  | ReturnURL 備用/測試入口，供瀏覽器直接開啟時導回前端。          |
 
 ## 藍新付款流程
 
@@ -339,16 +374,29 @@ POST /api/newebpay/return
 
 ## 攤主 API
 
-| Method | API | 說明 |
-| --- | --- | --- |
-| GET | `/api/vendor/account` | 攤主帳號資料 |
-| GET | `/api/vendor/stall/load` | 讀取攤主品牌與商品資料 |
-| POST | `/api/vendor/stall/save` | 儲存攤主品牌基本資料 |
-| POST | `/api/vendor/stall/addproduct` | 新增商品 |
-| POST | `/api/vendor/stall/edituct/{id}` | 編輯商品 |
-| POST | `/api/vendor/stall/deleteproduct/{id}` | 刪除商品 |
-| GET | `/api/vendor/stall-map/{applicationNo}` | 攤主選位地圖 |
-| POST | `/api/stalls/select` | 攤主送出選位 |
+| Method | API                                       | 說明                   |
+| ------ | ----------------------------------------- | ---------------------- |
+| GET    | `/api/vendor/account`                   | 攤主帳號資料           |
+| GET    | `/api/vendor/notices`                   | 攤主通知中心篩選與分頁查詢 |
+| GET    | `/api/vendor/stall/load`                | 讀取攤主品牌與商品資料 |
+| POST   | `/api/vendor/stall/save`                | 儲存攤主品牌基本資料   |
+| GET    | `/api/vendor/stall-map/{applicationNo}` | 攤主選位地圖           |
+| POST   | `/api/stalls/select`                    | 攤主送出選位           |
+
+### 攤主通知中心
+
+`GET /api/vendor/notices` 需要 Bearer Token，且帳號必須為已建立攤主資料的 `VENDOR`。
+
+| Query 參數 | 預設值 | 說明 |
+| ---------- | ------ | ---- |
+| `filter` | `全部` | 僅接受：`全部`、`未讀`、`報名審核`、`付款相關`、`攤位分配`、`活動異動` |
+| `page` | `1` | 頁碼從 1 開始 |
+| `pageSize` | `10` | 每頁筆數，最大 10 |
+
+- 只回傳目前登入攤主的通知，包含已讀與未讀。
+- 預設限制為最近一年，可以 `notification.retention-years` 調整。
+- 排序為未讀優先；相同閱讀狀態依 `createdAt` 由新到舊，相同時間再依 `id` 由大到小。
+- `unreadCount` 為該攤主在保留期間內的全部未讀總數，不受 `filter` 分類限制。
 
 ### 攤主資料欄位
 
@@ -378,27 +426,27 @@ POST /api/newebpay/return
 - 商品簡述
 - 商品金額
 
-`POST /api/vendor/stall/save` 不會用商品列表覆蓋舊商品。商品新增、編輯、刪除分別使用 `addproduct`、`edituct/{id}`、`deleteproduct/{id}`。
+`POST /api/vendor/stall/save` 會一次處理完整商品清單：依 ID 更新既有商品、新增無 ID 商品，並刪除未再送出的既有商品。
 
 ## 主辦 API
 
-| Method | API | 說明 |
-| --- | --- | --- |
-| GET | `/api/organizer/profile/load` | 讀取主辦基本資料 |
-| POST | `/api/organizer/profile/save` | 儲存主辦基本資料 |
-| GET | `/api/organizer/applications/search` | 報名列表查詢 |
-| GET | `/api/organizer/applications/{id}` | 報名詳情 |
-| POST | `/api/organizer/applications/{id}/approve` | 審核通過 |
-| POST | `/api/organizer/applications/{id}/reject` | 退回或拒絕 |
-| GET | `/api/organizer/stalls/search` | 攤位管理活動列表 |
-| GET | `/api/organizer/stall/{eventId}` | 主辦攤位地圖 |
-| GET | `/api/organizer/stall/{eventId}/{stallNo}` | 主辦攤位詳情 |
-| GET | `/api/organizer/equipment/search` | 設備管理活動列表 |
-| GET | `/api/organizer/equipment/{eventId}` | 設備管理詳情 |
-| GET | `/api/organizer/equipment/{eventId}/export` | 設備資料匯出 |
-| GET | `/api/organizer/accounts/search` | 帳務管理活動列表 |
-| GET | `/api/organizer/accounts/{eventId}` | 帳務管理詳情 |
-| GET | `/api/organizer/accounts/{eventId}/export` | 帳務資料匯出 |
+| Method | API                                           | 說明             |
+| ------ | --------------------------------------------- | ---------------- |
+| GET    | `/api/organizer/profile/load`               | 讀取主辦基本資料 |
+| POST   | `/api/organizer/profile/save`               | 儲存主辦基本資料 |
+| GET    | `/api/organizer/applications/search`        | 報名列表查詢     |
+| GET    | `/api/organizer/applications/{id}`          | 報名詳情         |
+| POST   | `/api/organizer/applications/{id}/approve`  | 審核通過         |
+| POST   | `/api/organizer/applications/{id}/reject`   | 退回或拒絕       |
+| GET    | `/api/organizer/stalls/search`              | 攤位管理活動列表 |
+| GET    | `/api/organizer/stall/{eventId}`            | 主辦攤位地圖     |
+| GET    | `/api/organizer/stall/{eventId}/{stallNo}`  | 主辦攤位詳情     |
+| GET    | `/api/organizer/equipment/search`           | 設備管理活動列表 |
+| GET    | `/api/organizer/equipment/{eventId}`        | 設備管理詳情     |
+| GET    | `/api/organizer/equipment/{eventId}/export` | 設備資料匯出     |
+| GET    | `/api/organizer/accounts/search`            | 帳務管理活動列表 |
+| GET    | `/api/organizer/accounts/{eventId}`         | 帳務管理詳情     |
+| GET    | `/api/organizer/accounts/{eventId}/export`  | 帳務資料匯出     |
 
 ### 主辦 profile 欄位
 
@@ -421,20 +469,20 @@ POST /api/newebpay/return
 
 ### 主辦 profile 輸入限制
 
-| 欄位 | 規則 |
-| --- | --- |
-| `organizerName` | 必填，長度不得超過資料庫欄位限制 |
-| `contactName` | 必填 |
-| `contactPhone` | 必填，需符合電話格式 |
-| `contactEmail` | 必填，需符合 email 格式 |
-| `city` | 必填，需存在於 `TaiwanAddressService` 的台灣縣市清單 |
-| `district` | 必填，需存在於指定縣市的行政區清單 |
-| `address` | 必填 |
-| `companyName` | 選填，若填寫不得超過 150 字 |
-| `taxId` | 若填寫需符合統一編號格式 |
-| `serviceDays` | 必填 |
-| `serviceStartTime` | 必填，時間格式 |
-| `serviceEndTime` | 必填，時間格式，需晚於開始時間 |
+| 欄位                 | 規則                                                  |
+| -------------------- | ----------------------------------------------------- |
+| `organizerName`    | 必填，長度不得超過資料庫欄位限制                      |
+| `contactName`      | 必填                                                  |
+| `contactPhone`     | 必填，需符合電話格式                                  |
+| `contactEmail`     | 必填，需符合 email 格式                               |
+| `city`             | 必填，需存在於`TaiwanAddressService` 的台灣縣市清單 |
+| `district`         | 必填，需存在於指定縣市的行政區清單                    |
+| `address`          | 必填                                                  |
+| `companyName`      | 選填，若填寫不得超過 150 字                           |
+| `taxId`            | 若填寫需符合統一編號格式                              |
+| `serviceDays`      | 必填                                                  |
+| `serviceStartTime` | 必填，時間格式                                        |
+| `serviceEndTime`   | 必填，時間格式，需晚於開始時間                        |
 
 ## 主辦攤位地圖
 
@@ -442,11 +490,11 @@ POST /api/newebpay/return
 
 Query params：
 
-| 參數 | 說明 |
-| --- | --- |
-| `applyDate` | 活動日期，不填則使用預設日期 |
-| `keyword` | 查詢攤位編號 `stallNo` 或已選攤位的品牌名稱 `selectedVendor.name` |
-| `status` | 篩選攤位狀態 |
+| 參數          | 說明                                                                 |
+| ------------- | -------------------------------------------------------------------- |
+| `applyDate` | 活動日期，不填則使用預設日期                                         |
+| `keyword`   | 查詢攤位編號`stallNo` 或已選攤位的品牌名稱 `selectedVendor.name` |
+| `status`    | 篩選攤位狀態                                                         |
 
 回傳重點：
 

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 import java.util.List;
 import java.util.Map;
@@ -58,17 +59,37 @@ class StallServiceVendorImageSaveTest {
     }
 
     @Test
-    void profileSaveDoesNotAttemptToOverwriteImageUrls() {
+    void profileSavePersistsSubmittedImageUrls() {
+        VendorStallSaveRequest request = validRequest();
+        request.setAvatarImageUrl("http://localhost:8081/images/vendor-avatar/new.png");
+        request.setCoverImageUrl("http://localhost:8081/images/vendor-cover/new.png");
+
         ApiResponse<MapBackedResponse> response = stallService.saveVendorStallProfile(
                 AUTHORIZATION,
-                validRequest());
+                request);
 
         assertThat(response.isSuccessStatus()).isTrue();
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> profileCaptor = ArgumentCaptor.forClass(Map.class);
         verify(stallRepository).updateVendorProfile(eq(10L), eq(20L), profileCaptor.capture());
         verify(stallRepository).replaceVendorProducts(20L, List.of());
-        assertThat(profileCaptor.getValue()).doesNotContainKeys("avatarImageUrl", "coverImageUrl");
+        assertThat(profileCaptor.getValue())
+                .containsEntry("avatarImageUrl", "http://localhost:8081/images/vendor-avatar/new.png")
+                .containsEntry("coverImageUrl", "http://localhost:8081/images/vendor-cover/new.png");
+    }
+
+    @Test
+    void profileSaveRejectsBase64ImagePayloads() {
+        VendorStallSaveRequest request = validRequest();
+        request.setAvatarImageUrl("data:image/png;base64,iVBORw0KGgoAAA");
+
+        ApiResponse<MapBackedResponse> response = stallService.saveVendorStallProfile(
+                AUTHORIZATION,
+                request);
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        assertThat(response.getMessage()).contains("/api/images");
+        verify(stallRepository, never()).updateVendorProfile(anyLong(), anyLong(), anyMap());
     }
 
     @Test
@@ -93,6 +114,30 @@ class StallServiceVendorImageSaveTest {
         verify(stallRepository).replaceVendorProducts(eq(20L), productsCaptor.capture());
         assertThat(productsCaptor.getValue()).singleElement()
                 .satisfies(savedProduct -> assertThat(savedProduct.get("id")).isEqualTo(88L));
+    }
+
+    @Test
+    void firstProfileSaveCreatesVendorProfile() {
+        when(stallRepository.findVendorAccountByEmail("vendor1@example.test"))
+                .thenReturn(Optional.empty());
+        when(stallRepository.findVendorDashboardStatusByEmail("vendor1@example.test"))
+                .thenReturn(Optional.of(Map.ofEntries(
+                        Map.entry("userId", 10L),
+                        Map.entry("userProfileId", 11L),
+                        Map.entry("email", "vendor1@example.test"),
+                        Map.entry("role", "VENDOR"),
+                        Map.entry("hasVendorProfile", false))));
+        when(stallRepository.createVendorProfile(eq(10L), eq(11L), anyMap()))
+                .thenReturn(21L);
+        when(stallRepository.replaceVendorProducts(21L, List.of())).thenReturn(0);
+
+        ApiResponse<MapBackedResponse> response = stallService.saveVendorStallProfile(
+                AUTHORIZATION,
+                validRequest());
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        verify(stallRepository).createVendorProfile(eq(10L), eq(11L), anyMap());
+        verify(stallRepository).replaceVendorProducts(21L, List.of());
     }
 
     private VendorStallSaveRequest validRequest() {

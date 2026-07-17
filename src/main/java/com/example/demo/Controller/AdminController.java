@@ -23,6 +23,8 @@ import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.enums.type.Role;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 @RestController
 @RequestMapping("/api/admin")
 @Tag(name = "管理員API", description = "提供與管理員活動審核、使用者帳號停復用相關功能")
+@SecurityRequirement(name = "bearerAuth")
 public class AdminController {
     final AdminServiceBase service;
     final JwtService jwtService;
