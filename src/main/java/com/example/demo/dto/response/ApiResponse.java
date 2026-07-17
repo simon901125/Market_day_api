@@ -116,8 +116,10 @@ public class ApiResponse<T> {
         return switch (message) {
             case "ok" -> "\u64cd\u4f5c\u6210\u529f";
             case "Users retrieved successfully" -> "\u4f7f\u7528\u8005\u5217\u8868\u53d6\u5f97\u6210\u529f";
-            case "User registered successfully. Verification code has been sent to email" -> "\u8a3b\u518a\u6210\u529f\uff0c\u9a57\u8b49\u78bc\u5df2\u5bc4\u9001\u81f3 Email";
-            case "Google user registered successfully. Verification code has been sent to email" -> "Google \u8a3b\u518a\u6210\u529f\uff0c\u9a57\u8b49\u78bc\u5df2\u5bc4\u9001\u81f3 Email";
+            case "User registered successfully. Verification code has been sent to email" ->
+                "\u8a3b\u518a\u6210\u529f\uff0c\u9a57\u8b49\u78bc\u5df2\u5bc4\u9001\u81f3 Email";
+            case "Google user registered successfully. Verification code has been sent to email" ->
+                "Google \u8a3b\u518a\u6210\u529f\uff0c\u9a57\u8b49\u78bc\u5df2\u5bc4\u9001\u81f3 Email";
             case "Login successful" -> "\u767b\u5165\u6210\u529f";
             case "Google login successful" -> "Google \u767b\u5165\u6210\u529f";
             case "Google account bound successfully" -> "Google \u5e33\u865f\u7d81\u5b9a\u6210\u529f";
@@ -126,29 +128,46 @@ public class ApiResponse<T> {
             case "User profile updated successfully" -> "\u4f7f\u7528\u8005\u8cc7\u6599\u66f4\u65b0\u6210\u529f";
             case "Account deactivated successfully" -> "\u5e33\u865f\u505c\u7528\u6210\u529f";
             case "Email verified successfully" -> "Email \u9a57\u8b49\u6210\u529f";
-            case "If the email belongs to a local account, a verification code has been sent" -> "\u82e5\u6b64 Email \u5c6c\u65bc\u672c\u5730\u5e33\u865f\uff0c\u9a57\u8b49\u78bc\u5df2\u5bc4\u9001";
-            case "Password reset email verified successfully" -> "\u91cd\u8a2d\u5bc6\u78bc Email \u9a57\u8b49\u6210\u529f";
+            case "If the email belongs to a local account, a verification code has been sent" ->
+                "\u82e5\u6b64 Email \u5c6c\u65bc\u672c\u5730\u5e33\u865f\uff0c\u9a57\u8b49\u78bc\u5df2\u5bc4\u9001";
+            case "Password reset email verified successfully" ->
+                "\u91cd\u8a2d\u5bc6\u78bc Email \u9a57\u8b49\u6210\u529f";
             case "Password reset successfully" -> "\u5bc6\u78bc\u91cd\u8a2d\u6210\u529f";
             case "Organizer profile loaded successfully" -> "\u4e3b\u8fa6\u65b9\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
             case "Organizer profile saved successfully" -> "\u4e3b\u8fa6\u65b9\u8cc7\u6599\u5132\u5b58\u6210\u529f";
-            case "Organizer accounting list retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u5e33\u52d9\u5217\u8868\u53d6\u5f97\u6210\u529f";
-            case "Organizer accounting detail retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u5e33\u52d9\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
-            case "Organizer applications retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u7533\u8acb\u5217\u8868\u53d6\u5f97\u6210\u529f";
-            case "Organizer stall events retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u7ba1\u7406\u6d3b\u52d5\u5217\u8868\u53d6\u5f97\u6210\u529f";
-            case "Organizer application detail retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u7533\u8acb\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
-            case "Organizer application reviewed successfully" -> "\u4e3b\u8fa6\u65b9\u7533\u8acb\u5be9\u6838\u6210\u529f";
+            case "Organizer accounting list retrieved successfully" ->
+                "\u4e3b\u8fa6\u65b9\u5e33\u52d9\u5217\u8868\u53d6\u5f97\u6210\u529f";
+            case "Organizer accounting detail retrieved successfully" ->
+                "\u4e3b\u8fa6\u65b9\u5e33\u52d9\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
+            case "Organizer applications retrieved successfully" ->
+                "\u4e3b\u8fa6\u65b9\u7533\u8acb\u5217\u8868\u53d6\u5f97\u6210\u529f";
+            case "Organizer stall events retrieved successfully" ->
+                "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u7ba1\u7406\u6d3b\u52d5\u5217\u8868\u53d6\u5f97\u6210\u529f";
+            case "Organizer application detail retrieved successfully" ->
+                "\u4e3b\u8fa6\u65b9\u7533\u8acb\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
+            case "Organizer application reviewed successfully" ->
+                "\u4e3b\u8fa6\u65b9\u7533\u8acb\u5be9\u6838\u6210\u529f";
             case "Stall selection successful" -> "\u6524\u4f4d\u9078\u64c7\u6210\u529f";
-            case "Event stalls status retrieved successfully" -> "\u6d3b\u52d5\u6524\u4f4d\u72c0\u614b\u53d6\u5f97\u6210\u529f";
-            case "Vendor account retrieved successfully" -> "\u6524\u4e3b\u5e33\u865f\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
-            case "Vendor applications retrieved successfully" -> "\u6524\u4e3b\u5831\u540d\u7d00\u9304\u53d6\u5f97\u6210\u529f";
-            case "Vendor application detail retrieved successfully" -> "\u6524\u4e3b\u5831\u540d\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
-            case "Vendor stall map retrieved successfully" -> "\u6524\u4e3b\u9078\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
-            case "Organizer stall map retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
-            case "Organizer stall detail retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
+            case "Event stalls status retrieved successfully" ->
+                "\u6d3b\u52d5\u6524\u4f4d\u72c0\u614b\u53d6\u5f97\u6210\u529f";
+            case "Vendor account retrieved successfully" ->
+                "\u6524\u4e3b\u5e33\u865f\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
+            case "Vendor applications retrieved successfully" ->
+                "\u6524\u4e3b\u5831\u540d\u7d00\u9304\u53d6\u5f97\u6210\u529f";
+            case "Vendor application detail retrieved successfully" ->
+                "\u6524\u4e3b\u5831\u540d\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
+            case "Vendor stall map retrieved successfully" ->
+                "\u6524\u4e3b\u9078\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
+            case "Organizer stall map retrieved successfully" ->
+                "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u5730\u5716\u53d6\u5f97\u6210\u529f";
+            case "Organizer stall detail retrieved successfully" ->
+                "\u4e3b\u8fa6\u65b9\u6524\u4f4d\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
             case "Brands retrieved successfully" -> "\u54c1\u724c\u5217\u8868\u53d6\u5f97\u6210\u529f";
             case "Brand detail retrieved successfully" -> "\u54c1\u724c\u8a73\u60c5\u53d6\u5f97\u6210\u529f";
-            case "Brand scroll options retrieved successfully" -> "\u54c1\u724c\u641c\u5c0b\u9078\u9805\u53d6\u5f97\u6210\u529f";
-            case "NewebPay payment created successfully" -> "\u85cd\u65b0\u91d1\u6d41\u4ed8\u6b3e\u8cc7\u6599\u5efa\u7acb\u6210\u529f";
+            case "Brand scroll options retrieved successfully" ->
+                "\u54c1\u724c\u641c\u5c0b\u9078\u9805\u53d6\u5f97\u6210\u529f";
+            case "NewebPay payment created successfully" ->
+                "\u85cd\u65b0\u91d1\u6d41\u4ed8\u6b3e\u8cc7\u6599\u5efa\u7acb\u6210\u529f";
             case "Payment status retrieved successfully" -> "\u4ed8\u6b3e\u72c0\u614b\u53d6\u5f97\u6210\u529f";
             case "NewebPay trade queried successfully" -> "\u85cd\u65b0\u4ea4\u6613\u67e5\u8a62\u6210\u529f";
             case "Image saved successfully" -> "\u5716\u7247\u5df2\u5132\u5b58\u4e26\u7d81\u5b9a\u8cc7\u6599";
@@ -162,23 +181,29 @@ public class ApiResponse<T> {
         }
 
         return switch (message) {
-            case "Admin accounts must be created by the system" -> "\u7ba1\u7406\u54e1\u5e33\u865f\u5fc5\u9808\u7531\u7cfb\u7d71\u5efa\u7acb";
-            case "Admin accounts do not support Google registration" -> "\u7ba1\u7406\u54e1\u5e33\u865f\u4e0d\u652f\u63f4 Google \u8a3b\u518a";
-            case "Admin accounts do not support Google login" -> "\u7ba1\u7406\u54e1\u5e33\u865f\u4e0d\u652f\u63f4 Google \u767b\u5165";
+            case "Admin accounts must be created by the system" ->
+                "\u7ba1\u7406\u54e1\u5e33\u865f\u5fc5\u9808\u7531\u7cfb\u7d71\u5efa\u7acb";
+            case "Admin accounts do not support Google registration" ->
+                "\u7ba1\u7406\u54e1\u5e33\u865f\u4e0d\u652f\u63f4 Google \u8a3b\u518a";
+            case "Admin accounts do not support Google login" ->
+                "\u7ba1\u7406\u54e1\u5e33\u865f\u4e0d\u652f\u63f4 Google \u767b\u5165";
             case "Email already registered" -> "\u6b64 Email \u5df2\u88ab\u8a3b\u518a";
             case "Email already verified" -> "\u6b64 Email \u5df2\u5b8c\u6210\u9a57\u8b49";
-            case "Registration verification code has been sent" -> "\u8a3b\u518a\u9a57\u8b49\u78bc\u5df2\u91cd\u65b0\u5bc4\u9001";
+            case "Registration verification code has been sent" ->
+                "\u8a3b\u518a\u9a57\u8b49\u78bc\u5df2\u91cd\u65b0\u5bc4\u9001";
             case "Local account not found" -> "\u627e\u4e0d\u5230\u6b64\u672c\u5730\u5e33\u865f";
             case "Email is required" -> "\u8acb\u8f38\u5165 Email";
             case "Email is not verified" -> "Email \u5c1a\u672a\u5b8c\u6210\u9a57\u8b49";
             case "Invalid email format" -> "Email \u683c\u5f0f\u4e0d\u6b63\u78ba";
             case "Name is required" -> "\u8acb\u8f38\u5165\u540d\u7a31";
             case "Name must not exceed 20 characters" -> "\u540d\u7a31\u4e0d\u5f97\u8d85\u904e 20 \u500b\u5b57";
-            case "Phone must be 10 digits and start with 09" -> "\u96fb\u8a71\u5fc5\u9808\u70ba 09 \u958b\u982d\u7684 10 \u4f4d\u6578\u5b57";
+            case "Phone must be 10 digits and start with 09" ->
+                "\u96fb\u8a71\u5fc5\u9808\u70ba 09 \u958b\u982d\u7684 10 \u4f4d\u6578\u5b57";
             case "Google account has already register" -> "\u6b64 Google \u5e33\u865f\u5df2\u88ab\u8a3b\u518a";
             case "Google account is not registered" -> "\u6b64 Google \u5e33\u865f\u5c1a\u672a\u8a3b\u518a";
             case "Google account is already bound" -> "\u6b64 Google \u5e33\u865f\u5df2\u7d81\u5b9a";
-            case "Google email does not match current account" -> "Google Email \u8207\u76ee\u524d\u767b\u5165\u5e33\u865f\u4e0d\u7b26";
+            case "Google email does not match current account" ->
+                "Google Email \u8207\u76ee\u524d\u767b\u5165\u5e33\u865f\u4e0d\u7b26";
             case "Google account binding failed" -> "Google \u5e33\u865f\u7d81\u5b9a\u5931\u6557";
             case "Google credential is required" -> "\u8acb\u63d0\u4f9b Google \u767b\u5165\u6191\u8b49";
             case "Invalid Google credential" -> "Google \u767b\u5165\u6191\u8b49\u7121\u6548";
@@ -187,22 +212,27 @@ public class ApiResponse<T> {
             case "Invalid email or password" -> "Email \u6216\u5bc6\u78bc\u932f\u8aa4";
             case "Invalid or expired token" -> "Token \u7121\u6548\u6216\u5df2\u904e\u671f";
             case "Invalid or expired verification code" -> "\u9a57\u8b49\u78bc\u7121\u6548\u6216\u5df2\u904e\u671f";
-            case "Invalid or expired reset token" -> "\u91cd\u8a2d\u5bc6\u78bc token \u7121\u6548\u6216\u5df2\u904e\u671f";
+            case "Invalid or expired reset token" ->
+                "\u91cd\u8a2d\u5bc6\u78bc token \u7121\u6548\u6216\u5df2\u904e\u671f";
             case "Authorization token is required" -> "\u8acb\u63d0\u4f9b Authorization token";
             case "Session expired" -> "\u767b\u5165\u72c0\u614b\u5df2\u904e\u671f\uff0c\u8acb\u91cd\u65b0\u767b\u5165";
             case "User not found" -> "\u627e\u4e0d\u5230\u4f7f\u7528\u8005";
             case "Organizer profile not found" -> "\u627e\u4e0d\u5230\u4e3b\u8fa6\u65b9\u8cc7\u6599";
             case "Organizer profile request is required" -> "\u8acb\u63d0\u4f9b\u4e3b\u8fa6\u65b9\u8cc7\u6599";
             case "Organizer name is required" -> "\u8acb\u8f38\u5165\u4e3b\u8fa6\u65b9\u540d\u7a31";
-            case "Organizer name must not exceed 150 characters" -> "\u4e3b\u8fa6\u65b9\u540d\u7a31\u4e0d\u5f97\u8d85\u904e 150 \u500b\u5b57";
+            case "Organizer name must not exceed 150 characters" ->
+                "\u4e3b\u8fa6\u65b9\u540d\u7a31\u4e0d\u5f97\u8d85\u904e 150 \u500b\u5b57";
             case "Contact name is required" -> "\u8acb\u8f38\u5165\u806f\u7d61\u4eba";
-            case "Contact name must not exceed 100 characters" -> "\u806f\u7d61\u4eba\u4e0d\u5f97\u8d85\u904e 100 \u500b\u5b57";
+            case "Contact name must not exceed 100 characters" ->
+                "\u806f\u7d61\u4eba\u4e0d\u5f97\u8d85\u904e 100 \u500b\u5b57";
             case "Contact phone is required" -> "\u8acb\u8f38\u5165\u806f\u7d61\u96fb\u8a71";
-            case "Contact phone must be 10 digits and start with 09" -> "\u806f\u7d61\u96fb\u8a71\u5fc5\u9808\u70ba 09 \u958b\u982d\u7684 10 \u4f4d\u6578\u5b57";
+            case "Contact phone must be 10 digits and start with 09" ->
+                "\u806f\u7d61\u96fb\u8a71\u5fc5\u9808\u70ba 09 \u958b\u982d\u7684 10 \u4f4d\u6578\u5b57";
             case "Contact email is required" -> "\u8acb\u8f38\u5165\u806f\u7d61 Email";
             case "Invalid contact email format" -> "\u806f\u7d61 Email \u683c\u5f0f\u4e0d\u6b63\u78ba";
             case "Company name is required" -> "\u8acb\u8f38\u5165\u516c\u53f8\u6216\u5718\u9ad4\u540d\u7a31";
-            case "Company name must not exceed 150 characters" -> "\u516c\u53f8\u6216\u5718\u9ad4\u540d\u7a31\u4e0d\u5f97\u8d85\u904e 150 \u500b\u5b57";
+            case "Company name must not exceed 150 characters" ->
+                "\u516c\u53f8\u6216\u5718\u9ad4\u540d\u7a31\u4e0d\u5f97\u8d85\u904e 150 \u500b\u5b57";
             case "Tax id is required" -> "\u8acb\u8f38\u5165\u7d71\u4e00\u7de8\u865f";
             case "Tax id must be 8 digits" -> "\u7d71\u4e00\u7de8\u865f\u5fc5\u9808\u70ba 8 \u78bc\u6578\u5b57";
             case "City is required" -> "\u8acb\u8f38\u5165\u7e23\u5e02";
@@ -212,16 +242,29 @@ public class ApiResponse<T> {
             case "District must not exceed 50 characters" -> "\u5730\u5340\u4e0d\u5f97\u8d85\u904e 50 \u500b\u5b57";
             case "District is invalid for city" -> "\u5730\u5340\u4e0d\u5c6c\u65bc\u6240\u9078\u7e23\u5e02";
             case "Address is required" -> "\u8acb\u8f38\u5165\u8a73\u7d30\u5730\u5740";
-            case "Address must not exceed 255 characters" -> "\u8a73\u7d30\u5730\u5740\u4e0d\u5f97\u8d85\u904e 255 \u500b\u5b57";
+            case "Address must not exceed 255 characters" ->
+                "\u8a73\u7d30\u5730\u5740\u4e0d\u5f97\u8d85\u904e 255 \u500b\u5b57";
             case "Service days are required" -> "\u8acb\u8f38\u5165\u670d\u52d9\u65e5\u671f";
             case "Service days are invalid" -> "\u670d\u52d9\u65e5\u671f\u683c\u5f0f\u4e0d\u6b63\u78ba";
             case "Service start time is required" -> "\u8acb\u8f38\u5165\u670d\u52d9\u958b\u59cb\u6642\u9593";
-            case "Service start time format is invalid" -> "\u670d\u52d9\u958b\u59cb\u6642\u9593\u683c\u5f0f\u4e0d\u6b63\u78ba";
+            case "Service start time format is invalid" ->
+                "\u670d\u52d9\u958b\u59cb\u6642\u9593\u683c\u5f0f\u4e0d\u6b63\u78ba";
             case "Service end time is required" -> "\u8acb\u8f38\u5165\u670d\u52d9\u7d50\u675f\u6642\u9593";
-            case "Service end time format is invalid" -> "\u670d\u52d9\u7d50\u675f\u6642\u9593\u683c\u5f0f\u4e0d\u6b63\u78ba";
-            case "Service end time must be after start time" -> "\u670d\u52d9\u7d50\u675f\u6642\u9593\u5fc5\u9808\u665a\u65bc\u958b\u59cb\u6642\u9593";
+            case "Service end time format is invalid" ->
+                "\u670d\u52d9\u7d50\u675f\u6642\u9593\u683c\u5f0f\u4e0d\u6b63\u78ba";
+            case "Service end time must be after start time" ->
+                "\u670d\u52d9\u7d50\u675f\u6642\u9593\u5fc5\u9808\u665a\u65bc\u958b\u59cb\u6642\u9593";
             case "Vendor profile not found" -> "\u627e\u4e0d\u5230\u6524\u4e3b\u8cc7\u6599";
-            case "Vendor products are required" -> "\u8acb\u63d0\u4f9b\u76ee\u524d\u5b8c\u6574\u7684\u5546\u54c1\u6e05\u55ae";
+            case "Avatar image URL must be uploaded through /api/images" ->
+                "\u8acb\u5148\u900f\u904e /api/images \u5716\u7247\u4e0a\u50b3 API \u4e0a\u50b3\u54c1\u724c\u982d\u50cf";
+            case "Cover image URL must be uploaded through /api/images" ->
+                "\u8acb\u5148\u900f\u904e /api/images \u5716\u7247\u4e0a\u50b3 API \u4e0a\u50b3\u54c1\u724c\u5c01\u9762";
+            case "Avatar image URL must not exceed 500 characters" ->
+                "\u54c1\u724c\u982d\u50cf URL \u4e0d\u5f97\u8d85\u904e 500 \u5b57";
+            case "Cover image URL must not exceed 500 characters" ->
+                "\u54c1\u724c\u5c01\u9762 URL \u4e0d\u5f97\u8d85\u904e 500 \u5b57";
+            case "Vendor products are required" ->
+                "\u8acb\u63d0\u4f9b\u76ee\u524d\u5b8c\u6574\u7684\u5546\u54c1\u6e05\u55ae";
             case "Vendor products must not exceed 3 items" -> "\u5546\u54c1\u6700\u591a\u53ea\u80fd\u6709 3 \u7b46";
             case "Vendor product snapshot save failed" -> "\u5546\u54c1\u8cc7\u6599\u5132\u5b58\u5931\u6557";
             case "Product id is invalid" -> "\u5546\u54c1 ID \u4e0d\u6b63\u78ba";
@@ -232,21 +275,29 @@ public class ApiResponse<T> {
             case "Application id is required" -> "\u8acb\u63d0\u4f9b\u7533\u8acb ID";
             case "Application number is required" -> "\u8acb\u63d0\u4f9b\u7533\u8acb\u7de8\u865f";
             case "Application not found" -> "\u627e\u4e0d\u5230\u7533\u8acb\u8cc7\u6599";
-            case "Application does not belong to this account" -> "\u6b64\u7533\u8acb\u4e0d\u5c6c\u65bc\u76ee\u524d\u767b\u5165\u5e33\u865f";
-            case "Application is not selectable for stall map" -> "\u6b64\u7533\u8acb\u76ee\u524d\u4e0d\u80fd\u67e5\u770b\u9078\u4f4d\u5730\u5716";
-            case "Application is not approved, paid, or selectable" -> "\u6b64\u7533\u8acb\u5c1a\u672a\u901a\u904e\u5be9\u6838\u3001\u5c1a\u672a\u4ed8\u6b3e\u6216\u4e0d\u80fd\u9078\u4f4d";
+            case "Application does not belong to this account" ->
+                "\u6b64\u7533\u8acb\u4e0d\u5c6c\u65bc\u76ee\u524d\u767b\u5165\u5e33\u865f";
+            case "Application is not selectable for stall map" ->
+                "\u6b64\u7533\u8acb\u76ee\u524d\u4e0d\u80fd\u67e5\u770b\u9078\u4f4d\u5730\u5716";
+            case "Application is not approved, paid, or selectable" ->
+                "\u6b64\u7533\u8acb\u5c1a\u672a\u901a\u904e\u5be9\u6838\u3001\u5c1a\u672a\u4ed8\u6b3e\u6216\u4e0d\u80fd\u9078\u4f4d";
             case "Application review is pending" -> "\u7533\u8acb\u5c1a\u5f85\u4e3b\u8fa6\u65b9\u5be9\u6838";
             case "Application review was rejected" -> "\u7533\u8acb\u5be9\u6838\u672a\u901a\u904e";
             case "Application is not approved" -> "\u7533\u8acb\u5c1a\u672a\u901a\u904e\u5be9\u6838";
             case "Application payment is pending" -> "\u7533\u8acb\u5c1a\u5f85\u4ed8\u6b3e";
-            case "Application payment is not paid" -> "\u7533\u8acb\u4ed8\u6b3e\u72c0\u614b\u4e0d\u662f\u5df2\u4ed8\u6b3e";
+            case "Application payment is not paid" ->
+                "\u7533\u8acb\u4ed8\u6b3e\u72c0\u614b\u4e0d\u662f\u5df2\u4ed8\u6b3e";
             case "Application dates are required" -> "\u627e\u4e0d\u5230\u7533\u8acb\u65e5\u671f\u8cc7\u6599";
             case "Application has already selected a stall" -> "\u6b64\u7533\u8acb\u5df2\u5b8c\u6210\u9078\u4f4d";
-            case "Application date has already selected a stall", "Application date has already been selected" -> "\u6b64\u7533\u8acb\u65e5\u671f\u5df2\u5b8c\u6210\u9078\u4f4d";
-            case "Application status changed during stall selection" -> "\u7533\u8acb\u72c0\u614b\u5df2\u8b8a\u66f4\uff0c\u8acb\u91cd\u65b0\u78ba\u8a8d\u5f8c\u518d\u9078\u4f4d";
+            case "Application date has already selected a stall", "Application date has already been selected" ->
+                "\u6b64\u7533\u8acb\u65e5\u671f\u5df2\u5b8c\u6210\u9078\u4f4d";
+            case "Application status changed during stall selection" ->
+                "\u7533\u8acb\u72c0\u614b\u5df2\u8b8a\u66f4\uff0c\u8acb\u91cd\u65b0\u78ba\u8a8d\u5f8c\u518d\u9078\u4f4d";
             case "Apply date is required" -> "\u8acb\u63d0\u4f9b\u7533\u8acb\u65e5\u671f";
-            case "Apply date is not part of this event" -> "\u7533\u8acb\u65e5\u671f\u4e0d\u5c6c\u65bc\u6b64\u6d3b\u52d5";
-            case "Apply date is not part of this application" -> "\u7533\u8acb\u65e5\u671f\u4e0d\u5c6c\u65bc\u6b64\u5831\u540d";
+            case "Apply date is not part of this event" ->
+                "\u7533\u8acb\u65e5\u671f\u4e0d\u5c6c\u65bc\u6b64\u6d3b\u52d5";
+            case "Apply date is not part of this application" ->
+                "\u7533\u8acb\u65e5\u671f\u4e0d\u5c6c\u65bc\u6b64\u5831\u540d";
             case "Event id is required" -> "\u8acb\u63d0\u4f9b\u6d3b\u52d5 ID";
             case "Event not found" -> "\u627e\u4e0d\u5230\u6d3b\u52d5\u8cc7\u6599";
             case "Brand id is required" -> "\u8acb\u63d0\u4f9b\u54c1\u724c ID";
@@ -265,40 +316,54 @@ public class ApiResponse<T> {
             case "Payment record not found" -> "\u627e\u4e0d\u5230\u4ed8\u6b3e\u7d00\u9304";
             case "NewebPay query failed" -> "\u85cd\u65b0\u4ea4\u6613\u67e5\u8a62\u5931\u6557";
             case "Stall selections are required" -> "\u8acb\u63d0\u4f9b\u9078\u4f4d\u8cc7\u6599";
-            case "Duplicate apply date in stall selections" -> "\u9078\u4f4d\u8cc7\u6599\u4e2d\u6709\u91cd\u8907\u7684\u7533\u8acb\u65e5\u671f";
-            case "Stall selections must match all application dates" -> "\u9078\u4f4d\u8cc7\u6599\u5fc5\u9808\u5b8c\u6574\u5c0d\u61c9\u6240\u6709\u5831\u540d\u65e5\u671f";
+            case "Duplicate apply date in stall selections" ->
+                "\u9078\u4f4d\u8cc7\u6599\u4e2d\u6709\u91cd\u8907\u7684\u7533\u8acb\u65e5\u671f";
+            case "Stall selections must match all application dates" ->
+                "\u9078\u4f4d\u8cc7\u6599\u5fc5\u9808\u5b8c\u6574\u5c0d\u61c9\u6240\u6709\u5831\u540d\u65e5\u671f";
             case "Stall number is required" -> "\u8acb\u63d0\u4f9b\u6524\u4f4d\u7de8\u865f";
             case "Stall is not available" -> "\u6b64\u6524\u4f4d\u4e0d\u53ef\u9078\u64c7";
             case "Stall has already been selected" -> "\u6b64\u6524\u4f4d\u5df2\u88ab\u9078\u8d70";
             case "Stall selection failed" -> "\u6524\u4f4d\u9078\u64c7\u5931\u6557";
-            case "Account is not active", "Account is not active or disabled" -> "\u5e33\u865f\u5c1a\u672a\u555f\u7528\u6216\u5df2\u505c\u7528";
-            case "Account role does not match token role" -> "\u5e33\u865f\u89d2\u8272\u8207 token \u89d2\u8272\u4e0d\u7b26\u5408";
-            case "Account cannot be deactivated while vendor applications are still in progress" -> "\u5c1a\u6709\u9032\u884c\u4e2d\u7684\u6524\u4e3b\u5831\u540d\uff0c\u7121\u6cd5\u505c\u7528\u5e33\u865f";
-            case "Account cannot be deactivated while organizer events are still in progress" -> "\u5c1a\u6709\u9032\u884c\u4e2d\u7684\u4e3b\u8fa6\u6d3b\u52d5\uff0c\u7121\u6cd5\u505c\u7528\u5e33\u865f";
-            case "This account role cannot be deactivated from this API" -> "\u6b64\u5e33\u865f\u89d2\u8272\u4e0d\u80fd\u900f\u904e\u6b64 API \u505c\u7528";
+            case "Account is not active", "Account is not active or disabled" ->
+                "\u5e33\u865f\u5c1a\u672a\u555f\u7528\u6216\u5df2\u505c\u7528";
+            case "Account role does not match token role" ->
+                "\u5e33\u865f\u89d2\u8272\u8207 token \u89d2\u8272\u4e0d\u7b26\u5408";
+            case "Account cannot be deactivated while vendor applications are still in progress" ->
+                "\u5c1a\u6709\u9032\u884c\u4e2d\u7684\u6524\u4e3b\u5831\u540d\uff0c\u7121\u6cd5\u505c\u7528\u5e33\u865f";
+            case "Account cannot be deactivated while organizer events are still in progress" ->
+                "\u5c1a\u6709\u9032\u884c\u4e2d\u7684\u4e3b\u8fa6\u6d3b\u52d5\uff0c\u7121\u6cd5\u505c\u7528\u5e33\u865f";
+            case "This account role cannot be deactivated from this API" ->
+                "\u6b64\u5e33\u865f\u89d2\u8272\u4e0d\u80fd\u900f\u904e\u6b64 API \u505c\u7528";
             case "Account deactivation failed" -> "\u5e33\u865f\u505c\u7528\u5931\u6557";
-            case "This account cannot login from this portal" -> "\u6b64\u5e33\u865f\u4e0d\u80fd\u5f9e\u6b64\u5165\u53e3\u767b\u5165";
+            case "This account cannot login from this portal" ->
+                "\u6b64\u5e33\u865f\u4e0d\u80fd\u5f9e\u6b64\u5165\u53e3\u767b\u5165";
             case "Login status update failed" -> "\u767b\u5165\u72c0\u614b\u66f4\u65b0\u5931\u6557";
             case "Reset token is required" -> "\u8acb\u63d0\u4f9b\u91cd\u8a2d\u5bc6\u78bc token";
             case "Password is required" -> "\u8acb\u8f38\u5165\u5bc6\u78bc";
             case "Current password is required" -> "\u8acb\u8f38\u5165\u76ee\u524d\u5bc6\u78bc";
             case "Current password is incorrect" -> "\u76ee\u524d\u5bc6\u78bc\u932f\u8aa4";
-            case "Password must be at least 8 characters and contain letters and numbers" -> "\u5bc6\u78bc\u81f3\u5c11\u9700 8 \u500b\u5b57\uff0c\u4e14\u9700\u5305\u542b\u82f1\u6587\u8207\u6578\u5b57";
+            case "Password must be at least 8 characters and contain letters and numbers" ->
+                "\u5bc6\u78bc\u81f3\u5c11\u9700 8 \u500b\u5b57\uff0c\u4e14\u9700\u5305\u542b\u82f1\u6587\u8207\u6578\u5b57";
             case "Password reset failed" -> "\u5bc6\u78bc\u91cd\u8a2d\u5931\u6557";
             case "Image purpose is required" -> "\u8acb\u63d0\u4f9b\u5716\u7247\u7528\u9014";
             case "Image purpose is invalid" -> "\u5716\u7247\u7528\u9014\u4e0d\u6b63\u78ba";
-            case "Image purpose is not allowed for this account" -> "\u76ee\u524d\u5e33\u865f\u4e0d\u80fd\u4e0a\u50b3\u6b64\u7528\u9014\u7684\u5716\u7247";
+            case "Image purpose is not allowed for this account" ->
+                "\u76ee\u524d\u5e33\u865f\u4e0d\u80fd\u4e0a\u50b3\u6b64\u7528\u9014\u7684\u5716\u7247";
             case "Image file is required" -> "\u8acb\u9078\u64c7\u8981\u4e0a\u50b3\u7684\u5716\u7247";
             case "File size must not exceed 5 MB" -> "\u6a94\u6848\u5927\u5c0f\u4e0d\u5f97\u8d85\u904e 5 MB";
             case "Only JPG or PNG files are allowed" -> "\u50c5\u652f\u63f4 JPG \u6216 PNG \u6a94\u6848";
             case "Only JPG, PNG, or PDF files are allowed" -> "\u50c5\u652f\u63f4 JPG\u3001PNG \u6216 PDF \u6a94\u6848";
             case "Invalid upload path" -> "\u4e0a\u50b3\u8def\u5f91\u4e0d\u6b63\u78ba";
             case "File upload failed" -> "\u6a94\u6848\u4e0a\u50b3\u5931\u6557";
-            case "Product id is required for product image" -> "\u5546\u54c1\u5716\u7247\u5fc5\u9808\u63d0\u4f9b productId";
+            case "Product id is required for product image" ->
+                "\u5546\u54c1\u5716\u7247\u5fc5\u9808\u63d0\u4f9b productId";
             case "Event id is required for event image" -> "\u6d3b\u52d5\u5716\u7247\u5fc5\u9808\u63d0\u4f9b eventId";
-            case "Product id is not allowed for this image purpose" -> "\u6b64\u5716\u7247\u7528\u9014\u4e0d\u5141\u8a31\u63d0\u4f9b productId";
-            case "Event id is not allowed for this image purpose" -> "\u6b64\u5716\u7247\u7528\u9014\u4e0d\u5141\u8a31\u63d0\u4f9b eventId";
-            case "Image target not found or does not belong to this account" -> "\u627e\u4e0d\u5230\u8981\u7d81\u5b9a\u7684\u8cc7\u6599\uff0c\u6216\u8a72\u8cc7\u6599\u4e0d\u5c6c\u65bc\u76ee\u524d\u5e33\u865f";
+            case "Product id is not allowed for this image purpose" ->
+                "\u6b64\u5716\u7247\u7528\u9014\u4e0d\u5141\u8a31\u63d0\u4f9b productId";
+            case "Event id is not allowed for this image purpose" ->
+                "\u6b64\u5716\u7247\u7528\u9014\u4e0d\u5141\u8a31\u63d0\u4f9b eventId";
+            case "Image target not found or does not belong to this account" ->
+                "\u627e\u4e0d\u5230\u8981\u7d81\u5b9a\u7684\u8cc7\u6599\uff0c\u6216\u8a72\u8cc7\u6599\u4e0d\u5c6c\u65bc\u76ee\u524d\u5e33\u865f";
             case "Image save failed" -> "\u5716\u7247\u5132\u5b58\u5931\u6557";
             case "Verification code is required" -> "\u8acb\u8f38\u5165\u9a57\u8b49\u78bc";
             case "Verification code must be 6 digits" -> "\u9a57\u8b49\u78bc\u5fc5\u9808\u70ba 6 \u4f4d\u6578\u5b57";

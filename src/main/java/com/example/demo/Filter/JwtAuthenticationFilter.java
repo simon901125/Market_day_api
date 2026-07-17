@@ -21,7 +21,6 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-
     private static final Set<String> PROTECTED_API_PREFIXES = Set.of(
             "/api/vendor/",
             "/api/organizer/",
@@ -30,7 +29,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/account/",
             "/api/images",
             "/api/stalls/");
-    //------------------------不過濾的端口(提供非登入使用者使用)------------------------
+    // ------------------------不過濾的端口(提供非登入使用者使用)------------------------
     private static final Set<PublicApi> PUBLIC_APIS = Set.of(
             new PublicApi(HttpMethod.POST.name(), "/api/vendor/local-register"),
             new PublicApi(HttpMethod.POST.name(), "/api/vendor/google-register"),
@@ -68,12 +67,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
-        //非目標apis直接放行
+        // 非目標apis直接放行
         if (!isProtectedApi(request)) {
             filterChain.doFilter(request, response);
             return;
         }
-        //目標api，做驗證
+        // 目標api，做驗證
         String token = jwtService.extractTokenFromAuthorizationHeader(request.getHeader("Authorization"));
         if (token == null || token.isBlank()) {
             writeUnauthorizedResponse(response, "Authorization token is required");
@@ -97,6 +96,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
+
     private boolean isProtectedApi(HttpServletRequest request) {
         if (HttpMethod.OPTIONS.matches(request.getMethod()) || isPublicApi(request)) {
             return false;
@@ -127,7 +127,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String regex = "^" + pattern.replaceAll("\\{[^/]+\\}", "[^/]+") + "$";
         return path.matches(regex);
     }
-    //編寫錯誤回報
+
+    // 編寫錯誤回報
     private void writeUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -145,4 +146,3 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private record PublicApi(String method, String path) {
     }
 }
-

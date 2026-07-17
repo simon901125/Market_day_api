@@ -35,6 +35,7 @@ import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorAccountResponse;
 import com.example.demo.dto.response.VendorApplicationSubmitResponse;
+import com.example.demo.dto.response.VendorDashboardInitResponse;
 import com.example.demo.dto.response.VendorMarketDetailResponse;
 import com.example.demo.dto.response.VendorApplicationDetailResponse;
 import com.example.demo.dto.response.VendorApplicationSearchResponse;
@@ -333,6 +334,44 @@ public class StallService {
         return ApiResponse.success("Vendor account retrieved successfully", new VendorAccountResponse(account));
     }
 
+    /**
+     * 驗證攤主身分並取得後台初始化狀態。
+     * vendor_profiles 尚未建立時，前端應顯示首次登入資料填寫引導。
+     *
+     * @param authorizationHeader Bearer JWT
+     * @return needsProfileSetup 為 true 表示需要填寫攤位資料
+     */
+    public ApiResponse<VendorDashboardInitResponse> initVendorDashboard(String authorizationHeader) {
+        // Controller 允許缺少 Header，以統一由 Service 回傳專案格式的錯誤內容。
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank()) {
+            return ApiResponse.fail("Authorization token is required");
+        }
+        if (!jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("Invalid or expired token");
+        }
+        if (!"VENDOR".equals(jwtService.getRole(token))) {
+            return ApiResponse.fail("This account is not a vendor");
+        }
+
+        // 不使用完整攤主資料查詢，因為首次登入時 vendor_profiles 本來就不存在。
+        Map<String, Object> dashboardStatus = stallRepository
+                .findVendorDashboardStatusByEmail(jwtService.getEmail(token))
+                .orElse(null);
+        if (dashboardStatus == null) {
+            return ApiResponse.fail("User not found");
+        }
+        if (!"VENDOR".equals(dashboardStatus.get("role"))) {
+            return ApiResponse.fail("This account is not a vendor");
+        }
+
+        // DB 查到攤主品牌資料時不需引導；查不到時才要求使用者填寫。
+        boolean needsProfileSetup = !isTrue(dashboardStatus.get("hasVendorProfile"));
+        return ApiResponse.success(
+                "Vendor dashboard initialized successfully",
+                new VendorDashboardInitResponse(needsProfileSetup));
+    }
+
     public ApiResponse<MapBackedResponse> loadVendorStallProfile(String authorizationHeader) {
         Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
         if (vendor.containsKey("message")) {
@@ -354,7 +393,21 @@ public class StallService {
 
         Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
         if (vendor.containsKey("message")) {
-            return ApiResponse.fail(vendor.get("message").toString());
+            if (!"Vendor profile not found".equals(vendor.get("message"))) {
+                return ApiResponse.fail(vendor.get("message").toString());
+            }
+
+            String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+            Map<String, Object> dashboardStatus = stallRepository
+                    .findVendorDashboardStatusByEmail(jwtService.getEmail(token))
+                    .orElse(null);
+            if (dashboardStatus == null) {
+                return ApiResponse.fail("User not found");
+            }
+            if (!"VENDOR".equals(dashboardStatus.get("role"))) {
+                return ApiResponse.fail("This account is not a vendor");
+            }
+            vendor = new HashMap<>(dashboardStatus);
         }
 
         String validationError = validateVendorProfile(body);
@@ -388,7 +441,9 @@ public class StallService {
         }
 
         Long userId = toLong(vendor.get("userId"));
-        Long vendorProfileId = toLong(vendor.get("vendorProfileId"));
+        Long vendorProfileId = vendor.get("vendorProfileId") == null
+                ? null
+                : toLong(vendor.get("vendorProfileId"));
         String email = normalizeText(vendor.get("email"));
 
         Map<String, Object> profile = orderedMap(
@@ -403,14 +458,30 @@ public class StallService {
                 "instagramUrl", nullIfBlank(body.getInstagramUrl()),
                 "facebookUrl", nullIfBlank(body.getFacebookUrl()),
                 "websiteUrl", nullIfBlank(body.getWebsiteUrl()),
+                "avatarImageUrl", nullIfBlank(body.getAvatarImageUrl()),
+                "coverImageUrl", nullIfBlank(body.getCoverImageUrl()),
                 "brandSummary", normalizeText(body.getBrandSummary()),
                 "brandDescription", normalizeText(body.getBrandDescription()));
 
         try {
-            int updatedRows = stallRepository.updateVendorProfile(userId, vendorProfileId, profile);
-            if (updatedRows == 0) {
-                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                return ApiResponse.fail("Vendor profile save failed");
+            if (vendorProfileId == null) {
+                vendorProfileId = stallRepository.createVendorProfile(
+                        userId,
+                        vendor.get("userProfileId") == null
+                                ? null
+                                : toLong(vendor.get("userProfileId")),
+                        profile);
+                if (vendorProfileId == null) {
+                    TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                    return ApiResponse.fail("Vendor profile save failed");
+                }
+                vendor.put("vendorProfileId", vendorProfileId);
+            } else {
+                int updatedRows = stallRepository.updateVendorProfile(userId, vendorProfileId, profile);
+                if (updatedRows == 0) {
+                    TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                    return ApiResponse.fail("Vendor profile save failed");
+                }
             }
             int savedProducts = stallRepository.replaceVendorProducts(vendorProfileId, productSnapshots);
             if (savedProducts != productSnapshots.size()) {
@@ -870,6 +941,28 @@ public class StallService {
         }
         if (normalizeText(body.getBrandType()).isEmpty()) {
             return "Brand type is required";
+        }
+        String avatarImageError = validateImageUrl(body.getAvatarImageUrl(), "Avatar image URL");
+        if (avatarImageError != null) {
+            return avatarImageError;
+        }
+        String coverImageError = validateImageUrl(body.getCoverImageUrl(), "Cover image URL");
+        if (coverImageError != null) {
+            return coverImageError;
+        }
+        return null;
+    }
+
+    private String validateImageUrl(String value, String fieldName) {
+        String imageUrl = normalizeText(value);
+        if (imageUrl.isEmpty()) {
+            return null;
+        }
+        if (imageUrl.startsWith("data:")) {
+            return fieldName + " must be uploaded through /api/images";
+        }
+        if (imageUrl.length() > 500) {
+            return fieldName + " must not exceed 500 characters";
         }
         return null;
     }
@@ -1347,9 +1440,18 @@ public class StallService {
 
         Long vendorUserId = ((Number) vendor.get("userId")).longValue();
         Long vendorProfileId = ((Number) vendor.get("vendorProfileId")).longValue();
+        // Serialize capacity checks and inserts for the same event to prevent overbooking.
+        stallRepository.lockMarketForApplication(body.getEventId());
         // 同一個品牌在同一活動只能建立一筆報名資料
         if (stallRepository.existsVendorApplication(body.getEventId(), vendorProfileId)) {
             return ApiResponse.fail("此活動已建立報名資料");
+        }
+
+        List<LocalDate> unavailableDates = stallRepository.findUnavailableApplicationDates(
+                body.getEventId(),
+                applyDates);
+        if (!unavailableDates.isEmpty()) {
+            return ApiResponse.fail("以下日期已無剩餘名額：" + unavailableDates);
         }
 
         List<Map<String, Object>> rentalResponses = new ArrayList<>();

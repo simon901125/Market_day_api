@@ -58,12 +58,8 @@ public class VendorDashboardService {
         }
 
         Long userId = toLong(vendor.get("userId"));
-        Long vendorProfileId = nullableLong(vendor.get("vendorProfileId"));
-        List<Map<String, Object>> products = vendorProfileId == null
-                ? List.of()
-                : stallRepository.findVendorProducts(vendorProfileId);
 
-        if (isProfileIncomplete(vendor, products)) {
+        if (isProfileIncomplete(vendor)) {
             return ApiResponse.success(
                     "攤主首次登入導引",
                     new VendorDashboardInitResponse(
@@ -98,10 +94,8 @@ public class VendorDashboardService {
                         notifications));
     }
 
-    private boolean isProfileIncomplete(
-            Map<String, Object> vendor,
-            List<Map<String, Object>> products) {
-        if (isMissing(vendor.get("userProfileId"))
+    private boolean isProfileIncomplete(Map<String, Object> vendor) {
+        return isMissing(vendor.get("userProfileId"))
                 || isMissing(vendor.get("vendorProfileId"))
                 || isMissing(vendor.get("name"))
                 || isMissing(vendor.get("contactName"))
@@ -114,16 +108,7 @@ public class VendorDashboardService {
                 || isMissing(vendor.get("avatarImageUrl"))
                 || isMissing(vendor.get("coverImageUrl"))
                 || isMissing(vendor.get("brandSummary"))
-                || isMissing(vendor.get("brandDescription"))) {
-            return true;
-        }
-
-        return products == null
-                || products.isEmpty()
-                || products.stream().anyMatch(product ->
-                        isMissing(product.get("productName"))
-                                || isMissing(product.get("productSummary"))
-                                || isMissing(product.get("productPrice")));
+                || isMissing(vendor.get("brandDescription"));
     }
 
     private boolean isMissing(Object value) {
@@ -132,13 +117,6 @@ public class VendorDashboardService {
 
     private String text(Object value) {
         return value == null ? null : value.toString();
-    }
-
-    private Long nullableLong(Object value) {
-        if (value == null) {
-            return null;
-        }
-        return toLong(value);
     }
 
     private Long toLong(Object value) {

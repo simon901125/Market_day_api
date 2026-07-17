@@ -7,7 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,7 +44,6 @@ class VendorDashboardServiceTest {
         incomplete.put("coverImageUrl", null);
         when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(incomplete));
-        when(stallRepository.findVendorProducts(20L)).thenReturn(completeProducts());
 
         var response = service.initDashboard("Bearer token");
 
@@ -63,7 +61,6 @@ class VendorDashboardServiceTest {
         authenticateVendor();
         when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(completeVendor()));
-        when(stallRepository.findVendorProducts(20L)).thenReturn(completeProducts());
         when(stallRepository.findVendorDashboardApplicationCounts(7L)).thenReturn(Map.of(
                 "pendingReviewCount", 12,
                 "pendingPaymentCount", 6,
@@ -95,15 +92,22 @@ class VendorDashboardServiceTest {
     }
 
     @Test
-    void emptyProductsAreTreatedAsIncompleteProfile() {
+    void emptyProductsDoNotKeepProfileInFirstLoginState() {
         authenticateVendor();
         when(stallRepository.findVendorDashboardProfileByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(completeVendor()));
-        when(stallRepository.findVendorProducts(20L)).thenReturn(List.of());
+        when(stallRepository.findVendorDashboardApplicationCounts(7L)).thenReturn(Map.of(
+                "pendingReviewCount", 0,
+                "pendingPaymentCount", 0,
+                "pendingStallSelectionCount", 0));
+        when(notificationRepository.findVendorNotifications(
+                eq(7L), eq(null), eq(false), any(LocalDateTime.class), eq(0), eq(6)))
+                .thenReturn(List.of());
 
         var response = service.initDashboard("Bearer token");
 
-        assertThat(response.getData().needsProfile()).isTrue();
+        assertThat(response.getData().needsProfile()).isFalse();
+        verify(stallRepository, never()).findVendorProducts(any());
     }
 
     private void authenticateVendor() {
@@ -134,10 +138,4 @@ class VendorDashboardServiceTest {
         return vendor;
     }
 
-    private List<Map<String, Object>> completeProducts() {
-        return List.of(Map.of(
-                "productName", "商品一",
-                "productSummary", "商品介紹",
-                "productPrice", BigDecimal.valueOf(100)));
-    }
 }

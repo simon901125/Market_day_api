@@ -40,19 +40,17 @@ public class StallController {
     @PostMapping("/api/stalls/select")
     public ApiResponse<StallSelectionResponse> selectEventStall(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    content = @Content(examples = @ExampleObject(value = """
-                            {
-                              "applicationNo": "MD0101-APP01",
-                              "selections": [
-                                {
-                                  "applyDate": "2026-08-02",
-                                  "stallNo": "A06"
-                                }
-                              ]
-                            }
-                            """)))
-            @Valid @RequestBody StallSelectionRequest body) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = @ExampleObject(value = """
+                    {
+                      "applicationNo": "MD0101-APP01",
+                      "selections": [
+                        {
+                          "applyDate": "2026-08-02",
+                          "stallNo": "A06"
+                        }
+                      ]
+                    }
+                    """))) @Valid @RequestBody StallSelectionRequest body) {
         return stallService.selectEventStall(authorizationHeader, body);
     }
 
@@ -63,9 +61,7 @@ public class StallController {
         return stallService.getVendorAccount(authorizationHeader);
     }
 
-    @Operation(
-            summary = "搜尋攤主報名紀錄",
-            description = "搜尋目前登入攤主送出的全部報名紀錄，支援活動名稱、報名狀態、活動日期與分頁篩選。")
+    @Operation(summary = "搜尋攤主報名紀錄", description = "依活動名稱、狀態、活動日期及分頁條件搜尋目前攤主的報名紀錄。")
     @GetMapping("/api/vendor/applications/search")
     public ApiResponse<VendorApplicationSearchResponse> searchVendorApplications(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -75,8 +71,8 @@ public class StallController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventStartAt,
             @RequestParam(value = "event_end_at", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventEndAt,
-            @RequestParam(value = "page", required = false, defaultValue = "1") Integer page,
-            @RequestParam(value = "pageSize", required = false, defaultValue = "10") Integer pageSize) {
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
         return stallService.searchVendorApplications(
                 authorizationHeader,
                 eventTitle,
@@ -87,9 +83,7 @@ public class StallController {
                 pageSize);
     }
 
-    @Operation(
-            summary = "取得攤主報名詳情",
-            description = "取得目前登入攤主自己的報名、活動、狀態、付款、攤位、設備、用電與費用明細。")
+    @Operation(summary = "取得攤主報名詳情", description = "取得目前攤主自己的報名與相關費用明細。")
     @GetMapping("/api/vendor/applications/{id}")
     public ApiResponse<VendorApplicationDetailResponse> getVendorApplicationDetail(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -104,7 +98,7 @@ public class StallController {
         return stallService.loadVendorStallProfile(authorizationHeader);
     }
 
-    @Operation(summary = "儲存攤主品牌資料", description = "更新目前登入攤主的品牌、聯絡資料、分類與完整商品清單；不會修改大頭照或封面 URL。")
+    @Operation(summary = "儲存攤主品牌資料", description = "更新目前登入攤主的品牌、聯絡資料、圖片 URL、分類與完整商品清單。")
     @PostMapping(value = "/api/vendor/stall/save", consumes = "application/json")
     public ApiResponse<MapBackedResponse> saveVendorStallProfile(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,

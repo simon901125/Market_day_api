@@ -61,6 +61,8 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 ### 2026-07-14
 
+- `GET /api/vendor/dashboard/init`：登入後判斷目前攤主是否需要填寫攤位資料；該使用者沒有 `vendor_profiles` 時回傳 `needsProfileSetup: true`。
+
 #### simon branch
 
 - 新增台灣地址下拉選單 API：`GET /api/addresses/cities` 回傳台灣縣市清單，`GET /api/addresses/districts?city={縣市}` 依所選縣市回傳所屬地區；資料由 `TaiwanAddressService` 提供，無效縣市會回傳驗證錯誤。

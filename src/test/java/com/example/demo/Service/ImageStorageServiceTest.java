@@ -79,12 +79,13 @@ class ImageStorageServiceTest {
 
         ApiResponse<StoredImageResponse> response = imageStorageService.store(
                 AUTHORIZATION,
-                "VENDOR_AVATAR",
+                "vendor-avatar",
                 null,
                 null,
                 png("avatar.png"));
 
         assertThat(response.isSuccessStatus()).isTrue();
+        assertThat(response.getData().purpose()).isEqualTo("VENDOR_AVATAR");
         assertThat(response.getData().imageUrl())
                 .contains("/images/")
                 .contains("/vendor-avatar/");

@@ -271,7 +271,11 @@ public class ImageStorageService {
                 return null;
             }
             try {
-                return valueOf(value.trim().toUpperCase(Locale.ROOT));
+                String normalizedValue = value
+                        .trim()
+                        .replace('-', '_')
+                        .toUpperCase(Locale.ROOT);
+                return valueOf(normalizedValue);
             } catch (IllegalArgumentException exception) {
                 return null;
             }
