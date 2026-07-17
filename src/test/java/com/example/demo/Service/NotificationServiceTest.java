@@ -264,6 +264,7 @@ class NotificationServiceTest {
                 notificationService.markAsRead("Bearer token", 1L);
 
         assertThat(response.isSuccessStatus()).isFalse();
+        assertThat(response.getMessage()).isEqualTo("找不到通知");
         verify(notificationRepo, never()).save(any());
     }
 
@@ -278,6 +279,7 @@ class NotificationServiceTest {
                 notificationService.markAsRead("Bearer token", 1L);
 
         assertThat(response.isSuccessStatus()).isFalse();
+        assertThat(response.getMessage()).isEqualTo("此通知不屬於目前登入帳號");
         verify(notificationRepo, never()).save(any());
     }
 
@@ -287,12 +289,14 @@ class NotificationServiceTest {
         ApiResponse<com.example.demo.dto.response.NotificationToggleDto> missing =
                 notificationService.markAsRead(null, 1L);
         assertThat(missing.isSuccessStatus()).isFalse();
+        assertThat(missing.getMessage()).isEqualTo("請提供 Authorization token");
 
         when(jwtService.extractTokenFromAuthorizationHeader("Bearer bad")).thenReturn("bad");
         when(jwtService.isTokenValid("bad")).thenReturn(false);
         ApiResponse<com.example.demo.dto.response.NotificationToggleDto> invalid =
                 notificationService.markAsRead("Bearer bad", 1L);
         assertThat(invalid.isSuccessStatus()).isFalse();
+        assertThat(invalid.getMessage()).isEqualTo("Token 無效或已過期");
 
         verify(notificationRepo, never()).findById(any());
     }

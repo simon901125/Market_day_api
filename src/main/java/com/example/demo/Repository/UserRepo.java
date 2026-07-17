@@ -21,6 +21,7 @@ import com.example.demo.enums.type.Role;
 public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExecutor<User>, UserRepoCustom {
     int countByRoleAndStatus(Role role, UserStatus status);
     Optional<User> findByEmail(String email);
+
     /** 管理員後台: 攤主詳細:帳號與品牌基本資料 (不含最後登入時間、活動數統計，需另外查詢) */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.AdminVenderDetailProjection(

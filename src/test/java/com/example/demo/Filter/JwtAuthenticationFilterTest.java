@@ -134,6 +134,7 @@ class JwtAuthenticationFilterTest {
         assertUnauthorized("GET", "/api/organizer/profile/load");
         assertUnauthorized("POST", "/api/auth/logout");
         assertUnauthorized("POST", "/api/images");
+        assertUnauthorized("POST", "/api/notification/1/isRead");
     }
 
     @Test
