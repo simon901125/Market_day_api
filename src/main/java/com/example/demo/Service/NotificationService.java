@@ -188,6 +188,17 @@ public class NotificationService {
                 brandName(brandName) + "已完成攤位選擇：" + eventName(eventTitle)));
     }
 
+    public void notifyRefundRequested(Long userId, Long refundId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                userId,
+                NotificationCategory.PAYMENT,
+                NotificationType.REFUND_REQUESTED,
+                NotificationTargetType.REFUND,
+                refundId,
+                "退款申請待審核",
+                eventName(eventTitle) + " 已收到攤主退款申請，請進行審核。"));
+    }
+
     private void validate(NotificationCreateCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("Notification command is required");

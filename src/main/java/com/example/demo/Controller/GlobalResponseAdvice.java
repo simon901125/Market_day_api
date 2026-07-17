@@ -41,7 +41,8 @@ public class GlobalResponseAdvice implements ResponseBodyAdvice<Object> {
         return controllerClass == UserController.class
                 || controllerClass == StallController.class
                 || controllerClass == OrganizerController.class
-                || controllerClass == AdminController.class;
+                || controllerClass == AdminController.class
+                || controllerClass == PaymentController.class;
     }
 
     @Override

@@ -14,11 +14,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.NewebPayService;
+import com.example.demo.Service.VendorRefundService;
 import com.example.demo.dto.request.VendorPaymentRequest;
+import com.example.demo.dto.request.VendorRefundRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.NewebPayPaymentResponse;
 import com.example.demo.dto.response.NewebPayQueryResponse;
 import com.example.demo.dto.response.PaymentStatusResponse;
+import com.example.demo.dto.response.VendorRefundResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -31,12 +34,15 @@ import jakarta.validation.Valid;
 public class PaymentController {
 
     private final NewebPayService newebPayService;
+    private final VendorRefundService vendorRefundService;
     private final String frontendUrl;
 
     public PaymentController(
             NewebPayService newebPayService,
+            VendorRefundService vendorRefundService,
             @Value("${frontend.url:http://localhost:4200}") String frontendUrl) {
         this.newebPayService = newebPayService;
+        this.vendorRefundService = vendorRefundService;
         this.frontendUrl = frontendUrl;
     }
 
@@ -50,6 +56,18 @@ public class PaymentController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @Valid @RequestBody VendorPaymentRequest request) {
         return newebPayService.createPayment(authorizationHeader, request);
+    }
+
+    @Operation(
+            summary = "攤主退款申請",
+            description = "攤主依報名編號送出退款申請，建立退款紀錄並保留原付款成功狀態。")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/api/vendor/refunds")
+    public ApiResponse<VendorRefundResponse> requestVendorRefund(
+            @Parameter(hidden = true)
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @Valid @RequestBody VendorRefundRequest request) {
+        return vendorRefundService.requestRefund(authorizationHeader, request);
     }
 
     @Operation(
