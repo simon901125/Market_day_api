@@ -2,11 +2,16 @@ package com.example.demo.Service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,8 +20,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.NotificationRepository;
+import com.example.demo.Repository.UserRepo;
 import com.example.demo.dto.notification.NotificationCreateCommand;
+import com.example.demo.dto.response.ApiResponse;
+import com.example.demo.entity.Notification;
+import com.example.demo.entity.User;
 import com.example.demo.enums.notification.NotificationCategory;
 import com.example.demo.enums.notification.NotificationTargetType;
 import com.example.demo.enums.notification.NotificationType;
@@ -27,11 +37,20 @@ class NotificationServiceTest {
     @Mock
     private NotificationRepository notificationRepository;
 
+    @Mock
+    private NotificationRepo notificationRepo;
+
+    @Mock
+    private UserRepo userRepo;
+
+    @Mock
+    private JwtService jwtService;
+
     private NotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(notificationRepository);
+        notificationService = new NotificationService(notificationRepository, notificationRepo, userRepo, jwtService);
     }
 
     @Test
@@ -199,5 +218,103 @@ class NotificationServiceTest {
         ArgumentCaptor<NotificationCreateCommand> captor = ArgumentCaptor.forClass(NotificationCreateCommand.class);
         verify(notificationRepository).create(captor.capture());
         return captor.getValue();
+    }
+
+    @Test
+    void markAsReadUpdatesIsReadAndReadAtForOwner() {
+        User owner = userWithId(5L);
+        Notification notification = notificationOwnedBy(owner, false);
+        authenticate("token", "owner@example.com", owner);
+        when(notificationRepo.findById(1L)).thenReturn(Optional.of(notification));
+
+        ApiResponse<com.example.demo.dto.response.NotificationToggleDto> response =
+                notificationService.markAsRead("Bearer token", 1L);
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        assertThat(response.getData().id()).isEqualTo(1L);
+        assertThat(response.getData().isRead()).isTrue();
+        assertThat(notification.getIsRead()).isTrue();
+        assertThat(notification.getReadAt()).isNotNull();
+        verify(notificationRepo).save(notification);
+    }
+
+    @Test
+    void markAsReadOnAlreadyReadNotificationIsIdempotent() {
+        User owner = userWithId(5L);
+        Notification notification = notificationOwnedBy(owner, true);
+        notification.setReadAt(LocalDateTime.of(2026, 1, 1, 0, 0));
+        authenticate("token", "owner@example.com", owner);
+        when(notificationRepo.findById(1L)).thenReturn(Optional.of(notification));
+
+        ApiResponse<com.example.demo.dto.response.NotificationToggleDto> response =
+                notificationService.markAsRead("Bearer token", 1L);
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        assertThat(response.getData().isRead()).isTrue();
+        assertThat(notification.getReadAt()).isEqualTo(LocalDateTime.of(2026, 1, 1, 0, 0));
+        verify(notificationRepo, never()).save(any());
+    }
+
+    @Test
+    void markAsReadReturnsFailureWhenNotificationMissing() {
+        authenticate("token", "owner@example.com", userWithId(5L));
+        when(notificationRepo.findById(1L)).thenReturn(Optional.empty());
+
+        ApiResponse<com.example.demo.dto.response.NotificationToggleDto> response =
+                notificationService.markAsRead("Bearer token", 1L);
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        verify(notificationRepo, never()).save(any());
+    }
+
+    @Test
+    void markAsReadReturnsFailureWhenNotOwner() {
+        User owner = userWithId(5L);
+        Notification notification = notificationOwnedBy(owner, false);
+        authenticate("token", "someone-else@example.com", userWithId(9L));
+        when(notificationRepo.findById(1L)).thenReturn(Optional.of(notification));
+
+        ApiResponse<com.example.demo.dto.response.NotificationToggleDto> response =
+                notificationService.markAsRead("Bearer token", 1L);
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        verify(notificationRepo, never()).save(any());
+    }
+
+    @Test
+    void markAsReadReturnsFailureWhenTokenMissingOrInvalid() {
+        when(jwtService.extractTokenFromAuthorizationHeader(null)).thenReturn(null);
+        ApiResponse<com.example.demo.dto.response.NotificationToggleDto> missing =
+                notificationService.markAsRead(null, 1L);
+        assertThat(missing.isSuccessStatus()).isFalse();
+
+        when(jwtService.extractTokenFromAuthorizationHeader("Bearer bad")).thenReturn("bad");
+        when(jwtService.isTokenValid("bad")).thenReturn(false);
+        ApiResponse<com.example.demo.dto.response.NotificationToggleDto> invalid =
+                notificationService.markAsRead("Bearer bad", 1L);
+        assertThat(invalid.isSuccessStatus()).isFalse();
+
+        verify(notificationRepo, never()).findById(any());
+    }
+
+    private void authenticate(String token, String email, User user) {
+        when(jwtService.extractTokenFromAuthorizationHeader("Bearer " + token)).thenReturn(token);
+        when(jwtService.isTokenValid(token)).thenReturn(true);
+        when(jwtService.getEmail(token)).thenReturn(email);
+        when(userRepo.findByEmail(email)).thenReturn(Optional.of(user));
+    }
+
+    private User userWithId(Long id) {
+        User user = new User();
+        user.setId(id);
+        return user;
+    }
+
+    private Notification notificationOwnedBy(User owner, boolean isRead) {
+        Notification notification = new Notification();
+        notification.setId(1L);
+        notification.setUser(owner);
+        notification.setIsRead(isRead);
+        return notification;
     }
 }
