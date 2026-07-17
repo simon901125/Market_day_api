@@ -43,4 +43,14 @@ public interface NotificationRepo extends JpaRepository<Notification, Long> {
               AND (:category IS NULL OR n.category = :category)
             """)
     long countAdminNotices(@Param("userId") Long userId, @Param("category") NotificationCategory category);
+
+    /** 計算指定管理員未讀且符合分類條件的通知總筆數 (管理員後台首頁: 系統警告計數) */
+    @Query("""
+            SELECT count(n.id)
+            FROM Notification n
+            WHERE n.user.id = :userId
+              AND n.category = :category
+              AND n.isRead = false
+            """)
+    long countUnreadNoticesByCategory(@Param("userId") Long userId, @Param("category") NotificationCategory category);
 }

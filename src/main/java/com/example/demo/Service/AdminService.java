@@ -135,21 +135,30 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             "/api/vender/google-login",
             "/api/vender/local-login");
 
+    /** 首頁通知列表預覽筆數 */
+    private static final int DASHBOARD_NOTICE_COUNT = 6;
+
     // 設定管理員後台: 首頁資料統計部分
     @Override
-    public AdminDashboardDto getDashboardResponse() {
+    public AdminDashboardDto getDashboardResponse(String operatorEmail) {
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
         LocalDateTime now = LocalDateTime.now();
+        long systemWarningCount = notificationRepo.countUnreadNoticesByCategory(admin.id(), NotificationCategory.EXCEPTION);
+        List<AdminNoticeDto> notices = getNotice(null, 1, DASHBOARD_NOTICE_COUNT, operatorEmail).getItems();
 
         // 塞資料
         return new AdminDashboardDto(
                 eventRepo.countByWorkflowStatus(WorkflowStatus.PENDING_REVIEW),
                 eventRepo.countByWorkflowStatus(WorkflowStatus.MAP_BUILDING),
                 eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED),
-                0, // TODO:補完系統警告計數
+                (int) systemWarningCount,
                 userRepo.countByRoleAndStatus(Role.ORGANIZER, UserStatus.ACTIVE),
                 userRepo.countByRoleAndStatus(Role.VENDOR, UserStatus.ACTIVE),
                 eventRepo.countByEventInPlatform(now),
-                eventRepo.countByEventStatusIsACTIVE(now));
+                eventRepo.countByEventStatusIsACTIVE(now),
+                notices);
     }
 
     /**

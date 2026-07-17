@@ -28,7 +28,7 @@ import jakarta.annotation.Nonnull;
 public abstract class AdminServiceBase {
 
         /** 取得管理員後台: 首頁資料統計部分 */
-        public abstract AdminDashboardDto getDashboardResponse();
+        public abstract AdminDashboardDto getDashboardResponse(String operatorEmail);
 
         /** 取得管理員後台: 通知中心 */
         public abstract PageResponse<AdminNoticeDto> getNotice(NotificationCategory category, int pageNumber, int pageSize, String operatorEmail);

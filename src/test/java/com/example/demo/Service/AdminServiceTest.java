@@ -3,12 +3,15 @@ package com.example.demo.Service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.example.demo.Repository.AdminLogRepo;
@@ -26,6 +30,7 @@ import com.example.demo.Repository.EventUnpublishRequestRepo;
 import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminLookupProjection;
+import com.example.demo.Repository.projection.admin.AdminNoticeProjection;
 import com.example.demo.Repository.projection.admin.EventApprovalProjection;
 import com.example.demo.Repository.projection.admin.EventUnpublishReviewProjection;
 import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
@@ -64,6 +69,15 @@ class AdminServiceTest {
     }
 
     @Test void dashboardAggregatesRepositoryCounters() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(notificationRepo.countUnreadNoticesByCategory(9L, NotificationCategory.EXCEPTION)).thenReturn(8L);
+        AdminNoticeProjection notice = new AdminNoticeProjection(
+                101L, NotificationType.SYSTEM_EXCEPTION, NotificationTargetType.MARKET_EVENT, 1L,
+                "標題", "內容", false, LocalDateTime.of(2026, 1, 1, 12, 0));
+        when(notificationRepo.findAdminNotices(eq(9L), isNull(), any(PageRequest.class)))
+                .thenReturn(List.of(notice));
+        when(notificationRepo.countAdminNotices(9L, null)).thenReturn(1L);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.PENDING_REVIEW)).thenReturn(1);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.MAP_BUILDING)).thenReturn(2);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED)).thenReturn(3);
@@ -71,14 +85,24 @@ class AdminServiceTest {
         when(userRepo.countByRoleAndStatus(Role.VENDOR, UserStatus.ACTIVE)).thenReturn(5);
         when(eventRepo.countByEventInPlatform(any())).thenReturn(6);
         when(eventRepo.countByEventStatusIsACTIVE(any())).thenReturn(7);
-        var result = service.getDashboardResponse();
+        var result = service.getDashboardResponse("op@test.com");
         assertThat(result.pendingReview()).isEqualTo(1);
         assertThat(result.mapBuilding()).isEqualTo(2);
         assertThat(result.pendingUnpublish()).isEqualTo(3);
+        assertThat(result.systemWarning()).isEqualTo(8);
         assertThat(result.totalOrganizer()).isEqualTo(4);
         assertThat(result.totalVender()).isEqualTo(5);
         assertThat(result.totalActivity()).isEqualTo(6);
         assertThat(result.active()).isEqualTo(7);
+        assertThat(result.notices()).hasSize(1);
+        assertThat(result.notices().get(0).id()).isEqualTo(101L);
+    }
+
+    @Test void dashboardRejectsWhenOperatorIsNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.getDashboardResponse("op@test.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該管理員");
     }
 
     @Test void changeStatusRejectsUnsupportedObject() {

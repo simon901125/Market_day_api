@@ -57,9 +57,19 @@ public class AdminController {
     @GetMapping("/dashboard/overview")
     public ApiResponse<AdminDashboardDto> getDashboardOverview(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
-        // FIXME:需要補充通知訊息部分
-        AdminDashboardDto response = service.getDashboardResponse();
-        return ApiResponse.success("ok", response);
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
+            return ApiResponse.fail("驗證憑證無效或已過期");
+        }
+
+        try {
+            String operatorEmail = jwtService.getEmail(token);
+            return ApiResponse.success("ok", service.getDashboardResponse(operatorEmail));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.fail("取得首頁統計資料失敗");
+        }
     }
 
     /**
