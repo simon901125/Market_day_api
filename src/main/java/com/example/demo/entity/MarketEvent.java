@@ -37,6 +37,7 @@ import lombok.ToString;
  * @see com.example.demo.entity.EventApplication#event
  * @see com.example.demo.entity.EventStallZone#marketEvent
  * @see com.example.demo.entity.EventStall#marketEvent
+ * @see com.example.demo.entity.EventUnpublishRequest#event
  */
 @Entity
 @Data
@@ -189,5 +190,11 @@ public class MarketEvent {
     @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "marketEvent")
     private List<EventStall> eventStalls;
+
+    /** 活動的下架申請清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "event")
+    private List<EventUnpublishRequest> eventUnpublishRequests;
 
 }

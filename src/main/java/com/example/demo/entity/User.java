@@ -33,6 +33,8 @@ import com.example.demo.enums.type.Role;
  * @see UserProfile#user
  * @see AdminProfile#user
  * @see Notification#user
+ * @see EventUnpublishRequest#requestUser
+ * @see EventUnpublishRequest#reviewUser
  */
 @Entity
 @Data
@@ -148,6 +150,18 @@ public class User {
     @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "user")
     private List<Notification> notifications;
+
+    /** 使用者提出的活動下架申請清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "requestUser")
+    private List<EventUnpublishRequest> requestedUnpublishRequests;
+
+    /** 使用者審核的活動下架申請清單 */
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "reviewUser")
+    private List<EventUnpublishRequest> reviewedUnpublishRequests;
 
     //----------我是分隔線----------
 

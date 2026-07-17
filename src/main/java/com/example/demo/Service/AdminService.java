@@ -15,21 +15,28 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventApplicationRepo;
 import com.example.demo.Repository.EventRepo;
 import com.example.demo.Repository.EventStallZoneRepo;
+import com.example.demo.Repository.EventUnpublishRequestRepo;
+import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.RequestLogRepo;
 import com.example.demo.Repository.StatusLogRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
+import com.example.demo.Repository.projection.admin.AdminLookupProjection;
 import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
 import com.example.demo.Repository.projection.admin.AdminOrganizerDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminVenderDetailProjection;
 import com.example.demo.Repository.projection.admin.ApplicationDateProjection;
+import com.example.demo.Repository.projection.admin.EventApprovalProjection;
 import com.example.demo.Repository.projection.admin.EventStatusLogProjection;
+import com.example.demo.Repository.projection.admin.EventUnpublishReasonProjection;
 import com.example.demo.Repository.projection.admin.RefundProjection;
+import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
 import com.example.demo.Repository.projection.admin.UserLoginLogProjection;
 import com.example.demo.Repository.projection.admin.VenderRegApplicationProjection;
 import com.example.demo.Repository.specification.AdminLogSpecification;
@@ -50,27 +57,34 @@ import com.example.demo.dto.response.admin.AdminUserLoginDto;
 import com.example.demo.dto.response.admin.AdminVenderDetailDto;
 import com.example.demo.dto.response.admin.AdminVenderRegDto;
 import com.example.demo.dto.response.admin.BoothZone;
+import com.example.demo.dto.response.admin.EventStatusChangeDto;
 import com.example.demo.dto.response.admin.RegBooth;
 import com.example.demo.dto.response.admin.StatusLog;
+import com.example.demo.dto.response.admin.UserStatusChangeDto;
 import com.example.demo.entity.AdminOperationLog;
 import com.example.demo.entity.EventStallZone;
 import com.example.demo.entity.MarketEvent;
+import com.example.demo.entity.Notification;
 import com.example.demo.entity.User;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.PaymentStatus;
 import com.example.demo.enums.status.RefundStatus;
 import com.example.demo.enums.status.ReviewStatus;
+import com.example.demo.enums.status.UnpublishRequestStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
+import com.example.demo.enums.type.AdminTargetType;
 import com.example.demo.enums.type.AdminTargetTypeForFront;
+import com.example.demo.enums.type.NotificationCategory;
+import com.example.demo.enums.type.NotificationTargetType;
 import com.example.demo.enums.type.Role;
 
 import jakarta.annotation.Nonnull;
 import jakarta.persistence.Tuple;
 
 @Service
-public class AdminService implements AdminServiceInterface, EventStatusServiceInterface<Object> {
+public class AdminService extends AdminServiceBase implements EventStatusServiceInterface<Object> {
     @Autowired
     EventRepo eventRepo;
 
@@ -93,21 +107,27 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
     StatusLogRepo statusLogRepo;
 
     @Autowired
+    NotificationRepo notificationRepo;
+
+    @Autowired
+    EventUnpublishRequestRepo eventUnpublishRequestRepo;
+
+    @Autowired
     MessageSource messageSource;
 
     /** yyyy/MM/dd HH:mm */
-    DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+    private final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
     /** yyyy/MM/dd */
-    DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+    private final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     /** HH:mm */
-    DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+    private final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     /** 主辦方登入API路徑 */
-    static final List<String> ORGANIZER_LOGIN_PATHS = List.of(
+    private static final List<String> ORGANIZER_LOGIN_PATHS = List.of(
             "/api/organizer/google-login",
             "/api/organizer/local-login");
     /** 攤主登入API路徑 */
-    static final List<String> VENDOR_LOGIN_PATHS = List.of(
+    private static final List<String> VENDOR_LOGIN_PATHS = List.of(
             "/api/vender/google-login",
             "/api/vender/local-login");
 
@@ -151,10 +171,10 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             LocalDateTime endAt = row.get("endAt", LocalDateTime.class);
             String eventDate = String.format(
                     "%s - %s",
-                    startAt == null ? "" : startAt.format(dateFormatter),
-                    endAt == null ? "" : endAt.format(dateFormatter));
+                    startAt == null ? "" : startAt.format(DATE_FORMATTER),
+                    endAt == null ? "" : endAt.format(DATE_FORMATTER));
             LocalDateTime submittedAt = row.get("submittedAt", LocalDateTime.class);
-            String submittedAtStr = submittedAt == null ? "活動尚未送審" : submittedAt.format(dateTimeFormatter);
+            String submittedAtStr = submittedAt == null ? "活動尚未送審" : submittedAt.format(DATE_TIME_FORMATTER);
 
             WorkflowStatus workflowStatus = row.get("workflowStatus", WorkflowStatus.class);
             Integer maxBooths = row.get("maxBooths", Integer.class);
@@ -195,20 +215,26 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
         List<EventStallZone> zones = eventStallZoneRepo.findByMarketEventId(eventId);
         int registeredBoothCount = eventApplicationRepo.countRegBoothsByEventId(eventId);
+        // 活動狀態=UNPUBLISH_REQUESTED時，多查一筆待審核下架申請的id與原因
+        EventUnpublishReasonProjection unpublishReason = event.workflowStatus() != WorkflowStatus.UNPUBLISH_REQUESTED
+                ? null
+                : eventUnpublishRequestRepo
+                        .findLatestReasonByEventIdAndStatus(eventId, UnpublishRequestStatus.PENDING)
+                        .orElse(null);
 
         // ----------塞資料----------
         String eventTime = String.format(
                 "%s - %s %s-%s",
-                event.startAt().format(dateFormatter),
-                event.endAt().format(dateFormatter),
-                event.startAt().format(timeFormatter),
-                event.endAt().format(timeFormatter));
+                event.startAt().format(DATE_FORMATTER),
+                event.endAt().format(DATE_FORMATTER),
+                event.startAt().format(TIME_FORMATTER),
+                event.endAt().format(TIME_FORMATTER));
         // 沒有主辦方資料(organizerProfile)時不組營業時間
         String serviceHours = String.format(
                 "%s %s-%s",
                 event.serviceDays() == null ? "" : event.serviceDays(),
-                event.serviceStartTime() == null ? "營業開始時間" : event.serviceStartTime().format(timeFormatter),
-                event.serviceEndTime() == null ? "營業結束時間" : event.serviceEndTime().format(timeFormatter));
+                event.serviceStartTime() == null ? "營業開始時間" : event.serviceStartTime().format(TIME_FORMATTER),
+                event.serviceEndTime() == null ? "營業結束時間" : event.serviceEndTime().format(TIME_FORMATTER));
         String addr = String.format(
                 "%s%s%s",
                 event.city(),
@@ -237,7 +263,6 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         List<BoothZone> boothZones = zones.stream()
                 .map(zone -> new BoothZone(zone.getZoneName(), zone.getStallCount()))
                 .toList();
-                
 
         return new AdminEventDetailDto(
                 event.eventId(),
@@ -248,9 +273,9 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 eventStatus,
                 event.eventType(),
                 event.description(),
-                event.regStartAt().format(dateTimeFormatter),
-                event.regEndAt().format(dateTimeFormatter),
-                event.publicInfoAt() == null ? null : event.publicInfoAt().format(dateTimeFormatter),
+                event.regStartAt().format(DATE_TIME_FORMATTER),
+                event.regEndAt().format(DATE_TIME_FORMATTER),
+                event.publicInfoAt() == null ? null : event.publicInfoAt().format(DATE_TIME_FORMATTER),
                 eventTime,
                 event.organizerName(),
                 event.texId(),
@@ -267,8 +292,9 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 event.boothFee(),
                 boothZones,
                 event.mapImg(),
-                getEventStatusLogs(eventId, 1, pageSize)
-        );
+                unpublishReason == null ? null : unpublishReason.id(),
+                unpublishReason == null ? null : unpublishReason.reason(),
+                getEventStatusLogs(eventId, 1, pageSize));
     }
 
     // 設定管理員後台: 活動詳細:活動狀態變動紀錄
@@ -299,7 +325,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             // null處理
             LocalDateTime loginTime = row.get("loginTime", LocalDateTime.class);
             String userName = row.get("name", String.class) == null ? "使用者尚未填寫" : row.get("name", String.class);
-            String loginTimeStr = loginTime == null ? null : loginTime.format(dateTimeFormatter);
+            String loginTimeStr = loginTime == null ? null : loginTime.format(DATE_TIME_FORMATTER);
 
             AdminUserListDto dtoItem = new AdminUserListDto(
                     row.get("id", Long.class),
@@ -307,7 +333,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     userName,
                     row.get("status", UserStatus.class).getStatus(),
                     row.get("email", String.class),
-                    row.get("regAt", LocalDateTime.class).format(dateTimeFormatter),
+                    row.get("regAt", LocalDateTime.class).format(DATE_TIME_FORMATTER),
                     loginTimeStr);
 
             dtoList.add(dtoItem);
@@ -346,8 +372,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 profile.role().getRole(),
                 profile.accountStatus().getStatus(),
                 isGoogleBound,
-                profile.regAt().format(dateTimeFormatter),
-                lastLoginAt == null ? null : lastLoginAt.format(dateTimeFormatter),
+                profile.regAt().format(DATE_TIME_FORMATTER),
+                lastLoginAt == null ? null : lastLoginAt.format(DATE_TIME_FORMATTER),
                 ongoingEventCount,
                 endedEventCount,
                 profile.brandName(),
@@ -380,7 +406,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         // ----------依報名編號分組: 報名攤位----------
         Map<Long, List<RegBooth>> regBoothsByApplication = new HashMap<>();
         for (ApplicationDateProjection date : dates) {
-            String regDate = date.applyDate() == null ? "" : date.applyDate().format(dateFormatter);
+            String regDate = date.applyDate() == null ? "" : date.applyDate().format(DATE_FORMATTER);
             String boothNo = (date.stallNo() == null || date.zoneName() == null)
                     ? "尚未選攤位"
                     : date.zoneName() + date.stallNo();
@@ -416,7 +442,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         return new PageResponse<>(dtoList, pageNumber, pageSize, total);
     }
 
-    //設定管理員後台: 主辦方詳細
+    // 設定管理員後台: 主辦方詳細
     @Override
     public AdminOrgDetailDto getOrganizerDetail(Long userId, int pageSize) {
         // ----------撈資料----------
@@ -438,8 +464,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         String serviceHours = String.format(
                 "%s %s-%s",
                 profile.serviceDays() == null ? "" : profile.serviceDays(),
-                profile.serviceStartTime() == null ? "營業開始時間" : profile.serviceStartTime().format(timeFormatter),
-                profile.serviceEndTime() == null ? "營業結束時間" : profile.serviceEndTime().format(timeFormatter));
+                profile.serviceStartTime() == null ? "營業開始時間" : profile.serviceStartTime().format(TIME_FORMATTER),
+                profile.serviceEndTime() == null ? "營業結束時間" : profile.serviceEndTime().format(TIME_FORMATTER));
         String contactAddress = String.format(
                 "%s%s%s",
                 profile.city() == null ? "" : profile.city(),
@@ -452,8 +478,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                 profile.role().getRole(),
                 profile.accountStatus().getStatus(),
                 isGoogleBound,
-                profile.regAt().format(dateTimeFormatter),
-                lastLoginAt == null ? null : lastLoginAt.format(dateTimeFormatter),
+                profile.regAt().format(DATE_TIME_FORMATTER),
+                lastLoginAt == null ? null : lastLoginAt.format(DATE_TIME_FORMATTER),
                 createdEventCount,
                 ongoingEventCount,
                 endedEventCount,
@@ -485,10 +511,10 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             LocalDateTime endAt = event.endAt();
             String eventDate = String.format(
                     "%s - %s %s-%s",
-                    startAt.format(dateFormatter),
-                    endAt.format(dateFormatter),
-                    startAt.format(timeFormatter),
-                    endAt.format(timeFormatter));
+                    startAt.format(DATE_FORMATTER),
+                    endAt.format(DATE_FORMATTER),
+                    startAt.format(TIME_FORMATTER),
+                    endAt.format(TIME_FORMATTER));
 
             int maxBooths = event.maxBooths() == null ? 0 : event.maxBooths();
             int registeredBoothCount = eventApplicationRepo.countRegBoothsByEventId(event.eventId());
@@ -520,7 +546,8 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
 
     // 設定管理員後台: 使用者詳細 :使用者登入紀錄
     @Override
-    public PageResponse<AdminUserLoginDto> getUserLoginLogs(Long userId, int pageNumber, int pageSize) throws IllegalArgumentException{
+    public PageResponse<AdminUserLoginDto> getUserLoginLogs(Long userId, int pageNumber, int pageSize)
+            throws IllegalArgumentException {
         // ----------撈資料----------
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
@@ -543,7 +570,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             String loginStatus = log.statusCode() != null && log.statusCode() == 200 ? "成功" : "失敗";
 
             dtoList.add(new AdminUserLoginDto(
-                    log.loginTime() == null ? null : log.loginTime().format(dateTimeFormatter),
+                    log.loginTime() == null ? null : log.loginTime().format(DATE_TIME_FORMATTER),
                     loginMethod,
                     loginStatus));
         }
@@ -569,7 +596,7 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
                     row.get("targetType", AdminTargetTypeForFront.class),
                     row.get("targetName", String.class),
                     row.get("email", String.class),
-                    row.get("createdAt", LocalDateTime.class).format(dateTimeFormatter),
+                    row.get("createdAt", LocalDateTime.class).format(DATE_TIME_FORMATTER),
                     row.get("content", String.class));
 
             dtoList.add(dtoItem);
@@ -579,34 +606,294 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
         return response;
     }
 
-    /**
-     * 將MarketEvent轉換成EventStatus
-     * 
-     * @param data :MarketEvent
-     * @return EventStatus
-     * @throws IllegalArgumentException 型別不符時拋出
-     */
     @Override
-    public EventStatus changeToEventStatus(Object data) throws IllegalArgumentException {
-        if (data instanceof MarketEvent) {
-            MarketEvent entity = (MarketEvent) data;
-
-            return checkEventStatus(
-                    entity.getWorkflowStatus(),
-                    entity.getRegistrationStartAt(),
-                    entity.getRegistrationEndAt(),
-                    entity.getBrandPublicAt(),
-                    entity.getStartAt(),
-                    entity.getEndAt(),
-                    entity.getMaxBooths(),
-                    entity.getEventApplications() == null ? 0 : entity.getEventApplications().size());
+    @Transactional
+    public UserStatusChangeDto setUserAccountDisable(Long userId, String operatorEmail, Role operatorRole) {
+        if (userId == null) {
+            throw new IllegalArgumentException("請提供使用者id");
         }
-        throw new IllegalArgumentException("data須符合型別類型MarketEvent");
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+
+        UserStatus newStatus = target.status();
+        if (target.status() == UserStatus.ACTIVE) {
+            userRepo.updateStatusIfCurrent(userId, UserStatus.ACTIVE, UserStatus.DISABLED);
+            newStatus = UserStatus.DISABLED;
+        }
+
+        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.ACCOUNT_DISABLED);
+        adminLog.setTargetType(AdminTargetType.USER);
+        adminLog.setTargetId(userId);
+        adminLog.setTargetLabel(targetLabel);
+        adminLog.setContent(admin.adminName() + "停用" + targetLabel + "的帳號");
+        logRepo.save(adminLog);
+
+        return new UserStatusChangeDto(target.contactName(), target.email(), newStatus);
     }
 
-    //處理活動狀態變動紀錄:說明的文字映射
+    @Override
+    @Transactional 
+    public UserStatusChangeDto setUserAccountRestore(Long userId, String operatorEmail, Role operatorRole) {
+        if (userId == null) {
+            throw new IllegalArgumentException("請提供使用者id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+
+        UserStatus newStatus = target.status();
+        if (target.status() == UserStatus.DISABLED) {
+            userRepo.updateStatusIfCurrent(userId, UserStatus.DISABLED, UserStatus.ACTIVE);
+            newStatus = UserStatus.ACTIVE;
+        }
+
+        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.ACCOUNT_RESTORED);
+        adminLog.setTargetType(AdminTargetType.USER);
+        adminLog.setTargetId(userId);
+        adminLog.setTargetLabel(targetLabel);
+        adminLog.setContent(admin.adminName() + "恢復" + targetLabel + "的帳號");
+        logRepo.save(adminLog);
+
+        return new UserStatusChangeDto(target.contactName(), target.email(), newStatus);
+    }
+
+    @Override
+    @Transactional
+    public EventStatusChangeDto setEventApprove(Long eventId, String operatorEmail, Role operatorRole, String note) {
+        if (eventId == null) {
+            throw new IllegalArgumentException("請提供活動id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+
+        if (event.workflowStatus() != WorkflowStatus.PENDING_REVIEW) {
+            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+
+        if (note == null || note.isBlank()) {
+            eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING);
+        } else {
+            eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+                    eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING, note);
+        }
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(event.organizerId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Event_Approve");
+        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
+        notification.setTargetId(eventId);
+        notification.setTitle("審核通過");
+        notification.setContent(event.title() + "審核通過，開始建置攤位地圖");
+        notificationRepo.save(notification);
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.ACTIVITY_REVIEW);
+        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
+        adminLog.setTargetId(eventId);
+        adminLog.setTargetLabel(event.title());
+        adminLog.setContent(admin.adminName() + "同意" + event.title() + "申請");
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(event.title(), EventStatus.MAP_BUILDING);
+    }
+
+    @Override
+    @Transactional //TODO: 前端會傳送EventUnpublishRequestId過來, 如果EventUnpublishRequestId!=null，
+    public EventStatusChangeDto setEventRevision(Long eventId, String operatorEmail, Role operatorRole, String note) {
+        if (eventId == null) {
+            throw new IllegalArgumentException("請提供活動id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        if (note == null || note.isBlank()) {
+            throw new IllegalArgumentException("請提供補件原因");
+        }
+
+        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+
+        if (event.workflowStatus() != WorkflowStatus.PENDING_REVIEW) {
+            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+
+        eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+                eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.REVISION_REQUIRED, note);
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(event.organizerId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Event_Revision");
+        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
+        notification.setTargetId(eventId);
+        notification.setTitle("補件通知");
+        notification.setContent(event.title() + "需要補件，請修改後重新送出審核");
+        notificationRepo.save(notification);
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.REQUEST_REVISION);
+        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
+        adminLog.setTargetId(eventId);
+        adminLog.setTargetLabel(event.title());
+        adminLog.setContent(admin.adminName() + "退回" + event.title() + "申請, 原因:" + note);
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(event.title(), EventStatus.REVISION_REQUIRED);
+    }
+
+    @Override
+    @Transactional
+    public EventStatusChangeDto setEventMapComplete(Long eventId, String operatorEmail, Role operatorRole) {
+        if (eventId == null) {
+            throw new IllegalArgumentException("請提供活動id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+
+        if (event.workflowStatus() != WorkflowStatus.MAP_BUILDING) {
+            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+
+        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.MAP_BUILDING, WorkflowStatus.READY_TO_PUBLISH);
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(event.organizerId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Event_Map_Complete");
+        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
+        notification.setTargetId(eventId);
+        notification.setTitle("地圖完成");
+        notification.setContent(event.title() + "攤位地圖已建置完成，可前往活動詳情確認");
+        notificationRepo.save(notification);
+
+        String organizerLabel = event.organizerContactName() != null ? event.organizerContactName() : "主辦方";
+        String eventTitleLabel = event.title() != null ? event.title() : "活動";
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(userRepo.getReferenceById(admin.id()));
+        adminLog.setOperationType(AdminOperationType.MAP_BUILD_COMPLETED);
+        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
+        adminLog.setTargetId(eventId);
+        adminLog.setTargetLabel(event.title());
+        adminLog.setContent(admin.adminName() + "通知主辦方" + organizerLabel + " " + eventTitleLabel + "地圖建置完成");
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(event.title(), EventStatus.READY_TO_PUBLISH);
+    }
+
+    @Override
+    @Transactional
+    public EventStatusChangeDto setEventUnpublish(Long eventId, String operatorEmail, Role operatorRole, String note) {
+        if (eventId == null) {
+            throw new IllegalArgumentException("請提供活動id");
+        }
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+
+        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+
+        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+
+        if (event.workflowStatus() != WorkflowStatus.UNPUBLISH_REQUESTED) {
+            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+
+        User adminRef = userRepo.getReferenceById(admin.id());
+
+        Long unpublishRequestId = eventUnpublishRequestRepo
+                .findLatestRequestIdByEventIdAndStatus(eventId, UnpublishRequestStatus.PENDING)
+                .orElse(null);
+
+        if (unpublishRequestId == null) {
+            Notification exceptionNotification = new Notification();
+            exceptionNotification.setUser(adminRef);
+            exceptionNotification.setCategory(NotificationCategory.EXCEPTION);
+            exceptionNotification.setType("System_EXCEPTION");
+            exceptionNotification.setTargetType(NotificationTargetType.MARKET_EVENT);
+            exceptionNotification.setTargetId(eventId);
+            exceptionNotification.setTitle("活動狀態異常");
+            exceptionNotification.setContent(event.title() + "活動狀態為申請下架，資料庫查無該活動下架申請單");
+            notificationRepo.save(exceptionNotification);
+
+            throw new IllegalArgumentException("找不到該活動的下架申請");
+        }
+
+        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.UNPUBLISH_REQUESTED,
+                WorkflowStatus.UNPUBLISHED);
+
+        eventUnpublishRequestRepo.reviewIfCurrent(
+                unpublishRequestId, adminRef, UnpublishRequestStatus.PENDING, UnpublishRequestStatus.APPROVED, note);
+
+        Notification notification = new Notification();
+        notification.setUser(userRepo.getReferenceById(event.organizerId()));
+        notification.setCategory(NotificationCategory.EVENT_CHANGE);
+        notification.setType("Event_Unpublish");
+        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
+        notification.setTargetId(eventId);
+        notification.setTitle("活動下架");
+        notification.setContent(event.title() + "活動已下架");
+        notificationRepo.save(notification);
+
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(adminRef);
+        adminLog.setOperationType(AdminOperationType.EVENT_UNPUBLISH_REVIEW);
+        adminLog.setTargetType(AdminTargetType.EVENT_UNPUBLISH_REQUEST);
+        adminLog.setTargetId(unpublishRequestId);
+        adminLog.setTargetLabel(event.title());
+        adminLog.setContent(admin.adminName() + "審核通過" + event.title() + "活動下架申請");
+        logRepo.save(adminLog);
+
+        return new EventStatusChangeDto(event.title(), EventStatus.UNPUBLISHED);
+    }
+
+    // 處理活動狀態變動紀錄:說明的文字映射
     private StatusLog toStatusLog(EventStatusLogProjection log) {
-        String dateTime = log.reqAt() == null ? null : log.reqAt().format(dateTimeFormatter);
+        String dateTime = log.reqAt() == null ? null : log.reqAt().format(DATE_TIME_FORMATTER);
         WorkflowStatus status = log.newStatus() == null ? null : WorkflowStatus.valueOf(log.newStatus());
         String description = log.newStatus() == null
                 ? null
@@ -657,5 +944,30 @@ public class AdminService implements AdminServiceInterface, EventStatusServiceIn
             return hasRefundedAt ? RefundStatus.REFUNDED.getStatus() : RefundStatus.REFUNDING.getStatus();
         }
         return paymentStatus == null ? null : paymentStatus.getStatus();
+    }
+
+    /**
+     * 將MarketEvent轉換成EventStatus
+     * 
+     * @param data :MarketEvent
+     * @return EventStatus
+     * @throws IllegalArgumentException 型別不符時拋出
+     */
+    @Override
+    public EventStatus changeToEventStatus(Object data) throws IllegalArgumentException {
+        if (data instanceof MarketEvent) {
+            MarketEvent entity = (MarketEvent) data;
+
+            return checkEventStatus(
+                    entity.getWorkflowStatus(),
+                    entity.getRegistrationStartAt(),
+                    entity.getRegistrationEndAt(),
+                    entity.getBrandPublicAt(),
+                    entity.getStartAt(),
+                    entity.getEndAt(),
+                    entity.getMaxBooths(),
+                    entity.getEventApplications() == null ? 0 : entity.getEventApplications().size());
+        }
+        throw new IllegalArgumentException("data須符合型別類型MarketEvent");
     }
 }

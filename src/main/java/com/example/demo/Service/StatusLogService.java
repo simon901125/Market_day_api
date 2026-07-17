@@ -46,7 +46,7 @@ public class StatusLogService {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private final List<StatusLogApi> statusLogApis = List.of(
+    private final List<StatusLogApi> statusLogApis = List.<StatusLogApi>of(
             new StatusLogApi(HttpMethod.POST.name(), "/api/stalls/select", this::buildStallSelectionLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/local-login", this::buildLoginLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/local-login", this::buildLoginLogs),
@@ -61,7 +61,24 @@ public class StatusLogService {
                             requestLogId, request, "/approve", "APPROVED")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject",
                     (requestLogId, request) -> buildOrganizerApplicationReviewLogs(
-                            requestLogId, request, "/reject", "REJECTED")));
+                            requestLogId, request, "/reject", "REJECTED")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/disable",
+                    (requestLogId, request) -> buildAdminUserAccountStatusLogs(
+                            requestLogId, request, "/disable", "DISABLED")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/restore",
+                    (requestLogId, request) -> buildAdminUserAccountStatusLogs(
+                            requestLogId, request, "/restore", "ACTIVE")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/approve",
+                    (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
+                            requestLogId, request, "/approve", "MAP_BUILDING")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/request-revision",
+                    (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
+                            requestLogId, request, "/request-revision", "REVISION_REQUIRED")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/map-complete",
+                    (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
+                            requestLogId, request, "/map-complete", "READY_TO_PUBLISH")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/unpublish-confirm",
+                    this::buildAdminEventUnpublishConfirmLogs));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {
@@ -138,6 +155,33 @@ public class StatusLogService {
         return validEntries(List.of(
                 entry(requestLogId, "USER", userId, "users.status", "DISABLED"),
                 entry(requestLogId, "USER", userId, "users.isLogin", "0")));
+    }
+
+    private List<StatusLogEntry> buildAdminUserAccountStatusLogs(
+            Long requestLogId, HttpServletRequest request, String suffix, String newStatus) {
+        Long userId = pathId(request.getRequestURI(), "/api/admin/users/", suffix);
+        return validEntries(List.of(entry(requestLogId, "USER", userId, "users.status", newStatus)));
+    }
+
+    private List<StatusLogEntry> buildAdminEventWorkflowStatusLogs(
+            Long requestLogId, HttpServletRequest request, String suffix, String newStatus) {
+        Long eventId = pathId(request.getRequestURI(), "/api/admin/events/", suffix);
+        return validEntries(List.of(entry(requestLogId, "EVENT", eventId, "workflow_status", newStatus)));
+    }
+
+    private List<StatusLogEntry> buildAdminEventUnpublishConfirmLogs(Long requestLogId, HttpServletRequest request) {
+        Long eventId = pathId(request.getRequestURI(), "/api/admin/events/", "/unpublish-confirm");
+        List<StatusLogEntry> entries = new ArrayList<>();
+        entries.add(entry(requestLogId, "EVENT", eventId, "workflow_status", "UNPUBLISHED"));
+
+        Long unpublishRequestId = eventId == null
+                ? null
+                : statusLogRepository.findLatestApprovedUnpublishRequestId(eventId);
+        if (unpublishRequestId != null) {
+            entries.add(entry(requestLogId, "EventUnpublishRequest", unpublishRequestId, "status", "APPROVED"));
+        }
+
+        return validEntries(entries);
     }
 
     private List<StatusLogEntry> buildEmailVerifyLogs(Long requestLogId, HttpServletRequest request) {

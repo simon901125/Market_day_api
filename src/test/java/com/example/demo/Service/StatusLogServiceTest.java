@@ -224,6 +224,84 @@ class StatusLogServiceTest {
     }
 
     @Test
+    void adminEventApproveRecordsMapBuildingStatus() {
+        MockHttpServletRequest request = post("/api/admin/events/30/approve");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{}");
+
+        statusLogService.recordForRequest(8L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("MAP_BUILDING");
+    }
+
+    @Test
+    void adminEventRequestRevisionRecordsRevisionRequiredStatus() {
+        MockHttpServletRequest request = post("/api/admin/events/30/request-revision");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "\"缺少營業執照\"");
+
+        statusLogService.recordForRequest(9L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("REVISION_REQUIRED");
+    }
+
+    @Test
+    void adminEventMapCompleteRecordsReadyToPublishStatus() {
+        MockHttpServletRequest request = post("/api/admin/events/30/map-complete");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{}");
+
+        statusLogService.recordForRequest(10L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("READY_TO_PUBLISH");
+    }
+
+    @Test
+    void adminEventUnpublishConfirmRecordsUnpublishedAndApprovedRequestStatus() {
+        MockHttpServletRequest request = post("/api/admin/events/30/unpublish-confirm");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "\"庫存已清空\"");
+        when(statusLogRepository.findLatestApprovedUnpublishRequestId(30L)).thenReturn(77L);
+
+        statusLogService.recordForRequest(11L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(2);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("UNPUBLISHED");
+        assertThat(entries.get(1).getTargetType()).isEqualTo("EventUnpublishRequest");
+        assertThat(entries.get(1).getTargetId()).isEqualTo(77L);
+        assertThat(entries.get(1).getStatusField()).isEqualTo("status");
+        assertThat(entries.get(1).getNewStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void adminEventUnpublishConfirmRecordsOnlyEventStatusWhenRequestIdUnresolved() {
+        MockHttpServletRequest request = post("/api/admin/events/30/unpublish-confirm");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "\"庫存已清空\"");
+        when(statusLogRepository.findLatestApprovedUnpublishRequestId(30L)).thenReturn(null);
+
+        statusLogService.recordForRequest(12L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+    }
+
+    @Test
     void organizerApplicationRejectRecordsRejectedStatus() {
         MockHttpServletRequest request = post("/api/organizer/applications/10/reject");
         ContentCachingRequestWrapper wrapper = cachedJsonRequest(

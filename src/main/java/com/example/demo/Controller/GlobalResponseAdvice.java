@@ -40,7 +40,8 @@ public class GlobalResponseAdvice implements ResponseBodyAdvice<Object> {
         Class<?> controllerClass = returnType.getContainingClass();
         return controllerClass == UserController.class
                 || controllerClass == StallController.class
-                || controllerClass == OrganizerController.class;
+                || controllerClass == OrganizerController.class
+                || controllerClass == AdminController.class;
     }
 
     @Override
