@@ -37,7 +37,7 @@ class BrandRepositoryIT extends SqlServerIntegrationTestSupport {
         assertThat(repository.findProductSummaries(List.of(brandId))).hasSize(2);
         assertThat(repository.findBrandProducts(brandId)).hasSize(2);
         assertThat(repository.findBrandDetail(brandId)).isPresent();
-        assertThat(repository.findBrandCategoryNames()).isNotEmpty();
+        assertThat(repository.findBrandCategories()).isNotEmpty();
     }
 
     @Test void inactiveAccountIsExcludedFromSearchAndDetail() {
@@ -57,12 +57,18 @@ class BrandRepositoryIT extends SqlServerIntegrationTestSupport {
                 "SELECT id FROM user_profiles WHERE user_id = :userId AND profile_type = 'VENDOR'",
                 Map.of("userId", userId), Long.class);
         jdbc.update("""
-                INSERT INTO vendor_profiles (user_profile_id, category_id, brand_name, brand_summary)
-                VALUES (:profileId, :categoryId, :name, N'Integration summary')
+                INSERT INTO vendor_profiles (user_profile_id, brand_name, brand_summary)
+                VALUES (:profileId, :name, N'Integration summary')
                 """, new MapSqlParameterSource().addValue("profileId", profileId)
-                        .addValue("categoryId", categoryId).addValue("name", name));
-        return jdbc.queryForObject("SELECT id FROM vendor_profiles WHERE user_profile_id = :profileId",
+                        .addValue("name", name));
+        Long brandId = jdbc.queryForObject(
+                "SELECT id FROM vendor_profiles WHERE user_profile_id = :profileId",
                 Map.of("profileId", profileId), Long.class);
+        jdbc.update("""
+                INSERT INTO vendor_profile_categories (vendor_profile_id, category_id)
+                VALUES (:brandId, :categoryId)
+                """, Map.of("brandId", brandId, "categoryId", categoryId));
+        return brandId;
     }
 
     private void insertProduct(Long brandId, String name) {

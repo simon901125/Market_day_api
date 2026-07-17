@@ -32,11 +32,11 @@ class BrandServiceTest {
     }
 
     @Test void scrollOptionsCombinesBothRepositoryLists() {
-        when(repository.findBrandCategoryNames()).thenReturn(List.of("Food"));
+        when(repository.findBrandCategories()).thenReturn(List.of(map("id", 1L, "name", "Food", "slug", "food")));
         when(repository.findParticipatedMarketNames()).thenReturn(List.of("Market A"));
         var response = service.getBrandScrollOptions();
         assertThat(response.isSuccessStatus()).isTrue();
-        assertThat(response.getData().getValues()).containsEntry("categoryNames", List.of("Food"))
+        assertThat(response.getData().getValues()).containsKey("categories")
                 .containsEntry("marketNames", List.of("Market A"));
     }
 

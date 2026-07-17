@@ -135,6 +135,7 @@ public class ApiResponse<T> {
             case "Password reset successfully" -> "\u5bc6\u78bc\u91cd\u8a2d\u6210\u529f";
             case "Organizer profile loaded successfully" -> "\u4e3b\u8fa6\u65b9\u8cc7\u6599\u53d6\u5f97\u6210\u529f";
             case "Organizer profile saved successfully" -> "\u4e3b\u8fa6\u65b9\u8cc7\u6599\u5132\u5b58\u6210\u529f";
+            case "Organizer notifications retrieved successfully" -> "\u4e3b\u8fa6\u65b9\u901a\u77e5\u53d6\u5f97\u6210\u529f";
             case "Organizer accounting list retrieved successfully" ->
                 "\u4e3b\u8fa6\u65b9\u5e33\u52d9\u5217\u8868\u53d6\u5f97\u6210\u529f";
             case "Organizer accounting detail retrieved successfully" ->
@@ -270,6 +271,7 @@ public class ApiResponse<T> {
             case "Product id is invalid" -> "\u5546\u54c1 ID \u4e0d\u6b63\u78ba";
             case "Duplicate product id" -> "\u5546\u54c1\u6e05\u55ae\u4e2d\u6709\u91cd\u8907\u7684\u5546\u54c1 ID";
             case "This account is not an organizer" -> "\u6b64\u5e33\u865f\u4e0d\u662f\u4e3b\u8fa6\u65b9\u5e33\u865f";
+            case "Organizer notification filter is invalid" -> "\u4e3b\u8fa6\u65b9\u901a\u77e5\u7be9\u9078\u689d\u4ef6\u7121\u6548";
             case "This account is not a vendor" -> "\u6b64\u5e33\u865f\u4e0d\u662f\u6524\u4e3b\u5e33\u865f";
             case "This account is not an admin" -> "\u6b64\u5e33\u865f\u4e0d\u662f\u7ba1\u7406\u54e1\u5e33\u865f";
             case "Application id is required" -> "\u8acb\u63d0\u4f9b\u7533\u8acb ID";

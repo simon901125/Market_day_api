@@ -50,7 +50,8 @@ class StallServiceVendorImageSaveTest {
         when(jwtService.getEmail("valid-token")).thenReturn("vendor1@example.test");
         when(stallRepository.findVendorAccountByEmail("vendor1@example.test"))
                 .thenReturn(Optional.of(vendorData()));
-        when(stallRepository.findActiveCategoryIdByName("餐飲美食")).thenReturn(Optional.of(7L));
+        when(stallRepository.findActiveCategoriesByIds(List.of(7L)))
+                .thenReturn(List.of(Map.of("id", 7L, "name", "餐飲美食", "slug", "food")));
         when(stallRepository.updateVendorProfile(anyLong(), anyLong(), anyMap())).thenReturn(1);
         when(stallRepository.replaceVendorProducts(20L, List.of())).thenReturn(0);
         when(stallRepository.findVendorProducts(20L)).thenReturn(List.of());
@@ -151,7 +152,7 @@ class StallServiceVendorImageSaveTest {
         request.setAddress("市府路 1 號");
         request.setBrandSummary("測試摘要");
         request.setBrandDescription("測試介紹");
-        request.setBrandType("餐飲美食");
+        request.setCategoryIds(List.of(7L));
         request.setProducts(List.of());
         return request;
     }

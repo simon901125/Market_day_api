@@ -31,7 +31,7 @@ public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExe
                 user.provider,
                 user.createdAt,
                 vendorProfile.brandName,
-                category.name,
+                '',
                 userProfile.contactPhone,
                 userProfile.contactEmail,
                 userProfile.city,
@@ -41,7 +41,6 @@ public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExe
             FROM User user
             LEFT JOIN user.userProfile userProfile
             LEFT JOIN userProfile.vendorProfile vendorProfile
-            LEFT JOIN vendorProfile.category category
             WHERE user.id = :userId
             """)
     Optional<AdminVenderDetailProjection> findVenderDetailById(@Param("userId") Long userId);

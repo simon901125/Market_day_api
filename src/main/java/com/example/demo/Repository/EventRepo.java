@@ -93,7 +93,7 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             SELECT new com.example.demo.Repository.projection.admin.AdminEventDetailProjection(
                 market.id,
                 market.title,
-                category.name,
+                '',
                 market.startAt,
                 market.endAt,
                 market.brandPublicAt,
@@ -128,7 +128,6 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
                 market.driving
             )
             FROM MarketEvent market
-            JOIN market.category category
             JOIN market.user user
             LEFT JOIN user.userProfile userProfile
             LEFT JOIN userProfile.organizerProfile organizerProfile
