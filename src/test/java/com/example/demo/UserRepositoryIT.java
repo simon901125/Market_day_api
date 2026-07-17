@@ -349,17 +349,17 @@ class UserRepositoryIT extends SqlServerIntegrationTestSupport {
 
     private Long createFutureEvent(Long organizerId, Long categoryId) {
         LocalDateTime now = LocalDateTime.now().withNano(0);
-        return jdbcTemplate.queryForObject(
+        Long eventId = jdbcTemplate.queryForObject(
                 """
                 INSERT INTO market_events (
-                    user_id, category_id, title, summary, description,
+                    user_id, title, summary, description,
                     location_name, city, address,
                     start_at, end_at, registration_start_at, registration_end_at,
                     max_booths, base_fee
                 )
                 OUTPUT INSERTED.id
                 VALUES (
-                    :userId, :categoryId, N'整合測試活動', N'整合測試摘要', N'整合測試介紹',
+                    :userId, N'整合測試活動', N'整合測試摘要', N'整合測試介紹',
                     N'整合測試場地', N'台北市', N'整合測試地址',
                     :startAt, :endAt, :registrationStartAt, :registrationEndAt,
                     10, 1000
@@ -367,12 +367,16 @@ class UserRepositoryIT extends SqlServerIntegrationTestSupport {
                 """,
                 new MapSqlParameterSource()
                         .addValue("userId", organizerId)
-                        .addValue("categoryId", categoryId)
                         .addValue("startAt", now.plusDays(1))
                         .addValue("endAt", now.plusDays(2))
                         .addValue("registrationStartAt", now.minusDays(1))
                         .addValue("registrationEndAt", now.plusHours(1)),
                 Long.class);
+        jdbcTemplate.update("""
+                INSERT INTO market_event_categories (event_id, category_id)
+                VALUES (:eventId, :categoryId)
+                """, Map.of("eventId", eventId, "categoryId", categoryId));
+        return eventId;
     }
 
     private Long createVendorProfile(Long userId, Long categoryId) {
@@ -382,15 +386,15 @@ class UserRepositoryIT extends SqlServerIntegrationTestSupport {
 
         jdbcTemplate.update(
                 """
-                INSERT INTO vendor_profiles (user_profile_id, category_id, brand_name)
-                SELECT id, :categoryId, N'整合測試品牌'
+                INSERT INTO vendor_profiles (user_profile_id, brand_name)
+                SELECT id, N'整合測試品牌'
                 FROM user_profiles
                 WHERE user_id = :userId
                   AND profile_type = 'VENDOR'
                 """,
                 parameters);
 
-        return jdbcTemplate.queryForObject(
+        Long vendorProfileId = jdbcTemplate.queryForObject(
                 """
                 SELECT vp.id
                 FROM vendor_profiles vp
@@ -400,5 +404,10 @@ class UserRepositoryIT extends SqlServerIntegrationTestSupport {
                 """,
                 parameters,
                 Long.class);
+        jdbcTemplate.update("""
+                INSERT INTO vendor_profile_categories (vendor_profile_id, category_id)
+                VALUES (:vendorProfileId, :categoryId)
+                """, Map.of("vendorProfileId", vendorProfileId, "categoryId", categoryId));
+        return vendorProfileId;
     }
 }

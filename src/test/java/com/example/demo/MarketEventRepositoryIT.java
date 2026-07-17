@@ -51,17 +51,22 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
         Long organizerId = userRepository.createLocalUser("ORGANIZER", email, "hash");
         userRepository.markEmailVerified(organizerId);
         LocalDateTime now = LocalDateTime.now().withNano(0);
-        return jdbc.queryForObject("""
+        Long eventId = jdbc.queryForObject("""
                 INSERT INTO market_events (
-                    user_id, category_id, title, summary, description, location_name, city, district, address,
+                    user_id, title, summary, description, location_name, city, district, address,
                     start_at, end_at, registration_start_at, registration_end_at, max_booths, base_fee,
                     workflow_status, traffic_info_metro)
                 OUTPUT INSERTED.id
-                VALUES (:userId, :categoryId, N'Integration Market', N'Summary', N'Description', N'Location',
+                VALUES (:userId, N'Integration Market', N'Summary', N'Description', N'Location',
                     N'Taipei', N'District', N'Address', :startAt, :endAt, :regStart, :regEnd, 10, 500,
                     N'PUBLISHED', N'Metro')
-                """, new MapSqlParameterSource().addValue("userId", organizerId).addValue("categoryId", categoryId)
+                """, new MapSqlParameterSource().addValue("userId", organizerId)
                         .addValue("startAt", now.plusDays(10).withHour(10)).addValue("endAt", now.plusDays(11).withHour(18))
                         .addValue("regStart", now.minusDays(1)).addValue("regEnd", now.plusDays(5)), Long.class);
+        jdbc.update("""
+                INSERT INTO market_event_categories (event_id, category_id)
+                VALUES (:eventId, :categoryId)
+                """, Map.of("eventId", eventId, "categoryId", categoryId));
+        return eventId;
     }
 }
