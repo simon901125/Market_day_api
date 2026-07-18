@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import java.util.Locale;
 
@@ -50,6 +51,7 @@ import com.example.demo.dto.request.admin.AdminUserSearchDto;
 import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.admin.AdminDashboardDto;
 import com.example.demo.dto.response.admin.AdminEventDetailDto;
+import com.example.demo.dto.response.CategoryResponse;
 import com.example.demo.dto.response.admin.AdminEventListDto;
 import com.example.demo.dto.response.admin.AdminNoticeDto;
 import com.example.demo.dto.response.admin.AdminOperationLogDto;
@@ -252,6 +254,11 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         AdminEventDetailProjection event = eventRepo.findEventDetailById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
         List<EventStallZone> zones = eventStallZoneRepo.findByMarketEventId(eventId);
+        List<CategoryResponse> categories = Optional.ofNullable(eventRepo.findCategoriesByEventId(eventId))
+                .orElseGet(List::of)
+                .stream()
+                .map(category -> new CategoryResponse(category.getId(), category.getName(), category.getSlug()))
+                .toList();
         int registeredBoothCount = eventApplicationRepo.countRegBoothsByEventId(eventId);
         // 活動狀態=UNPUBLISH_REQUESTED時，多查一筆待審核下架申請的id與原因
         EventUnpublishReasonProjection unpublishReason = event.workflowStatus() != WorkflowStatus.UNPUBLISH_REQUESTED
@@ -309,7 +316,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 event.locationName(),
                 addr,
                 eventStatus,
-                event.eventType(),
+                categories,
                 event.description(),
                 event.regStartAt().format(DATE_TIME_FORMATTER),
                 event.regEndAt().format(DATE_TIME_FORMATTER),

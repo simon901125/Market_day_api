@@ -378,7 +378,8 @@ public class ApiResponse<T> {
     }
 
     private static boolean isLikelyEnglish(String message) {
-        return message.matches(".*[A-Za-z].*");
+        boolean containsChinese = message.matches(".*[\\u3400-\\u9FFF].*");
+        return !containsChinese && message.matches(".*[A-Za-z].*");
     }
 
     @JsonIgnore
