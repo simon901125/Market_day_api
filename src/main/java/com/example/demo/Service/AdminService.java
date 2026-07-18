@@ -640,7 +640,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                     row.get("id", Long.class),
                     row.get("adminName", String.class),
                     row.get("operationType", AdminOperationType.class),
-                    row.get("targetType", AdminTargetTypeForFront.class),
+                    toTargetTypeForFront(row.get("targetType", AdminTargetType.class), row.get("targetUserRole", Role.class)),
                     row.get("targetName", String.class),
                     row.get("email", String.class),
                     row.get("createdAt", LocalDateTime.class).format(DATE_TIME_FORMATTER),
@@ -651,6 +651,24 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
         PageResponse<AdminOperationLogDto> response = new PageResponse<>(dtoList, pageNumber, pageSize, total);
         return response;
+    }
+
+    /**
+     * 依原始targetType、操作對象角色(僅targetType=USER時有值)換算成前端顯示用的AdminTargetTypeForFront。<br>
+     * AdminTargetTypeForFront沒有對應任何資料庫欄位，Hibernate無法在CriteriaBuilder裡處理這個型別，
+     * 因此改成在tuple查詢只撈原始的targetType/role，這裡用一般Java程式碼換算。
+     */
+    private AdminTargetTypeForFront toTargetTypeForFront(AdminTargetType targetType, Role targetUserRole) {
+        return switch (targetType) {
+            case SYSTEM_SETTING -> AdminTargetTypeForFront.SYSTEM_SETTING;
+            case MARKET_EVENT, EVENT_UNPUBLISH_REQUEST -> AdminTargetTypeForFront.MARKET_EVENT;
+            case USER -> switch (targetUserRole) {
+                case ORGANIZER -> AdminTargetTypeForFront.ORGANIZER;
+                case VENDOR -> AdminTargetTypeForFront.VENDOR;
+                case ADMIN -> null;
+                case null -> null;
+            };
+        };
     }
 
     @Override

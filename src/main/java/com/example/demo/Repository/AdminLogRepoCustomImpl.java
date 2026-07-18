@@ -11,7 +11,6 @@ import com.example.demo.entity.AdminProfile;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.User;
 import com.example.demo.enums.type.AdminTargetType;
-import com.example.demo.enums.type.AdminTargetTypeForFront;
 import com.example.demo.enums.type.Role;
 
 import jakarta.persistence.EntityManager;
@@ -42,18 +41,23 @@ public class AdminLogRepoCustomImpl extends AbstractTupleQuerySupport implements
         // 設定搜尋條件
         applyPredicate(root, cq, cb, spec);
         Expression<String> targetEmail = targetEmailSubquery(root, cq, cb);
-        Expression<AdminTargetTypeForFront> targetTypeForFront = targetTypeForFrontExpression(root, cq, cb);
+        Expression<Role> targetUserRole = targetUserRoleSubquery(root, cq, cb);
 
         // 組裝select欄位
+        // 注意: AdminTargetTypeForFront沒有對應任何資料庫欄位，Hibernate 6無法在CriteriaBuilder裡
+        // 把它當成case-when的字面值/參數綁定(會丟JpaSystemException: Could not determine ValueMapping)，
+        // 因此這裡只SELECT有實際欄位對應的targetType(AdminTargetType)、targetUserRole(Role)兩個原始值，
+        // 換算成AdminTargetTypeForFront的邏輯改放到AdminService.getLogs()的一般Java程式碼裡做。
         cq.multiselect(
                 root.get("id").alias("id"),
                 adminProfile.get("name").alias("adminName"),
                 root.get("operationType").alias("operationType"),
+                root.get("targetType").alias("targetType"),
+                targetUserRole.alias("targetUserRole"),
                 root.get("targetLabel").alias("targetName"),
                 root.get("createdAt").alias("createdAt"),
                 root.get("content").alias("content"),
-                targetEmail.alias("email"),
-                targetTypeForFront.alias("targetType"));
+                targetEmail.alias("email"));
         // 設定orderBy: 操作時間:由新到舊(desc)
         cq.orderBy(cb.desc(root.get("createdAt")));
 
@@ -78,35 +82,22 @@ public class AdminLogRepoCustomImpl extends AbstractTupleQuerySupport implements
         eventOwnerEmailSubquery.select(eventOwnerEmailRoot.get("user").get("email"))
                 .where(cb.equal(eventOwnerEmailRoot.get("id"), root.get("targetId")));
 
-        return cb.<AdminTargetType, String>selectCase(root.get("targetType"))
-                .when(AdminTargetType.USER, userEmailSubquery)
-                .when(AdminTargetType.MARKET_EVENT, eventOwnerEmailSubquery)
-                .when(AdminTargetType.EVENT_UNPUBLISH_REQUEST, eventOwnerEmailSubquery)
+        return cb.<String>selectCase()
+                .when(cb.equal(root.get("targetType"), AdminTargetType.USER), userEmailSubquery)
+                .when(root.get("targetType").in(AdminTargetType.MARKET_EVENT, AdminTargetType.EVENT_UNPUBLISH_REQUEST), eventOwnerEmailSubquery)
                 .otherwise(cb.nullLiteral(String.class));
     }
 
     /**
-     * 依targetType對應到前端的AdminTargetTypeForFront。<br>
-     * targetType=USER時需再依targetId查出user.role，並依role對應到organizer/vendor(admin視為null)。
+     * 依targetId查出使用者角色(targetType不是USER時查不到人、回傳null)。<br>
+     * 只回傳資料庫有實際對應欄位的原始Role，換算成AdminTargetTypeForFront的邏輯交給呼叫端在Java程式碼裡處理。
      */
-    public static Expression<AdminTargetTypeForFront> targetTypeForFrontExpression(
+    public static Expression<Role> targetUserRoleSubquery(
             Root<AdminOperationLog> root, CriteriaQuery<?> cq, CriteriaBuilder cb) {
         Subquery<Role> userRoleSubquery = cq.subquery(Role.class);
         Root<User> userRoleRoot = userRoleSubquery.from(User.class);
         userRoleSubquery.select(userRoleRoot.get("role"))
                 .where(cb.equal(userRoleRoot.get("id"), root.get("targetId")));
-
-        Expression<AdminTargetTypeForFront> userTargetTypeForFront = cb
-                .<Role, AdminTargetTypeForFront>selectCase(userRoleSubquery)
-                .when(Role.ORGANIZER, AdminTargetTypeForFront.ORGANIZER)
-                .when(Role.VENDOR, AdminTargetTypeForFront.VENDOR)
-                .otherwise(cb.nullLiteral(AdminTargetTypeForFront.class));
-
-        return cb.<AdminTargetType, AdminTargetTypeForFront>selectCase(root.get("targetType"))
-                .when(AdminTargetType.SYSTEM_SETTING, AdminTargetTypeForFront.SYSTEM_SETTING)
-                .when(AdminTargetType.MARKET_EVENT, AdminTargetTypeForFront.MARKET_EVENT)
-                .when(AdminTargetType.EVENT_UNPUBLISH_REQUEST, AdminTargetTypeForFront.MARKET_EVENT)
-                .when(AdminTargetType.USER, userTargetTypeForFront)
-                .otherwise(cb.nullLiteral(AdminTargetTypeForFront.class));
+        return userRoleSubquery;
     }
 }
