@@ -75,9 +75,9 @@ class AdminServiceTest {
         AdminNoticeProjection notice = new AdminNoticeProjection(
                 101L, NotificationType.SYSTEM_EXCEPTION, NotificationTargetType.MARKET_EVENT, 1L,
                 "標題", "內容", false, LocalDateTime.of(2026, 1, 1, 12, 0));
-        when(notificationRepo.findAdminNotices(eq(9L), isNull(), any(PageRequest.class)))
+        when(notificationRepo.findAdminNotices(eq(9L), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(List.of(notice));
-        when(notificationRepo.countAdminNotices(9L, null)).thenReturn(1L);
+        when(notificationRepo.countAdminNotices(9L, null, null)).thenReturn(1L);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.PENDING_REVIEW)).thenReturn(1);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.MAP_BUILDING)).thenReturn(2);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED)).thenReturn(3);

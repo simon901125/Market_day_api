@@ -77,10 +77,10 @@ public class AdminController {
      * <b>API路徑</b>: /api/admin/notices/search<br>
      *
      * @param authorizationHeader 管理員驗證憑證
-     * @param request 通知分類與分頁參數；category 為 null 時查詢全部分類，pageNumber/pageSize 為 null 時使用預設值
+     * @param request 通知分類、未讀篩選與分頁參數；category 為 null 時查詢全部分類，isOnlyUnread 為 true 時查詢全部分類且僅未讀，pageNumber/pageSize 為 null 時使用預設值
      * @return ApiResponse<PageResponse<AdminNoticeDto>>
      */
-    @Operation(summary = "查詢通知列表", description = "查詢管理員後台的通知列表，可依分類篩選，支援分頁；category 為 null 時查詢全部分類。")
+    @Operation(summary = "查詢通知列表", description = "查詢管理員後台的通知列表，可依分類篩選，支援分頁；category 為 null 時查詢全部分類；isOnlyUnread 為 true 時查詢全部分類且僅未讀。")
     @PostMapping("/notices/search")
     public ApiResponse<?> getNotices(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -91,12 +91,13 @@ public class AdminController {
         }
 
         NotificationCategory category = request == null ? null : request.category();
+        Boolean isOnlyUnread = request == null ? null : request.isOnlyUnread();
         int pageNumber = request == null || request.pageNumber() == null ? 1 : request.pageNumber();
         int pageSize = request == null || request.pageSize() == null ? STANDARD_NOTIFICATION_PAGE_SIZE : request.pageSize();
 
         try {
             String operatorEmail = jwtService.getEmail(token);
-            return ApiResponse.success("ok", service.getNotice(category, pageNumber, pageSize, operatorEmail));
+            return ApiResponse.success("ok", service.getNotice(category, isOnlyUnread, pageNumber, pageSize, operatorEmail));
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         } catch (Exception e) {

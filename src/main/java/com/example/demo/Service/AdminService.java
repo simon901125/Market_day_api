@@ -146,7 +146,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
         LocalDateTime now = LocalDateTime.now();
         long systemWarningCount = notificationRepo.countUnreadNoticesByCategory(admin.id(), NotificationCategory.EXCEPTION);
-        List<AdminNoticeDto> notices = getNotice(null, 1, DASHBOARD_NOTICE_COUNT, operatorEmail).getItems();
+        List<AdminNoticeDto> notices = getNotice(null, null, 1, DASHBOARD_NOTICE_COUNT, operatorEmail).getItems();
 
         // 塞資料
         return new AdminDashboardDto(
@@ -164,6 +164,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     /**
      * 設定管理員後台: 通知中心，查詢指定管理員的通知列表，依未讀優先、時間新到舊排序<br>
      * @param category 通知分類，為 null 時查詢全部分類
+     * @param isOnlyUnread 為 true 時查詢全部分類且僅未讀通知，為 false/null 時不篩選已讀狀態
      * @param pageNumber 頁碼，從1開始計算
      * @param pageSize 每頁筆數
      * @param operatorEmail 操作者(管理員)email
@@ -172,13 +173,17 @@ public class AdminService extends AdminServiceBase implements EventStatusService
      */
     @Override
     public PageResponse<AdminNoticeDto> getNotice(
-            NotificationCategory category, int pageNumber, int pageSize, String operatorEmail) {
+            NotificationCategory category, Boolean isOnlyUnread, int pageNumber, int pageSize, String operatorEmail) {
         AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
                 .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
 
+        boolean onlyUnread = Boolean.TRUE.equals(isOnlyUnread);
+        NotificationCategory effectiveCategory = onlyUnread ? null : category;
+        Boolean isRead = onlyUnread ? Boolean.FALSE : null;
+
         PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
-        List<AdminNoticeProjection> notices = notificationRepo.findAdminNotices(admin.id(), category, pageRequest);
-        long total = notificationRepo.countAdminNotices(admin.id(), category);
+        List<AdminNoticeProjection> notices = notificationRepo.findAdminNotices(admin.id(), effectiveCategory, isRead, pageRequest);
+        long total = notificationRepo.countAdminNotices(admin.id(), effectiveCategory, isRead);
 
         List<AdminNoticeDto> items = notices.stream()
                 .map(this::toAdminNoticeDto)

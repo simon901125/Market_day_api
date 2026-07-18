@@ -13,7 +13,7 @@ import com.example.demo.enums.notification.NotificationCategory;
 
 public interface NotificationRepo extends JpaRepository<Notification, Long> {
 
-    /** 管理員後台: 通知中心列表 (依未讀優先、時間新到舊排序；category 為 null 時查詢全部分類) */
+    /** 管理員後台: 通知中心列表 (依未讀優先、時間新到舊排序；category 為 null 時查詢全部分類；isRead 為 null 時不篩選已讀狀態) */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.AdminNoticeProjection(
                 n.id,
@@ -28,21 +28,27 @@ public interface NotificationRepo extends JpaRepository<Notification, Long> {
             FROM Notification n
             WHERE n.user.id = :userId
               AND (:category IS NULL OR n.category = :category)
+              AND (:isRead IS NULL OR n.isRead = :isRead)
             ORDER BY n.isRead ASC, n.createdAt DESC
             """)
     List<AdminNoticeProjection> findAdminNotices(
             @Param("userId") Long userId,
             @Param("category") NotificationCategory category,
+            @Param("isRead") Boolean isRead,
             Pageable pageable);
 
-    /** 計算指定管理員符合分類條件的通知總筆數 */
+    /** 計算指定管理員符合分類與已讀狀態條件的通知總筆數 (isRead 為 null 時不篩選已讀狀態) */
     @Query("""
             SELECT count(n.id)
             FROM Notification n
             WHERE n.user.id = :userId
               AND (:category IS NULL OR n.category = :category)
+              AND (:isRead IS NULL OR n.isRead = :isRead)
             """)
-    long countAdminNotices(@Param("userId") Long userId, @Param("category") NotificationCategory category);
+    long countAdminNotices(
+            @Param("userId") Long userId,
+            @Param("category") NotificationCategory category,
+            @Param("isRead") Boolean isRead);
 
     /** 計算指定管理員未讀且符合分類條件的通知總筆數 (管理員後台首頁: 系統警告計數) */
     @Query("""

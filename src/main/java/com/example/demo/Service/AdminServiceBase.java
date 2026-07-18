@@ -31,7 +31,7 @@ public abstract class AdminServiceBase {
         public abstract AdminDashboardDto getDashboardResponse(String operatorEmail);
 
         /** 取得管理員後台: 通知中心 */
-        public abstract PageResponse<AdminNoticeDto> getNotice(NotificationCategory category, int pageNumber, int pageSize, String operatorEmail);
+        public abstract PageResponse<AdminNoticeDto> getNotice(NotificationCategory category, Boolean isOnlyUnread, int pageNumber, int pageSize, String operatorEmail);
 
         /** 取得管理員後台: 活動搜尋 */
         public abstract PageResponse<AdminEventListDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize);
