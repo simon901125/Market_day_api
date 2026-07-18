@@ -14,7 +14,6 @@ import com.example.demo.enums.status.WorkflowStatus;
  *
  * @param eventId 活動ID
  * @param eventName 活動名稱
- * @param eventType 活動類型
  * @param startAt 活動開始日期時間
  * @param endAt 活動結束日期時間
  * @param brandPublicAt 參與活動的品牌名單公開時間
@@ -53,7 +52,6 @@ import com.example.demo.enums.status.WorkflowStatus;
 public record AdminEventDetailProjection(
     Long eventId,
     String eventName,
-    String eventType,
     LocalDateTime startAt,
     LocalDateTime endAt,
     LocalDateTime brandPublicAt,

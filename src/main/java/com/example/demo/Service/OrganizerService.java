@@ -366,12 +366,12 @@ public class OrganizerService {
         LocalDateTime appliedEndExclusive = registrationEndAt == null ? null : registrationEndAt.plusDays(1).atStartOfDay();
         List<Map<String, Object>> applicationRows = organizerRepository
                 .findOrganizerApplications(organizerUserId, eventTitle, brandName, appliedStartAt, appliedEndExclusive);
-        Map<Long, List<CategoryResponse>> categoriesByVendorProfileId = categoriesByVendorProfileId(applicationRows);
+        Map<Long, CategoryResponse> categoryByVendorProfileId = categoryByVendorProfileId(applicationRows);
         List<OrganizerApplicationSummaryResponse> applications = applicationRows
                 .stream()
                 .map(this::withDisplayApplicationStatus)
                 .filter(application -> matchesApplicationStatus(application, status))
-                .map(application -> toApplicationSummaryResponse(application, categoriesByVendorProfileId))
+                .map(application -> toApplicationSummaryResponse(application, categoryByVendorProfileId))
                 .map(OrganizerApplicationSummaryResponse::new)
                 .toList();
         return ApiResponse.success(
@@ -1184,14 +1184,13 @@ public class OrganizerService {
 
     private Map<String, Object> toApplicationSummaryResponse(
             Map<String, Object> application,
-            Map<Long, List<CategoryResponse>> categoriesByVendorProfileId) {
+            Map<Long, CategoryResponse> categoryByVendorProfileId) {
         return orderedMap(
                 "applicationId", application.get("applicationId"),
                 "eventTitle", application.get("eventTitle"),
                 "eventTime", application.get("eventTime"),
                 "vendorName", application.get("vendorName"),
-                "categories", categoriesByVendorProfileId.getOrDefault(
-                        toLong(application.get("vendorProfileId")), List.of()),
+                "category", categoryByVendorProfileId.get(toLong(application.get("vendorProfileId"))),
                 "vendorOwnerName", application.get("vendorOwnerName"),
                 "appliedAt", formatAppliedAt(application),
                 "applicationStatus", application.get("applicationStatus"));
@@ -1236,7 +1235,7 @@ public class OrganizerService {
 
         response.put("brand", orderedMap(
                 "brandName", application.get("vendorName"),
-                "categories", vendorCategories(toLong(application.get("vendorProfileId"))),
+                "category", vendorCategory(toLong(application.get("vendorProfileId"))),
                 "brandDescription", application.get("brandDescription")));
 
         response.put("applicationdetail", orderedMap(
@@ -1291,27 +1290,26 @@ public class OrganizerService {
         return response;
     }
 
-    private List<CategoryResponse> vendorCategories(Long vendorProfileId) {
+    private CategoryResponse vendorCategory(Long vendorProfileId) {
         if (vendorProfileId == null) {
-            return List.of();
+            return null;
         }
-        return categoriesByVendorProfileId(List.of(Map.of("vendorProfileId", vendorProfileId)))
-                .getOrDefault(vendorProfileId, List.of());
+        return categoryByVendorProfileId(List.of(Map.of("vendorProfileId", vendorProfileId))).get(vendorProfileId);
     }
 
-    private Map<Long, List<CategoryResponse>> categoriesByVendorProfileId(List<Map<String, Object>> rows) {
+    private Map<Long, CategoryResponse> categoryByVendorProfileId(List<Map<String, Object>> rows) {
         List<Long> ids = rows.stream()
                 .map(row -> toLong(row.get("vendorProfileId")))
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<Long, List<CategoryResponse>> result = new LinkedHashMap<>();
+        Map<Long, CategoryResponse> result = new LinkedHashMap<>();
         if (ids.isEmpty()) {
             return result;
         }
         for (Map<String, Object> row : organizerRepository.findVendorCategoriesByProfileIds(ids)) {
             Long profileId = toLong(row.get("vendorProfileId"));
-            result.computeIfAbsent(profileId, ignored -> new ArrayList<>()).add(new CategoryResponse(
+            result.put(profileId, new CategoryResponse(
                     toLong(row.get("id")), Objects.toString(row.get("name"), ""),
                     Objects.toString(row.get("slug"), "")));
         }

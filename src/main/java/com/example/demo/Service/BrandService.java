@@ -27,10 +27,10 @@ public class BrandService {
     @Autowired
     private BrandRepository brandRepository;
 
-    public ApiResponse<MapBackedResponse> getBrandScrollOptions() {
+    public ApiResponse<MapBackedResponse> getBrandScrollOptions(String categoryName) {
         Map<String, Object> options = orderedMap(
                 "categories", brandRepository.findBrandCategories(),
-                "marketNames", brandRepository.findParticipatedMarketNames());
+                "marketNames", brandRepository.findParticipatedMarketNames(categoryName));
 
         return ApiResponse.success(
                 "Brand scroll options retrieved successfully",
@@ -45,11 +45,11 @@ public class BrandService {
         List<Map<String, Object>> rows = brandRepository.searchBrands(request, offset, pageSize);
         long totalItems = rows.isEmpty() ? 0 : numberValue(rows.get(0).get("totalRows")).longValue();
         Map<Long, List<Map<String, Object>>> productsByBrandId = productsByBrandId(rows);
-        Map<Long, List<CategoryResponse>> categoriesByBrandId = categoriesByBrandId(rows);
+        Map<Long, CategoryResponse> categoryByBrandId = categoryByBrandId(rows);
         List<BrandSummaryResponse> brands = rows.stream()
                 .map(this::withoutTotalRows)
                 .map(row -> withRepresentativeProducts(row, productsByBrandId))
-                .map(row -> withCategories(row, categoriesByBrandId))
+                .map(row -> withCategory(row, categoryByBrandId))
                 .map(BrandSummaryResponse::new)
                 .toList();
 
@@ -73,7 +73,7 @@ public class BrandService {
                 "mainImageUrl", brand.get("mainImageUrl"),
                 "avatarImageUrl", brand.get("avatarImageUrl"),
                 "brandName", brand.get("brandName"),
-                "categories", categoriesByBrandId(List.of(brand)).getOrDefault(brandId, List.of()),
+                "category", categoryByBrandId(List.of(brand)).get(brandId),
                 "brandSummary", brand.get("brandSummary"),
                 "participatedMarketCount", brand.get("participatedMarketCount"),
                 "brandDescription", brand.get("brandDescription"),
@@ -102,30 +102,29 @@ public class BrandService {
         return values;
     }
 
-    private Map<String, Object> withCategories(
+    private Map<String, Object> withCategory(
             Map<String, Object> brand,
-            Map<Long, List<CategoryResponse>> categoriesByBrandId) {
+            Map<Long, CategoryResponse> categoryByBrandId) {
         Map<String, Object> values = new LinkedHashMap<>(brand);
         Long brandId = longValue(values.get("brandId"));
-        values.put("categories", categoriesByBrandId.getOrDefault(brandId, List.of()));
+        values.put("category", categoryByBrandId.get(brandId));
         return values;
     }
 
-    private Map<Long, List<CategoryResponse>> categoriesByBrandId(List<Map<String, Object>> brands) {
+    private Map<Long, CategoryResponse> categoryByBrandId(List<Map<String, Object>> brands) {
         List<Long> brandIds = brands.stream()
                 .map(row -> longValue(row.get("brandId")))
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<Long, List<CategoryResponse>> grouped = new LinkedHashMap<>();
+        Map<Long, CategoryResponse> grouped = new LinkedHashMap<>();
         for (Map<String, Object> row : brandRepository.findCategoriesByBrandIds(brandIds)) {
             Long brandId = longValue(row.get("brandId"));
             if (brandId != null) {
-                grouped.computeIfAbsent(brandId, id -> new java.util.ArrayList<>())
-                        .add(new CategoryResponse(
-                                longValue(row.get("id")),
-                                String.valueOf(row.get("name")),
-                                String.valueOf(row.get("slug"))));
+                grouped.put(brandId, new CategoryResponse(
+                        longValue(row.get("id")),
+                        String.valueOf(row.get("name")),
+                        String.valueOf(row.get("slug"))));
             }
         }
         return grouped;

@@ -152,7 +152,7 @@ class StallServiceVendorImageSaveTest {
         request.setAddress("市府路 1 號");
         request.setBrandSummary("測試摘要");
         request.setBrandDescription("測試介紹");
-        request.setCategoryIds(List.of(7L));
+        request.setCategoryId(7L);
         request.setProducts(List.of());
         return request;
     }
