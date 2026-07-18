@@ -392,14 +392,14 @@ public class StallRepository {
         }
         String sql = """
                 SELECT
-                    vpc.vendor_profile_id AS vendorProfileId,
+                    vp.id AS vendorProfileId,
                     c.id,
                     c.name,
                     c.slug
-                FROM dbo.vendor_profile_categories vpc
-                INNER JOIN dbo.categories c ON c.id = vpc.category_id
-                WHERE vpc.vendor_profile_id IN (:vendorProfileIds)
-                ORDER BY vpc.vendor_profile_id, c.id
+                FROM dbo.vendor_profiles vp
+                INNER JOIN dbo.categories c ON c.id = vp.category_id
+                WHERE vp.id IN (:vendorProfileIds)
+                ORDER BY vp.id, c.id
                 """;
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
                 sql, Map.of("vendorProfileIds", vendorProfileIds)));
@@ -421,7 +421,8 @@ public class StallRepository {
                   AND vp.id = :vendorProfileId;
 
                 UPDATE dbo.vendor_profiles
-                SET brand_name = :brandName,
+                SET category_id = :categoryId,
+                    brand_name = :brandName,
                     instagram_url = :instagramUrl,
                     facebook_url = :facebookUrl,
                     website_url = :websiteUrl,
@@ -489,14 +490,14 @@ public class StallRepository {
                 DECLARE @insertedVendorProfiles TABLE (id BIGINT);
 
                 INSERT INTO dbo.vendor_profiles (
-                    user_profile_id, brand_name,
+                    user_profile_id, category_id, brand_name,
                     instagram_url, facebook_url, website_url,
                     avatar_image_url, cover_image_url,
                     brand_summary, brand_description
                 )
                 OUTPUT INSERTED.id INTO @insertedVendorProfiles (id)
                 VALUES (
-                    :userProfileId, :brandName,
+                    :userProfileId, :categoryId, :brandName,
                     :instagramUrl, :facebookUrl, :websiteUrl,
                     :avatarImageUrl, :coverImageUrl,
                     :brandSummary, :brandDescription
@@ -511,26 +512,6 @@ public class StallRepository {
                 createVendorProfileSql,
                 vendorProfileParameters,
                 Long.class);
-    }
-
-    public void replaceVendorCategories(Long vendorProfileId, List<Long> categoryIds) {
-        namedParameterJdbcTemplate.update(
-                "DELETE FROM dbo.vendor_profile_categories WHERE vendor_profile_id = :vendorProfileId",
-                Map.of("vendorProfileId", vendorProfileId));
-        if (categoryIds == null || categoryIds.isEmpty()) {
-            return;
-        }
-        String sql = """
-                INSERT INTO dbo.vendor_profile_categories (vendor_profile_id, category_id)
-                VALUES (:vendorProfileId, :categoryId)
-                """;
-        org.springframework.jdbc.core.namedparam.SqlParameterSource[] batch = categoryIds.stream()
-                .distinct()
-                .map(categoryId -> new MapSqlParameterSource()
-                        .addValue("vendorProfileId", vendorProfileId)
-                        .addValue("categoryId", categoryId))
-                .toArray(org.springframework.jdbc.core.namedparam.SqlParameterSource[]::new);
-        namedParameterJdbcTemplate.batchUpdate(sql, batch);
     }
 
     public int replaceVendorProducts(Long vendorProfileId, List<Map<String, Object>> products) {
@@ -1403,6 +1384,7 @@ public class StallRepository {
         String sql = """
                 SELECT
                     e.id AS eventId,
+                    e.user_id AS organizerUserId,
                     e.title AS eventTitle,
                     e.start_at AS startAt,
                     e.end_at AS endAt,

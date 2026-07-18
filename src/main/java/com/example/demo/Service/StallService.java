@@ -440,11 +440,15 @@ public class StallService {
 
         List<Long> categoryIds = normalizeCategoryIds(body.getCategoryIds());
         if (categoryIds.isEmpty()) {
-            return ApiResponse.fail("Brand categories are required");
+            return ApiResponse.fail("Brand category is required");
         }
-        if (stallRepository.findActiveCategoriesByIds(categoryIds).size() != categoryIds.size()) {
-            return ApiResponse.fail("Brand categories are invalid");
+        if (categoryIds.size() != 1) {
+            return ApiResponse.fail("Only one brand category is allowed");
         }
+        if (stallRepository.findActiveCategoriesByIds(categoryIds).size() != 1) {
+            return ApiResponse.fail("Brand category is invalid");
+        }
+        Long categoryId = categoryIds.get(0);
 
         Long userId = toLong(vendor.get("userId"));
         Long vendorProfileId = vendor.get("vendorProfileId") == null
@@ -453,6 +457,7 @@ public class StallService {
         String email = normalizeText(vendor.get("email"));
 
         Map<String, Object> profile = orderedMap(
+                "categoryId", categoryId,
                 "brandName", normalizeText(body.getBrandName()),
                 "contactName", normalizeText(body.getContactName()),
                 "contactPhone", normalizeText(body.getContactPhone()),
@@ -488,7 +493,6 @@ public class StallService {
                     return ApiResponse.fail("Vendor profile save failed");
                 }
             }
-            stallRepository.replaceVendorCategories(vendorProfileId, categoryIds);
             int savedProducts = stallRepository.replaceVendorProducts(vendorProfileId, productSnapshots);
             if (savedProducts != productSnapshots.size()) {
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();

@@ -75,8 +75,23 @@ class StallServiceVendorImageSaveTest {
         verify(stallRepository).updateVendorProfile(eq(10L), eq(20L), profileCaptor.capture());
         verify(stallRepository).replaceVendorProducts(20L, List.of());
         assertThat(profileCaptor.getValue())
+                .containsEntry("categoryId", 7L)
                 .containsEntry("avatarImageUrl", "http://localhost:8081/images/vendor-avatar/new.png")
                 .containsEntry("coverImageUrl", "http://localhost:8081/images/vendor-cover/new.png");
+    }
+
+    @Test
+    void profileSaveRejectsMultipleCategoriesForSingleCategorySchema() {
+        VendorStallSaveRequest request = validRequest();
+        request.setCategoryIds(List.of(7L, 8L));
+
+        ApiResponse<MapBackedResponse> response = stallService.saveVendorStallProfile(
+                AUTHORIZATION,
+                request);
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        assertThat(response.getMessage()).contains("Only one brand category");
+        verify(stallRepository, never()).updateVendorProfile(anyLong(), anyLong(), anyMap());
     }
 
     @Test
