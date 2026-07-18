@@ -78,7 +78,7 @@ class OrganizerServiceEventSaveTest {
     }
 
     @Test
-    void fillsDatabaseSafeDefaultsForSparseDraft() {
+    void normalizesSparseDraftWithoutInventingValues() {
         OrganizerEventSaveRequest sparse = new OrganizerEventSaveRequest(
                 null, null, null, null, null, null, null, null, null);
         when(organizerRepository.createOrganizerEvent(eq(7L), any(OrganizerEventSaveRequest.class)))
@@ -91,16 +91,19 @@ class OrganizerServiceEventSaveTest {
         ArgumentCaptor<OrganizerEventSaveRequest> captor = ArgumentCaptor.forClass(OrganizerEventSaveRequest.class);
         verify(organizerRepository).createOrganizerEvent(eq(7L), captor.capture());
         OrganizerEventSaveRequest saved = captor.getValue();
-        assertThat(saved.eventTitle()).isEmpty();
-        assertThat(saved.summary()).isEmpty();
-        assertThat(saved.description()).isEmpty();
+        assertThat(saved.eventTitle()).isNull();
+        assertThat(saved.summary()).isNull();
+        assertThat(saved.description()).isNull();
         assertThat(saved.categoryIds()).isEmpty();
-        assertThat(saved.schedule().startAt()).isNotNull();
-        assertThat(saved.location().locationName()).isEmpty();
-        assertThat(saved.booth().maxBooths()).isEqualTo(1);
-        assertThat(saved.booth().baseFee()).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(saved.booth().depositAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(saved.schedule().startAt()).isNull();
+        assertThat(saved.location().locationName()).isNull();
+        assertThat(saved.booth().maxBooths()).isNull();
+        assertThat(saved.booth().baseFee()).isNull();
+        assertThat(saved.booth().depositAmount()).isNull();
         assertThat(saved.booth().zones()).isEmpty();
+        assertThat(saved.equipment().providesEquipmentRental()).isNull();
+        assertThat(saved.equipment().providesBasicPower()).isNull();
+        assertThat(saved.equipment().allowsExtraPower()).isNull();
         assertThat(saved.equipment().items()).isEmpty();
     }
 
@@ -120,7 +123,7 @@ class OrganizerServiceEventSaveTest {
                         20, BigDecimal.valueOf(3), BigDecimal.valueOf(3),
                         BigDecimal.valueOf(2500), BigDecimal.valueOf(500),
                         List.of(new OrganizerEventSaveRequest.Zone(null, "A 區", 20, "#F97316"))),
-                new OrganizerEventSaveRequest.Equipment(List.of()));
+                new OrganizerEventSaveRequest.Equipment(false, false, false, List.of()));
     }
 
     private void stubDetail(Long eventId, String workflowStatus) {

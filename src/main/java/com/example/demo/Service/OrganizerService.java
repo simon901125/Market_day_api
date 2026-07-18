@@ -235,7 +235,11 @@ public class OrganizerService {
                         intValue(event.get("maxBooths")), toBigDecimal(event.get("stallWidth")),
                         toBigDecimal(event.get("stallLength")), toBigDecimal(event.get("baseFee")),
                         toBigDecimal(event.get("depositAmount")), normalizeText(event.get("mapImageUrl")), zones),
-                new OrganizerEventDetailResponse.Equipment(items),
+                new OrganizerEventDetailResponse.Equipment(
+                        nullableBoolean(event.get("providesEquipmentRental")),
+                        nullableBoolean(event.get("providesBasicPower")),
+                        nullableBoolean(event.get("allowsExtraPower")),
+                        items),
                 workflowStatus.name(), detailStatus, detailStatusText,
                 normalizeText(event.get("reviewNote")), availableOrganizerEventActions(workflowStatus, eventStatus),
                 toLocalDateTime(event.get("createdAt")));
@@ -253,7 +257,7 @@ public class OrganizerService {
         if (request == null) {
             return ApiResponse.fail("Event data is required");
         }
-        OrganizerEventSaveRequest draft = applyOrganizerEventDraftDefaults(request);
+        OrganizerEventSaveRequest draft = normalizeOrganizerEventDraft(request);
         String validationError = validateOrganizerEventDraft(draft);
         if (validationError != null) {
             return ApiResponse.fail(validationError);
@@ -310,27 +314,25 @@ public class OrganizerService {
         }
 
         OrganizerEventSaveRequest.Schedule schedule = request.schedule();
-        if (schedule == null || schedule.startAt() == null || schedule.endAt() == null
-                || schedule.registrationStartAt() == null || schedule.registrationEndAt() == null) {
-            return "Event and registration schedule is required";
-        }
-        if (schedule.endAt().isBefore(schedule.startAt())) {
+        if (schedule.startAt() != null && schedule.endAt() != null
+                && schedule.endAt().isBefore(schedule.startAt())) {
             return "Event end time must not be before start time";
         }
-        if (schedule.registrationEndAt().isBefore(schedule.registrationStartAt())) {
+        if (schedule.registrationStartAt() != null && schedule.registrationEndAt() != null
+                && schedule.registrationEndAt().isBefore(schedule.registrationStartAt())) {
             return "Registration end time must not be before start time";
         }
 
         OrganizerEventSaveRequest.Location location = request.location();
-        if (location.locationName().trim().length() > 200 || location.city().trim().length() > 50
-                || (location.district() != null && location.district().trim().length() > 50)
-                || location.address().trim().length() > 255) {
+        if (textLength(location.locationName()) > 200 || textLength(location.city()) > 50
+                || textLength(location.district()) > 50 || textLength(location.address()) > 255) {
             return "Event location exceeds the database length limit";
         }
 
         OrganizerEventSaveRequest.Booth booth = request.booth();
-        if (booth.maxBooths() <= 0 || !isNonNegative(booth.baseFee())
-                || !isNonNegative(booth.depositAmount())
+        if ((booth.maxBooths() != null && booth.maxBooths() <= 0)
+                || (booth.baseFee() != null && !isNonNegative(booth.baseFee()))
+                || (booth.depositAmount() != null && !isNonNegative(booth.depositAmount()))
                 || (booth.stallWidth() != null && !isPositive(booth.stallWidth()))
                 || (booth.stallLength() != null && !isPositive(booth.stallLength()))) {
             return "Booth numbers and fees are invalid";
@@ -362,19 +364,8 @@ public class OrganizerService {
      * 草稿可以缺少業務資料，但資料庫的 NOT NULL 欄位仍需有安全值。
      * 前端會提供相同預設；此處是直接呼叫 API 時的最後防線。
      */
-    private OrganizerEventSaveRequest applyOrganizerEventDraftDefaults(OrganizerEventSaveRequest request) {
-        LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
-        LocalDateTime defaultStartAt = now.plusDays(30).withHour(10).withMinute(0);
+    private OrganizerEventSaveRequest normalizeOrganizerEventDraft(OrganizerEventSaveRequest request) {
         OrganizerEventSaveRequest.Schedule sourceSchedule = request.schedule();
-        LocalDateTime startAt = sourceSchedule == null || sourceSchedule.startAt() == null
-                ? defaultStartAt : sourceSchedule.startAt();
-        LocalDateTime endAt = sourceSchedule == null || sourceSchedule.endAt() == null
-                ? startAt.plusHours(8) : sourceSchedule.endAt();
-        LocalDateTime registrationStartAt = sourceSchedule == null || sourceSchedule.registrationStartAt() == null
-                ? now : sourceSchedule.registrationStartAt();
-        LocalDateTime registrationEndAt = sourceSchedule == null || sourceSchedule.registrationEndAt() == null
-                ? startAt.minusDays(1).withHour(23).withMinute(59) : sourceSchedule.registrationEndAt();
-
         OrganizerEventSaveRequest.Location sourceLocation = request.location();
         OrganizerEventSaveRequest.Booth sourceBooth = request.booth();
         List<OrganizerEventSaveRequest.Zone> zones = sourceBooth == null || sourceBooth.zones() == null
@@ -383,31 +374,38 @@ public class OrganizerService {
                 || request.equipment().items() == null ? List.of() : request.equipment().items();
 
         return new OrganizerEventSaveRequest(
-                request.eventId(), defaultText(request.eventTitle()), defaultText(request.summary()),
-                defaultText(request.description()),
+                request.eventId(), normalizeText(request.eventTitle()), normalizeText(request.summary()),
+                normalizeText(request.description()),
                 request.categoryIds() == null ? List.of() : request.categoryIds(),
-                new OrganizerEventSaveRequest.Schedule(startAt, endAt, registrationStartAt, registrationEndAt),
+                new OrganizerEventSaveRequest.Schedule(
+                        sourceSchedule == null ? null : sourceSchedule.startAt(),
+                        sourceSchedule == null ? null : sourceSchedule.endAt(),
+                        sourceSchedule == null ? null : sourceSchedule.registrationStartAt(),
+                        sourceSchedule == null ? null : sourceSchedule.registrationEndAt()),
                 new OrganizerEventSaveRequest.Location(
-                        sourceLocation == null ? "" : defaultText(sourceLocation.locationName()),
-                        sourceLocation == null ? "" : defaultText(sourceLocation.city()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.locationName()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.city()),
                         sourceLocation == null ? null : normalizeText(sourceLocation.district()),
-                        sourceLocation == null ? "" : defaultText(sourceLocation.address()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.address()),
                         sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoMetro()),
                         sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoBus()),
                         sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoDriving())),
                 new OrganizerEventSaveRequest.Booth(
-                        sourceBooth == null || sourceBooth.maxBooths() == null ? 1 : sourceBooth.maxBooths(),
+                        sourceBooth == null ? null : sourceBooth.maxBooths(),
                         sourceBooth == null ? null : sourceBooth.stallWidth(),
                         sourceBooth == null ? null : sourceBooth.stallLength(),
-                        sourceBooth == null || sourceBooth.baseFee() == null ? BigDecimal.ZERO : sourceBooth.baseFee(),
-                        sourceBooth == null || sourceBooth.depositAmount() == null
-                                ? BigDecimal.ZERO : sourceBooth.depositAmount(),
+                        sourceBooth == null ? null : sourceBooth.baseFee(),
+                        sourceBooth == null ? null : sourceBooth.depositAmount(),
                         zones),
-                new OrganizerEventSaveRequest.Equipment(items));
+                new OrganizerEventSaveRequest.Equipment(
+                        request.equipment() == null ? null : request.equipment().providesEquipmentRental(),
+                        request.equipment() == null ? null : request.equipment().providesBasicPower(),
+                        request.equipment() == null ? null : request.equipment().allowsExtraPower(),
+                        items));
     }
 
-    private String defaultText(String value) {
-        return value == null ? "" : value;
+    private int textLength(String value) {
+        return value == null ? 0 : value.trim().length();
     }
 
     private String validateOrganizerEventEquipment(OrganizerEventSaveRequest.Item item) {
@@ -3049,6 +3047,10 @@ public class OrganizerService {
         }
         String text = statusText(value);
         return "TRUE".equals(text) || "1".equals(text);
+    }
+
+    private Boolean nullableBoolean(Object value) {
+        return value == null ? null : isTrue(value);
     }
 
     private String joinAddress(Object city, Object district, Object address) {

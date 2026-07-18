@@ -99,7 +99,7 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
                         10, BigDecimal.valueOf(3), BigDecimal.valueOf(3), BigDecimal.valueOf(1000),
                         BigDecimal.valueOf(500),
                         List.of(new OrganizerEventSaveRequest.Zone(null, "A 區", 10, "#F97316"))),
-                new OrganizerEventSaveRequest.Equipment(List.of()));
+                new OrganizerEventSaveRequest.Equipment(false, false, false, List.of()));
 
         Long eventId = organizer.createOrganizerEvent(organizerUserId, request);
         organizer.replaceEventCategories(eventId, request.categoryIds());

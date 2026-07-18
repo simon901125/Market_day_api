@@ -45,7 +45,11 @@ public record OrganizerEventSaveRequest(
             Integer stallCount,
             String colorCode) {}
 
-    public record Equipment(List<Item> items) {}
+    public record Equipment(
+            Boolean providesEquipmentRental,
+            Boolean providesBasicPower,
+            Boolean allowsExtraPower,
+            List<Item> items) {}
 
     public record Item(
             Long equipmentId,
