@@ -66,6 +66,7 @@ public class BrandRepository {
                     INNER JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
                         AND up.profile_type = N'VENDOR'
                     INNER JOIN dbo.users u ON u.id = up.user_id
+                    INNER JOIN dbo.categories c ON c.id = vp.category_id
                     OUTER APPLY (
                         SELECT COUNT(DISTINCT ea.event_id) AS participatedMarketCount
                         FROM dbo.event_applications ea

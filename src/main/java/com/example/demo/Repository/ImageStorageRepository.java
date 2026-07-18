@@ -63,6 +63,7 @@ public class ImageStorageRepository {
                   AND u.email = :email
                   AND u.role = 'ORGANIZER'
                   AND u.status <> 'IS_DELETED'
+                  AND e.workflow_status IN (N'DRAFT', N'REVISION_REQUIRED')
                 """.formatted(columnName);
         return jdbcTemplate.update(sql, Map.of(
                 "email", email,

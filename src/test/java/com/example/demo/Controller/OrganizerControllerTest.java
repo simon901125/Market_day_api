@@ -21,6 +21,7 @@ import com.example.demo.Service.OrganizerNotificationService;
 import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
+import com.example.demo.dto.request.OrganizerEventSaveRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,6 +56,21 @@ class OrganizerControllerTest {
         verify(organizerService).getOrganizerAccountDetail(AUTH, 4L, "PAID", 3, 15);
         verify(organizerService).loadOrganizerProfile(AUTH);
         verify(organizerService).saveOrganizerProfile(AUTH, request);
+    }
+
+    @Test void eventSearchEndpointDelegatesAllFiltersAndPages() {
+        LocalDate start = LocalDate.of(2026, 7, 1);
+        LocalDate end = LocalDate.of(2026, 7, 31);
+        controller.searchOrganizerEvents(AUTH, "market", "FULL", start, end, "UPCOMING_FIRST", 1, 3, true);
+        verify(organizerService).searchOrganizerEvents(
+                AUTH, "market", "FULL", start, end, "UPCOMING_FIRST", 1, 3, true);
+    }
+
+    @Test void eventSaveEndpointDelegatesRequest() {
+        OrganizerEventSaveRequest request = new OrganizerEventSaveRequest(
+                null, null, null, null, null, null, null, null, null);
+        controller.saveOrganizerEvent(AUTH, request);
+        verify(organizerService).saveOrganizerEvent(AUTH, request);
     }
 
     @Test void applicationSearchDetailApproveAndRejectDelegate() {

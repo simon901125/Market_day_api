@@ -44,7 +44,7 @@ public interface EventStatusServiceInterface<T> {
                 } else if (regEndTime != null
                         && regStartTime.isBefore(now)
                         && regEndTime.isAfter(now)
-                        && nowBooth <= maxBooth) {
+                        && nowBooth < maxBooth) {
                     return EventStatus.REGISTRATION_OPEN;
                 }
                 return EventStatus.FULL;

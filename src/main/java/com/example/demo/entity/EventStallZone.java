@@ -48,6 +48,10 @@ public class EventStallZone {
     @Column(name = "stall_count", nullable = false)
     private int stallCount;
 
+    /** 前端色票選定後保存的 #RRGGBB 分區顏色。 */
+    @Column(name = "zone_color", length = 20)
+    private String colorCode;
+
     //----------其他Entity的FK----------
 
     /**分區攤位資訊 */

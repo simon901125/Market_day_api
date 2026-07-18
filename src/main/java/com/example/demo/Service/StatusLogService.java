@@ -64,6 +64,8 @@ public class StatusLogService {
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/applications/{id}/reject",
                     (requestLogId, request) -> buildOrganizerApplicationReviewLogs(
                             requestLogId, request, "/reject", "REJECTED")),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/submit-review",
+                    this::buildOrganizerEventSubmitReviewLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/disable",
                     (requestLogId, request) -> buildAdminUserAccountStatusLogs(
                             requestLogId, request, "/disable", "DISABLED")),
@@ -169,6 +171,13 @@ public class StatusLogService {
             Long requestLogId, HttpServletRequest request, String suffix, String newStatus) {
         Long eventId = pathId(request.getRequestURI(), "/api/admin/events/", suffix);
         return validEntries(List.of(entry(requestLogId, "EVENT", eventId, "workflow_status", newStatus)));
+    }
+
+    private List<StatusLogEntry> buildOrganizerEventSubmitReviewLogs(
+            Long requestLogId, HttpServletRequest request) {
+        Long eventId = pathId(request.getRequestURI(), "/api/organizer/events/", "/submit-review");
+        return validEntries(List.of(entry(
+                requestLogId, "EVENT", eventId, "workflow_status", "PENDING_REVIEW")));
     }
 
     private List<StatusLogEntry> buildAdminEventRequestRevisionLogs(Long requestLogId, HttpServletRequest request) {
