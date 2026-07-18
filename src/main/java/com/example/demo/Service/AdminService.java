@@ -630,6 +630,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         List<AdminOperationLogDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
             AdminOperationLogDto dtoItem = new AdminOperationLogDto(
+                    row.get("id", Long.class),
                     row.get("adminName", String.class),
                     row.get("operationType", AdminOperationType.class),
                     row.get("targetType", AdminTargetTypeForFront.class),

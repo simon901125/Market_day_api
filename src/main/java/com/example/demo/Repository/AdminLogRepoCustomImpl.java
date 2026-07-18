@@ -46,10 +46,11 @@ public class AdminLogRepoCustomImpl extends AbstractTupleQuerySupport implements
 
         // 組裝select欄位
         cq.multiselect(
+                root.get("id").alias("id"),
                 adminProfile.get("name").alias("adminName"),
                 root.get("operationType").alias("operationType"),
                 root.get("targetLabel").alias("targetName"),
-                root.get("createdAt").alias("operatedAt"),
+                root.get("createdAt").alias("createdAt"),
                 root.get("content").alias("content"),
                 targetEmail.alias("email"),
                 targetTypeForFront.alias("targetType"));
