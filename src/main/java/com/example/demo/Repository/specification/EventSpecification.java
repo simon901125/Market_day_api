@@ -37,19 +37,20 @@ public class EventSpecification {
                 return null;
             }
             return cb.or(
-                cb.like(cb.lower(root.get("title")), "%" + keywordName.toLowerCase() + "%"), 
-                cb.like(cb.lower(root.get("user").get("userProfile").get("name")), "%" + keywordName.toLowerCase() + "%"));
+                cb.like(cb.lower(root.get("title")), "%" + keywordName.toLowerCase() + "%"),
+                cb.like(cb.lower(root.get("user").get("userProfile").get("organizerProfile").get("organizerName")), "%" + keywordName.toLowerCase() + "%"));
         };
     }
 
-    /** 主辦方名稱搜尋(join user.userProfile.name) */
+    /** 主辦方名稱搜尋(join user.userProfile.organizerProfile.organizerName) */
     private static Specification<MarketEvent> withOrganizer(String organizer) {
         return (root, query, cb) -> {
             if (organizer == null || organizer.isBlank()) {
                 return null;
             }
             return cb.equal(
-                    cb.lower(root.get("user").get("userProfile").get("name")), organizer.toLowerCase());
+                    cb.lower(root.get("user").get("userProfile").get("organizerProfile").get("organizerName")),
+                    organizer.toLowerCase());
         };
     }
 
