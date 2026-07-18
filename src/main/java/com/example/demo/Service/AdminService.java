@@ -197,6 +197,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     // 設定管理員後台: 活動搜尋
     @Override
     public PageResponse<AdminEventListDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize) {
+        // pageNumber/pageSize 若為 0 或負數（例如前端未帶值），需與 PageResponse 的正規化邏輯一致，避免查詢時 LIMIT 0 撈成空結果
+        pageNumber = PageResponse.normalizePage(pageNumber);
+        pageSize = PageResponse.normalizePageSize(pageSize);
+
         // ----------只撈頁面需要用到的欄位，避免撈出整張表----------
         Specification<MarketEvent> spec = EventSpecification.build(request);
         List<Tuple> rows = eventRepo.findEventListTuples(spec, pageNumber, pageSize);
@@ -292,9 +296,9 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 event.contactAddr() == null ? "" : event.contactAddr());
 
         String boothSpec = String.format(
-                "%d * %d",
-                event.stallLength() == null ? 0 : event.stallLength(),
-                event.stallWidth() == null ? 0 : event.stallWidth());
+                "%s * %s",
+                event.stallLength() == null ? "0" : event.stallLength().stripTrailingZeros().toPlainString(),
+                event.stallWidth() == null ? "0" : event.stallWidth().stripTrailingZeros().toPlainString());
         EventStatus eventStatus = checkEventStatus(
                 event.workflowStatus(),
                 event.regStartAt(),
