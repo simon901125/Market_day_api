@@ -3,12 +3,17 @@ package com.example.demo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.ImageStorageRepository;
@@ -16,6 +21,7 @@ import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.Repository.PaymentRepository;
 import com.example.demo.Repository.RequestLogRepository;
 import com.example.demo.Repository.StallRepository;
+import com.example.demo.dto.request.OrganizerEventSaveRequest;
 
 @Tag("integration")
 @Transactional
@@ -26,6 +32,7 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
     @Autowired PaymentRepository payment;
     @Autowired ImageStorageRepository images;
     @Autowired RequestLogRepository requests;
+    @Autowired NamedParameterJdbcTemplate jdbc;
 
     @Test void stallReadQueriesCompileAgainstCurrentSchema() {
         assertThat(stall.findVendorApplications(-1L, null, null, null)).isEmpty();
@@ -49,6 +56,10 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
 
     @Test void organizerReadQueriesCompileAgainstCurrentSchema() {
         assertThat(organizer.findOrganizerAccountByEmail("none@example.test")).isEmpty();
+        assertThat(organizer.findOrganizerEvents(-1L, null, null, null)).isEmpty();
+        assertThat(organizer.findOrganizerEventDetail(-1L, -1L)).isEmpty();
+        assertThat(organizer.findOrganizerEventCategories(-1L)).isEmpty();
+        assertThat(organizer.findOrganizerEventZones(-1L)).isEmpty();
         assertThat(organizer.findOrganizerAccountingEvents(-1L, null, null, null)).isEmpty();
         assertThat(organizer.findOrganizerAccountingEventDetail(-1L, -1L)).isEmpty();
         assertThat(organizer.findOrganizerAccountingPaymentDetails(-1L)).isEmpty();
@@ -66,6 +77,46 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
         assertThat(organizer.findOrganizerEquipmentManagementRows(-1L)).isEmpty();
         assertThat(organizer.findOrganizerPowerManagementRows(-1L)).isEmpty();
         assertThat(organizer.findOrganizerVehicleManagementRows(-1L)).isEmpty();
+    }
+
+    @Test void organizerEventWriteQueriesPersistCompleteDraft() {
+        jdbc.update("""
+                INSERT INTO dbo.users (role, email, provider, status, isLogin, email_verified_at)
+                VALUES ('ORGANIZER', 'event-write-it@example.test', 'LOCAL', 'ACTIVE', 0, SYSDATETIME())
+                """, Map.of());
+        Long organizerUserId = jdbc.queryForObject(
+                "SELECT id FROM dbo.users WHERE email = 'event-write-it@example.test'", Map.of(), Long.class);
+        Long categoryId = jdbc.queryForObject(
+                "SELECT TOP 1 id FROM dbo.categories WHERE is_active = 1 ORDER BY id", Map.of(), Long.class);
+        LocalDateTime start = LocalDateTime.of(2026, 10, 10, 10, 0);
+        OrganizerEventSaveRequest request = new OrganizerEventSaveRequest(
+                null, "Integration Market", "Summary", "Description", List.of(categoryId),
+                new OrganizerEventSaveRequest.Schedule(
+                        start, start.plusDays(1), start.minusMonths(2), start.minusDays(1)),
+                new OrganizerEventSaveRequest.Location(
+                        "Venue", "臺北市", "信義區", "Address", "Metro", null, null),
+                new OrganizerEventSaveRequest.Booth(
+                        10, BigDecimal.valueOf(3), BigDecimal.valueOf(3), BigDecimal.valueOf(1000),
+                        BigDecimal.valueOf(500),
+                        List.of(new OrganizerEventSaveRequest.Zone(null, "A 區", 10, "#F97316"))),
+                new OrganizerEventSaveRequest.Equipment(false, false, false, List.of()));
+
+        Long eventId = organizer.createOrganizerEvent(organizerUserId, request);
+        organizer.replaceEventCategories(eventId, request.categoryIds());
+        organizer.replaceEventZones(eventId, request.booth().zones());
+        organizer.replaceEventEquipment(eventId, List.of());
+
+        assertThat(eventId).isPositive();
+        assertThat(organizer.countActiveCategories(Set.of(categoryId))).isEqualTo(1);
+        assertThat(organizer.findOrganizerEventDetail(organizerUserId, eventId)).isPresent();
+        assertThat(organizer.findOrganizerEventCategories(eventId)).hasSize(1);
+        assertThat(organizer.findOrganizerEventZones(eventId)).hasSize(1);
+        assertThat(images.updateEventImage(
+                "event-write-it@example.test", eventId, "cover_image_url", "/images/cover.png")).isOne();
+        jdbc.update("UPDATE dbo.market_events SET workflow_status = N'PENDING_REVIEW' WHERE id = :eventId",
+                Map.of("eventId", eventId));
+        assertThat(images.updateEventImage(
+                "event-write-it@example.test", eventId, "map_image_url", "/images/map.png")).isZero();
     }
 
     @Test void paymentReadQueriesCompileAgainstCurrentSchema() {

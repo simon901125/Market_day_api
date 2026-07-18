@@ -60,7 +60,8 @@ class BrandRepositoryIT extends SqlServerIntegrationTestSupport {
                 INSERT INTO vendor_profiles (user_profile_id, category_id, brand_name, brand_summary)
                 VALUES (:profileId, :categoryId, :name, N'Integration summary')
                 """, new MapSqlParameterSource().addValue("profileId", profileId)
-                        .addValue("categoryId", categoryId).addValue("name", name));
+                        .addValue("categoryId", categoryId)
+                        .addValue("name", name));
         Long brandId = jdbc.queryForObject(
                 "SELECT id FROM vendor_profiles WHERE user_profile_id = :profileId",
                 Map.of("profileId", profileId), Long.class);

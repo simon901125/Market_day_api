@@ -11,6 +11,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
+import com.example.demo.dto.request.OrganizerEventSaveRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.CategoryResponse;
@@ -46,9 +48,16 @@ import com.example.demo.dto.response.OrganizerAccountingSummaryResponse;
 import com.example.demo.dto.response.OrganizerDashboardInitResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSummaryResponse;
+import com.example.demo.dto.response.OrganizerEventSearchResponse;
+import com.example.demo.dto.response.OrganizerEventDetailResponse;
+import com.example.demo.dto.response.OrganizerEventSummaryResponse;
+import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
+import com.example.demo.dto.response.OrganizerTaskSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.OrganizerStallEventSummaryResponse;
+import com.example.demo.enums.status.EventStatus;
+import com.example.demo.enums.status.WorkflowStatus;
 
 @Service
 public class OrganizerService {
@@ -108,6 +117,674 @@ public class OrganizerService {
         return ApiResponse.success(
                 "Organizer dashboard initialized successfully",
                 new OrganizerDashboardInitResponse(needsProfile));
+    }
+
+    public ApiResponse<OrganizerEventSearchResponse> searchOrganizerEvents(
+            String authorizationHeader,
+            String keyword,
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
+            String sort,
+            Integer page,
+            Integer pageSize,
+            Boolean registrationOverview) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ApiResponse.fail("Invalid date range");
+        }
+
+        EventStatus statusFilter = parseEventStatus(status);
+        if (normalizeText(status) != null && statusFilter == null) {
+            return ApiResponse.fail("Invalid event status");
+        }
+        String normalizedSort = normalizeText(sort);
+        if (normalizedSort == null) {
+            normalizedSort = "DEFAULT";
+        }
+        normalizedSort = normalizedSort.toUpperCase();
+        if (!Set.of("DEFAULT", "UPCOMING_FIRST").contains(normalizedSort)) {
+            return ApiResponse.fail("Invalid sort option");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        LocalDateTime startAt = startDate == null ? null : startDate.atStartOfDay();
+        LocalDateTime endExclusive = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        List<OrganizerEventSummaryResponse> events = organizerRepository
+                .findOrganizerEvents(organizerUserId, keyword, startAt, endExclusive)
+                .stream()
+                .map(this::toOrganizerEventSummary)
+                .filter(event -> statusFilter == null || statusFilter.getStatus().equals(event.status()))
+                .filter(event -> !Boolean.TRUE.equals(registrationOverview)
+                        || isRegistrationOverviewEvent(event))
+                .sorted(organizerEventComparator(normalizedSort))
+                .toList();
+
+        return ApiResponse.success(
+                "Organizer events retrieved successfully",
+                new OrganizerEventSearchResponse(PageResponse.from(events, page, pageSize)));
+    }
+
+    private boolean isRegistrationOverviewEvent(OrganizerEventSummaryResponse event) {
+        return Set.of(
+                WorkflowStatus.PUBLISHED.name(),
+                WorkflowStatus.FINAL_REVIEW.name(),
+                WorkflowStatus.UNPUBLISH_REQUESTED.name())
+                .contains(event.workflowStatus());
+    }
+
+    public ApiResponse<OrganizerEventDetailResponse> getOrganizerEventDetail(
+            String authorizationHeader, Long eventId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (eventId == null || eventId <= 0) {
+            return ApiResponse.fail("Invalid event id");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> event = organizerRepository
+                .findOrganizerEventDetail(organizerUserId, eventId).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail(404, "Organizer event not found");
+        }
+
+        WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(event.get("workflowStatus")));
+        EventStatus eventStatus = resolveOrganizerEventStatus(
+                event, workflowStatus, intValue(event.get("maxBooths")), intValue(event.get("registeredCount")));
+        String detailStatus = workflowStatus == WorkflowStatus.CANCELLED ? "cancelled" : eventStatus.getStatus();
+        String detailStatusText = workflowStatus == WorkflowStatus.CANCELLED ? "\u5df2\u53d6\u6d88" : eventStatus.getDescription();
+        List<OrganizerEventDetailResponse.Category> categories = organizerRepository
+                .findOrganizerEventCategories(eventId).stream()
+                .map(row -> new OrganizerEventDetailResponse.Category(
+                        longValue(row.get("categoryId")), statusText(row.get("categoryName")),
+                        statusText(row.get("categorySlug"))))
+                .toList();
+        List<OrganizerEventDetailResponse.Zone> zones = organizerRepository
+                .findOrganizerEventZones(eventId).stream()
+                .map(row -> new OrganizerEventDetailResponse.Zone(
+                        longValue(row.get("zoneId")), statusText(row.get("zoneName")),
+                        intValue(row.get("stallCount")), normalizeText(row.get("colorCode"))))
+                .toList();
+        List<OrganizerEventDetailResponse.Item> items = organizerRepository.findEventEquipments(eventId).stream()
+                .map(this::toOrganizerEventEquipmentItem)
+                .toList();
+
+        OrganizerEventDetailResponse detail = new OrganizerEventDetailResponse(
+                eventId,
+                statusText(event.get("eventTitle")),
+                statusText(event.get("summary")),
+                statusText(event.get("description")),
+                categories,
+                normalizeText(event.get("coverImageUrl")),
+                new OrganizerEventDetailResponse.Schedule(
+                        toLocalDateTime(event.get("startAt")), toLocalDateTime(event.get("endAt")),
+                        toLocalDateTime(event.get("registrationStartAt")),
+                        toLocalDateTime(event.get("registrationEndAt")),
+                        toLocalDateTime(event.get("publicInfoAt")),
+                        toLocalDateTime(event.get("brandsPublicAt"))),
+                new OrganizerEventDetailResponse.Location(
+                        statusText(event.get("locationName")), statusText(event.get("city")),
+                        normalizeText(event.get("district")), statusText(event.get("address")),
+                        normalizeText(event.get("trafficInfoMetro")), normalizeText(event.get("trafficInfoBus")),
+                        normalizeText(event.get("trafficInfoDriving"))),
+                new OrganizerEventDetailResponse.Booth(
+                        nullableInteger(event.get("maxBooths")), toBigDecimal(event.get("stallWidth")),
+                        toBigDecimal(event.get("stallLength")), toBigDecimal(event.get("baseFee")),
+                        toBigDecimal(event.get("depositAmount")), normalizeText(event.get("mapImageUrl")), zones),
+                new OrganizerEventDetailResponse.Equipment(
+                        nullableBoolean(event.get("providesEquipmentRental")),
+                        nullableBoolean(event.get("providesBasicPower")),
+                        nullableBoolean(event.get("allowsExtraPower")),
+                        items),
+                workflowStatus.name(), detailStatus, detailStatusText,
+                normalizeText(event.get("reviewNote")), availableOrganizerEventActions(workflowStatus, eventStatus),
+                toLocalDateTime(event.get("createdAt")));
+        return ApiResponse.success("Organizer event detail retrieved successfully", detail);
+    }
+
+    @Transactional
+    public ApiResponse<OrganizerEventDetailResponse> saveOrganizerEvent(
+            String authorizationHeader, OrganizerEventSaveRequest request) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+
+        if (request == null) {
+            return ApiResponse.fail("Event data is required");
+        }
+        OrganizerEventSaveRequest draft = normalizeOrganizerEventDraft(request);
+        String validationError = validateOrganizerEventDraft(draft);
+        if (validationError != null) {
+            return ApiResponse.fail(validationError);
+        }
+
+        Set<Long> categoryIds = new LinkedHashSet<>(draft.categoryIds());
+        if (!categoryIds.isEmpty()
+                && organizerRepository.countActiveCategories(categoryIds) != categoryIds.size()) {
+            return ApiResponse.fail("Event categories are invalid or inactive");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Long eventId = draft.eventId();
+        if (eventId == null) {
+            eventId = organizerRepository.createOrganizerEvent(organizerUserId, draft);
+        } else {
+            if (eventId <= 0) {
+                return ApiResponse.fail("Invalid event id");
+            }
+            Map<String, Object> existing = organizerRepository
+                    .findOrganizerEventDetail(organizerUserId, eventId).orElse(null);
+            if (existing == null) {
+                return ApiResponse.fail(404, "Organizer event not found");
+            }
+            WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(existing.get("workflowStatus")));
+            if (workflowStatus != WorkflowStatus.DRAFT && workflowStatus != WorkflowStatus.REVISION_REQUIRED) {
+                return ApiResponse.fail(409, "Event cannot be edited in its current workflow status");
+            }
+            if (organizerRepository.updateOrganizerEvent(organizerUserId, draft) != 1) {
+                return ApiResponse.fail(409, "Event cannot be edited in its current workflow status");
+            }
+        }
+
+        organizerRepository.replaceEventCategories(eventId, List.copyOf(categoryIds));
+        organizerRepository.replaceEventZones(eventId, draft.booth().zones());
+        List<OrganizerEventSaveRequest.Item> equipmentItems = draft.equipment().items();
+        organizerRepository.replaceEventEquipment(eventId, equipmentItems);
+
+        ApiResponse<OrganizerEventDetailResponse> detail = getOrganizerEventDetail(authorizationHeader, eventId);
+        return new ApiResponse<>(detail.getStatusCode(), "活動儲存成功", detail.getData());
+    }
+
+    @Transactional
+    public ApiResponse<OrganizerEventSubmitReviewResponse> submitOrganizerEventReview(
+            String authorizationHeader, Long eventId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (eventId == null || eventId <= 0) {
+            return ApiResponse.fail("Invalid event id");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> event = organizerRepository
+                .findOrganizerEventDetail(organizerUserId, eventId).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail(404, "Organizer event not found");
+        }
+
+        WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(event.get("workflowStatus")));
+        if (workflowStatus != WorkflowStatus.DRAFT && workflowStatus != WorkflowStatus.REVISION_REQUIRED) {
+            return ApiResponse.fail(409, "Event cannot be submitted in its current workflow status");
+        }
+
+        List<Map<String, Object>> categories = organizerRepository.findOrganizerEventCategories(eventId);
+        List<Map<String, Object>> zones = organizerRepository.findOrganizerEventZones(eventId);
+        List<Map<String, Object>> equipmentItems = organizerRepository.findEventEquipments(eventId);
+        List<String> missingFields = validateOrganizerEventReview(event, categories, zones, equipmentItems);
+        if (!missingFields.isEmpty()) {
+            EventStatus currentStatus = workflowStatus == WorkflowStatus.DRAFT
+                    ? EventStatus.DRAFT : EventStatus.REVISION_REQUIRED;
+            OrganizerEventSubmitReviewResponse validation = new OrganizerEventSubmitReviewResponse(
+                    eventId,
+                    workflowStatus.name(),
+                    currentStatus.getStatus(),
+                    currentStatus.getDescription(),
+                    availableOrganizerEventActions(workflowStatus, currentStatus),
+                    missingFields);
+            return new ApiResponse<>(400, "活動資料尚未填寫完整", "請完成以下欄位", validation);
+        }
+
+        if (organizerRepository.submitOrganizerEventReview(organizerUserId, eventId) != 1) {
+            return ApiResponse.fail(409, "Event cannot be submitted in its current workflow status");
+        }
+
+        return ApiResponse.success("Organizer event submitted for review successfully",
+                new OrganizerEventSubmitReviewResponse(
+                        eventId,
+                        WorkflowStatus.PENDING_REVIEW.name(),
+                        EventStatus.PENDING_REVIEW.getStatus(),
+                        EventStatus.PENDING_REVIEW.getDescription(),
+                        List.of(),
+                        List.of()));
+    }
+
+    private List<String> validateOrganizerEventReview(
+            Map<String, Object> event,
+            List<Map<String, Object>> categories,
+            List<Map<String, Object>> zones,
+            List<Map<String, Object>> equipmentItems) {
+        Set<String> errors = new LinkedHashSet<>();
+        String title = normalizeText(event.get("eventTitle"));
+        String summary = normalizeText(event.get("summary"));
+        String description = normalizeText(event.get("description"));
+        if (title == null || title.length() > 50) errors.add("eventTitle");
+        if (summary == null || summary.length() > 300) errors.add("summary");
+        if (description == null || description.length() > 800) errors.add("description");
+        if (normalizeText(event.get("coverImageUrl")) == null) errors.add("coverImage");
+
+        Set<Long> categoryIds = categories.stream()
+                .map(category -> longValue(category.get("categoryId")))
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (categoryIds.isEmpty()
+                || organizerRepository.countActiveCategories(categoryIds) != categoryIds.size()) {
+            errors.add("categoryIds");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startAt = toLocalDateTime(event.get("startAt"));
+        LocalDateTime endAt = toLocalDateTime(event.get("endAt"));
+        LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+        if (startAt == null || !startAt.isAfter(now)) errors.add("schedule.startAt");
+        if (endAt == null || startAt == null || !endAt.isAfter(startAt)) errors.add("schedule.endAt");
+        if (registrationStartAt == null || !registrationStartAt.isAfter(now)) {
+            errors.add("schedule.registrationStartAt");
+        }
+        if (registrationEndAt == null || registrationStartAt == null
+                || !registrationEndAt.isAfter(registrationStartAt)
+                || startAt == null || registrationEndAt.isAfter(startAt)) {
+            errors.add("schedule.registrationEndAt");
+        }
+
+        requireText(errors, event, "locationName", "location.locationName");
+        requireText(errors, event, "city", "location.city");
+        requireText(errors, event, "district", "location.district");
+        requireText(errors, event, "address", "location.address");
+        requireText(errors, event, "trafficInfoMetro", "location.trafficInfoMetro");
+        requireText(errors, event, "trafficInfoBus", "location.trafficInfoBus");
+        requireText(errors, event, "trafficInfoDriving", "location.trafficInfoDriving");
+
+        Integer maxBooths = nullableInteger(event.get("maxBooths"));
+        BigDecimal stallWidth = toBigDecimal(event.get("stallWidth"));
+        BigDecimal stallLength = toBigDecimal(event.get("stallLength"));
+        BigDecimal baseFee = toBigDecimal(event.get("baseFee"));
+        BigDecimal depositAmount = toBigDecimal(event.get("depositAmount"));
+        if (maxBooths == null || maxBooths <= 0) errors.add("booth.maxBooths");
+        if (!isPositive(stallWidth)) errors.add("booth.stallWidth");
+        if (!isPositive(stallLength)) errors.add("booth.stallLength");
+        if (!isNonNegative(baseFee)) errors.add("booth.baseFee");
+        if (!isNonNegative(depositAmount)) errors.add("booth.depositAmount");
+        if (normalizeText(event.get("mapImageUrl")) == null) errors.add("booth.mapImage");
+        validateOrganizerEventReviewZones(errors, zones, maxBooths);
+
+        Boolean providesEquipmentRental = nullableBoolean(event.get("providesEquipmentRental"));
+        Boolean providesBasicPower = nullableBoolean(event.get("providesBasicPower"));
+        Boolean allowsExtraPower = nullableBoolean(event.get("allowsExtraPower"));
+        if (providesEquipmentRental == null) errors.add("equipment.providesEquipmentRental");
+        if (providesBasicPower == null) errors.add("equipment.providesBasicPower");
+        if (allowsExtraPower == null) errors.add("equipment.allowsExtraPower");
+        if (Boolean.TRUE.equals(providesEquipmentRental)
+                && equipmentItems.stream().noneMatch(item -> "EQUIPMENT".equals(statusText(item.get("itemType"))))) {
+            errors.add("equipment.items");
+        }
+        if (Boolean.TRUE.equals(providesBasicPower)
+                && equipmentItems.stream().noneMatch(item -> "POWER".equals(statusText(item.get("itemType")))
+                        && "FREE".equals(statusText(item.get("chargeType"))))) {
+            errors.add("equipment.basicPowerItems");
+        }
+        if (Boolean.TRUE.equals(allowsExtraPower)
+                && equipmentItems.stream().noneMatch(item -> "POWER".equals(statusText(item.get("itemType")))
+                        && "PAID".equals(statusText(item.get("chargeType"))))) {
+            errors.add("equipment.extraPowerItems");
+        }
+        if (equipmentItems.stream().anyMatch(this::isInvalidOrganizerEventEquipmentRow)) {
+            errors.add("equipment.items");
+        }
+        return List.copyOf(errors);
+    }
+
+    private void requireText(Set<String> errors, Map<String, Object> values, String key, String field) {
+        if (normalizeText(values.get(key)) == null) errors.add(field);
+    }
+
+    private void validateOrganizerEventReviewZones(
+            Set<String> errors, List<Map<String, Object>> zones, Integer maxBooths) {
+        if (zones.isEmpty()) {
+            errors.add("booth.zones");
+            return;
+        }
+        Set<String> names = new LinkedHashSet<>();
+        int total = 0;
+        for (Map<String, Object> zone : zones) {
+            String name = normalizeText(zone.get("zoneName"));
+            Integer stallCount = nullableInteger(zone.get("stallCount"));
+            String color = normalizeText(zone.get("colorCode"));
+            if (name == null || name.length() > 50 || !names.add(name.toLowerCase())) {
+                errors.add("booth.zones");
+            }
+            if (stallCount == null || stallCount <= 0) {
+                errors.add("booth.zones");
+            } else {
+                total += stallCount;
+            }
+            if (color == null || !color.matches("^#[0-9A-Fa-f]{6}$")) {
+                errors.add("booth.zones");
+            }
+        }
+        if (maxBooths != null && total != maxBooths) errors.add("booth.zones");
+    }
+
+    private boolean isInvalidOrganizerEventEquipmentRow(Map<String, Object> row) {
+        String name = normalizeText(row.get("equipmentName"));
+        String chargeType = statusText(row.get("chargeType"));
+        String itemType = statusText(row.get("itemType"));
+        String pricingUnit = statusText(row.get("pricingUnit"));
+        String rentalStatus = statusText(row.get("rentalStatus"));
+        BigDecimal rentalFee = toBigDecimal(row.get("rentalFee"));
+        Integer stockQuantity = nullableInteger(row.get("stockQuantity"));
+        Integer limit = nullableInteger(row.get("perStallRentalLimit"));
+        Integer wattage = nullableInteger(row.get("wattageLimit"));
+        if (name == null || name.length() > 100
+                || !Set.of("FREE", "PAID").contains(chargeType)
+                || !Set.of("EQUIPMENT", "POWER").contains(itemType)
+                || !"DAY".equals(pricingUnit)
+                || !"ACTIVE".equals(rentalStatus)
+                || !isNonNegative(rentalFee)
+                || (stockQuantity != null && stockQuantity < 0)
+                || (limit != null && limit <= 0)) {
+            return true;
+        }
+        return "EQUIPMENT".equals(itemType)
+                ? normalizeText(row.get("unit")) == null || wattage != null
+                : normalizeText(row.get("unit")) != null || wattage == null || wattage <= 0;
+    }
+
+    private String validateOrganizerEventDraft(OrganizerEventSaveRequest request) {
+        String eventTitle = normalizeText(request.eventTitle());
+        String summary = normalizeText(request.summary());
+        if (eventTitle != null && eventTitle.length() > 200) {
+            return "Event title must not exceed 200 characters";
+        }
+        if (summary != null && summary.length() > 300) {
+            return "Event summary must not exceed 300 characters";
+        }
+        if (request.categoryIds().stream().anyMatch(id -> id == null || id <= 0)) {
+            return "Event category ids must be positive";
+        }
+
+        OrganizerEventSaveRequest.Schedule schedule = request.schedule();
+        if (schedule.startAt() != null && schedule.endAt() != null
+                && schedule.endAt().isBefore(schedule.startAt())) {
+            return "Event end time must not be before start time";
+        }
+        if (schedule.registrationStartAt() != null && schedule.registrationEndAt() != null
+                && schedule.registrationEndAt().isBefore(schedule.registrationStartAt())) {
+            return "Registration end time must not be before start time";
+        }
+
+        OrganizerEventSaveRequest.Location location = request.location();
+        if (textLength(location.locationName()) > 200 || textLength(location.city()) > 50
+                || textLength(location.district()) > 50 || textLength(location.address()) > 255) {
+            return "Event location exceeds the database length limit";
+        }
+
+        OrganizerEventSaveRequest.Booth booth = request.booth();
+        if ((booth.maxBooths() != null && booth.maxBooths() <= 0)
+                || (booth.baseFee() != null && !isNonNegative(booth.baseFee()))
+                || (booth.depositAmount() != null && !isNonNegative(booth.depositAmount()))
+                || (booth.stallWidth() != null && !isPositive(booth.stallWidth()))
+                || (booth.stallLength() != null && !isPositive(booth.stallLength()))) {
+            return "Booth numbers and fees are invalid";
+        }
+        Set<String> zoneNames = new LinkedHashSet<>();
+        for (OrganizerEventSaveRequest.Zone zone : booth.zones()) {
+            String zoneName = zone == null ? null : normalizeText(zone.zoneName());
+            if (zoneName == null || zoneName.length() > 50 || !zoneNames.add(zoneName.toLowerCase())) {
+                return "Booth zone names must be valid and unique";
+            }
+            if (zone.stallCount() == null || zone.stallCount() <= 0) {
+                return "Booth zone stall count must be greater than zero";
+            }
+            if (zone.colorCode() == null || !zone.colorCode().matches("^#[0-9A-Fa-f]{6}$")) {
+                return "Booth zone color must use #RRGGBB format";
+            }
+        }
+
+        for (OrganizerEventSaveRequest.Item item : request.equipment().items()) {
+            String equipmentError = validateOrganizerEventEquipment(item);
+            if (equipmentError != null) {
+                return equipmentError;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 草稿可以缺少業務資料，但資料庫的 NOT NULL 欄位仍需有安全值。
+     * 前端會提供相同預設；此處是直接呼叫 API 時的最後防線。
+     */
+    private OrganizerEventSaveRequest normalizeOrganizerEventDraft(OrganizerEventSaveRequest request) {
+        OrganizerEventSaveRequest.Schedule sourceSchedule = request.schedule();
+        OrganizerEventSaveRequest.Location sourceLocation = request.location();
+        OrganizerEventSaveRequest.Booth sourceBooth = request.booth();
+        List<OrganizerEventSaveRequest.Zone> zones = sourceBooth == null || sourceBooth.zones() == null
+                ? List.of() : sourceBooth.zones();
+        List<OrganizerEventSaveRequest.Item> items = request.equipment() == null
+                || request.equipment().items() == null ? List.of() : request.equipment().items();
+
+        return new OrganizerEventSaveRequest(
+                request.eventId(), normalizeText(request.eventTitle()), normalizeText(request.summary()),
+                normalizeText(request.description()),
+                request.categoryIds() == null ? List.of() : request.categoryIds(),
+                new OrganizerEventSaveRequest.Schedule(
+                        sourceSchedule == null ? null : sourceSchedule.startAt(),
+                        sourceSchedule == null ? null : sourceSchedule.endAt(),
+                        sourceSchedule == null ? null : sourceSchedule.registrationStartAt(),
+                        sourceSchedule == null ? null : sourceSchedule.registrationEndAt()),
+                new OrganizerEventSaveRequest.Location(
+                        sourceLocation == null ? null : normalizeText(sourceLocation.locationName()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.city()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.district()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.address()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoMetro()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoBus()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoDriving())),
+                new OrganizerEventSaveRequest.Booth(
+                        sourceBooth == null ? null : sourceBooth.maxBooths(),
+                        sourceBooth == null ? null : sourceBooth.stallWidth(),
+                        sourceBooth == null ? null : sourceBooth.stallLength(),
+                        sourceBooth == null ? null : sourceBooth.baseFee(),
+                        sourceBooth == null ? null : sourceBooth.depositAmount(),
+                        zones),
+                new OrganizerEventSaveRequest.Equipment(
+                        request.equipment() == null ? null : request.equipment().providesEquipmentRental(),
+                        request.equipment() == null ? null : request.equipment().providesBasicPower(),
+                        request.equipment() == null ? null : request.equipment().allowsExtraPower(),
+                        items));
+    }
+
+    private int textLength(String value) {
+        return value == null ? 0 : value.trim().length();
+    }
+
+    private String validateOrganizerEventEquipment(OrganizerEventSaveRequest.Item item) {
+        if (item == null || normalizeText(item.name()) == null || item.name().trim().length() > 100) {
+            return "Equipment name is required and must not exceed 100 characters";
+        }
+        if (!Set.of("FREE", "PAID").contains(item.chargeType())
+                || !Set.of("EQUIPMENT", "POWER").contains(item.itemType())
+                || !"DAY".equals(item.pricingUnit())
+                || !Set.of("ACTIVE", "UNACTIVE").contains(item.rentalStatus())
+                || !isNonNegative(item.rentalFee())) {
+            return "Equipment type, pricing, or status is invalid";
+        }
+        if (item.stockQuantity() != null && item.stockQuantity() < 0) {
+            return "Equipment stock quantity must not be negative";
+        }
+        if (item.perStallRentalLimit() != null && item.perStallRentalLimit() <= 0) {
+            return "Per-stall equipment limit must be greater than zero";
+        }
+        if ("EQUIPMENT".equals(item.itemType())) {
+            if (normalizeText(item.unit()) == null || item.wattageLimit() != null) {
+                return "Equipment unit is required and wattage must be empty";
+            }
+        } else if (normalizeText(item.unit()) != null
+                || item.wattageLimit() == null || item.wattageLimit() <= 0) {
+            return "Power item must have a valid wattage and no unit";
+        }
+        return null;
+    }
+
+    private boolean isPositive(BigDecimal value) {
+        return value != null && value.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private boolean isNonNegative(BigDecimal value) {
+        return value != null && value.compareTo(BigDecimal.ZERO) >= 0;
+    }
+
+    private OrganizerEventDetailResponse.Item toOrganizerEventEquipmentItem(Map<String, Object> row) {
+        return new OrganizerEventDetailResponse.Item(
+                longValue(row.get("eventEquipmentId")), normalizeText(row.get("equipmentGroupKey")),
+                statusText(row.get("equipmentName")), toBigDecimal(row.get("rentalFee")),
+                statusText(row.get("pricingUnit")), normalizeText(row.get("unit")),
+                statusText(row.get("chargeType")), statusText(row.get("itemType")),
+                normalizeText(row.get("equipmentDescription")), nullableInteger(row.get("stockQuantity")),
+                nullableInteger(row.get("perStallRentalLimit")), statusText(row.get("rentalStatus")),
+                nullableInteger(row.get("wattageLimit")));
+    }
+
+    private List<String> availableOrganizerEventActions(WorkflowStatus workflowStatus, EventStatus eventStatus) {
+        return switch (workflowStatus) {
+            case DRAFT -> List.of("EDIT", "SUBMIT_REVIEW", "DELETE");
+            case REVISION_REQUIRED -> List.of("EDIT", "RESUBMIT_REVIEW");
+            case READY_TO_PUBLISH -> List.of("PUBLISH");
+            case PUBLISHED -> eventStatus == EventStatus.REGISTRATION_OPEN
+                    ? List.of("REQUEST_UNPUBLISH") : List.of();
+            default -> List.of();
+        };
+    }
+
+    private Integer nullableInteger(Object value) {
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private OrganizerEventSummaryResponse toOrganizerEventSummary(Map<String, Object> event) {
+        WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(event.get("workflowStatus")));
+        int capacity = intValue(event.get("capacity"));
+        int registeredCount = intValue(event.get("registeredCount"));
+        EventStatus eventStatus = resolveOrganizerEventStatus(event, workflowStatus, capacity, registeredCount);
+        return new OrganizerEventSummaryResponse(
+                ((Number) event.get("eventId")).longValue(),
+                statusText(event.get("eventTitle")),
+                normalizeText(event.get("coverImageUrl")),
+                toLocalDateTime(event.get("createdAt")),
+                toLocalDateTime(event.get("eventStartAt")),
+                toLocalDateTime(event.get("eventEndAt")),
+                toLocalDateTime(event.get("registrationStartAt")),
+                toLocalDateTime(event.get("registrationEndAt")),
+                normalizeText(event.get("locationName")),
+                normalizeText(event.get("city")),
+                normalizeText(event.get("district")),
+                normalizeText(event.get("address")),
+                workflowStatus.name(),
+                eventStatus.getStatus(),
+                eventStatus.getDescription(),
+                capacity,
+                registeredCount,
+                intValue(event.get("pendingReviewCount")),
+                intValue(event.get("paidCount")),
+                intValue(event.get("selectedCount")));
+    }
+
+    private EventStatus resolveOrganizerEventStatus(
+            Map<String, Object> event,
+            WorkflowStatus workflowStatus,
+            int capacity,
+            int registeredCount) {
+        return switch (workflowStatus) {
+            case DRAFT -> EventStatus.DRAFT;
+            case PENDING_REVIEW -> EventStatus.PENDING_REVIEW;
+            case REVISION_REQUIRED -> EventStatus.REVISION_REQUIRED;
+            case MAP_BUILDING -> EventStatus.MAP_BUILDING;
+            case READY_TO_PUBLISH -> EventStatus.READY_TO_PUBLISH;
+            case UNPUBLISH_REQUESTED -> EventStatus.UNPUBLISH_REQUESTED;
+            case UNPUBLISHED -> EventStatus.UNPUBLISHED;
+            case CANCELLED -> EventStatus.UNPUBLISHED;
+            case PUBLISHED -> {
+                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
+                LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+                if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+                    yield EventStatus.READY_TO_PUBLISH;
+                }
+                if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
+                    yield registeredCount < capacity ? EventStatus.REGISTRATION_OPEN : EventStatus.FULL;
+                }
+                yield EventStatus.FULL;
+            }
+            case FINAL_REVIEW -> {
+                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime startAt = toLocalDateTime(firstPresent(event.get("eventStartAt"), event.get("startAt")));
+                LocalDateTime endAt = toLocalDateTime(firstPresent(event.get("eventEndAt"), event.get("endAt")));
+                if (endAt != null && now.isAfter(endAt)) yield EventStatus.ENDED;
+                if (startAt != null && !now.isBefore(startAt)) yield EventStatus.ACTIVE;
+                yield EventStatus.PUBLISHED;
+            }
+        };
+    }
+
+    private EventStatus parseEventStatus(String status) {
+        String normalized = normalizeText(status);
+        if (normalized == null) return null;
+        try {
+            return EventStatus.valueOf(normalized.toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private Comparator<OrganizerEventSummaryResponse> organizerEventComparator(String sort) {
+        LocalDateTime now = LocalDateTime.now();
+        boolean upcomingFirst = "UPCOMING_FIRST".equals(sort);
+        return (left, right) -> {
+            int leftGroup = organizerEventSortGroup(left, now, upcomingFirst);
+            int rightGroup = organizerEventSortGroup(right, now, upcomingFirst);
+            int groupComparison = Integer.compare(leftGroup, rightGroup);
+            if (groupComparison != 0) return groupComparison;
+
+            Comparator<OrganizerEventSummaryResponse> withinGroup;
+            boolean draftGroup = WorkflowStatus.DRAFT.name().equals(left.workflowStatus())
+                    && WorkflowStatus.DRAFT.name().equals(right.workflowStatus());
+            boolean endedGroup = left.eventEndAt() != null && left.eventEndAt().isBefore(now)
+                    && right.eventEndAt() != null && right.eventEndAt().isBefore(now);
+            if (draftGroup) {
+                withinGroup = Comparator.comparing(OrganizerEventSummaryResponse::createdAt,
+                        Comparator.nullsLast(Comparator.reverseOrder()));
+            } else if (endedGroup) {
+                withinGroup = Comparator.comparing(OrganizerEventSummaryResponse::eventEndAt,
+                        Comparator.nullsLast(Comparator.reverseOrder()));
+            } else {
+                withinGroup = Comparator.comparing(OrganizerEventSummaryResponse::eventStartAt,
+                        Comparator.nullsLast(Comparator.naturalOrder()));
+            }
+            return withinGroup.thenComparing(
+                    OrganizerEventSummaryResponse::eventId,
+                    Comparator.reverseOrder()).compare(left, right);
+        };
+    }
+
+    private int organizerEventSortGroup(
+            OrganizerEventSummaryResponse event,
+            LocalDateTime now,
+            boolean upcomingFirst) {
+        boolean draft = WorkflowStatus.DRAFT.name().equals(event.workflowStatus());
+        boolean unfinished = event.eventEndAt() == null || !event.eventEndAt().isBefore(now);
+        if (!upcomingFirst && draft) return 0;
+        if (unfinished && !draft) return upcomingFirst ? 0 : 1;
+        if (!unfinished) return upcomingFirst ? 1 : 2;
+        return 2;
+    }
+
+    private long longValue(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
     }
 
     private ApiResponse<OrganizerAccountResponse> loadOrganizerAccount(String authorizationHeader, String successMessage) {
@@ -362,6 +1039,11 @@ public class OrganizerService {
         }
 
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> summary = organizerRepository.findOrganizerApplicationTaskSummary(organizerUserId);
+        OrganizerTaskSummaryResponse taskSummary = new OrganizerTaskSummaryResponse(
+                longValue(summary.get("pendingReviewCount")),
+                longValue(summary.get("pendingRefundConfirmationCount")),
+                longValue(summary.get("pendingStallSelectionCount")));
         LocalDateTime appliedStartAt = registrationStartAt == null ? null : registrationStartAt.atStartOfDay();
         LocalDateTime appliedEndExclusive = registrationEndAt == null ? null : registrationEndAt.plusDays(1).atStartOfDay();
         List<Map<String, Object>> applicationRows = organizerRepository
@@ -376,7 +1058,9 @@ public class OrganizerService {
                 .toList();
         return ApiResponse.success(
                 "Organizer applications retrieved successfully",
-                new OrganizerApplicationSearchResponse(PageResponse.from(applications, page, pageSize)));
+                new OrganizerApplicationSearchResponse(
+                        taskSummary,
+                        PageResponse.from(applications, page, pageSize)));
     }
 
     public ApiResponse<OrganizerStallEventSearchResponse> searchOrganizerStallEvents(
@@ -2557,6 +3241,10 @@ public class OrganizerService {
         }
         String text = statusText(value);
         return "TRUE".equals(text) || "1".equals(text);
+    }
+
+    private Boolean nullableBoolean(Object value) {
+        return value == null ? null : isTrue(value);
     }
 
     private String joinAddress(Object city, Object district, Object address) {
