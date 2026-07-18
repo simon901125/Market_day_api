@@ -1028,7 +1028,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 : messageSource.getMessage("workflow-status." + log.newStatus(), null, Locale.TAIWAN);
         String operator = log.role() == Role.ADMIN ? log.adminName() : log.orgName();
 
-        return new StatusLog(dateTime, status, description, operator);
+        return new StatusLog(dateTime, status, description, log.role(), operator);
     }
 
     /** 依審核狀態、付款狀態、是否取消，轉換為前端顯示的報名狀態文字 */
