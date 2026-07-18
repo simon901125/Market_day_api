@@ -5,6 +5,20 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 ## 更新紀錄
 
+### 2026-07-18
+
+#### yingtung branch
+
+- 新增主辦方活動列表 API：`GET /api/organizer/events/search`，支援活動名稱、工作流程狀態、活動期間重疊、分頁與活動管理排序查詢，並回傳報名、待審核、已付款及已選位等活動概況數量。
+- 新增主辦方活動詳情 API：`GET /api/organizer/events/{eventId}`，回傳活動基本資料、日期、地點、交通方式、活動分類、攤位與分區、設備及用電設定、審核備註與目前可執行動作，供詳情及編輯頁共用。
+- 新增主辦方活動儲存 API：`POST /api/organizer/events`，以相同 Request 格式支援建立及修改活動，並同步儲存多筆活動分類、攤位分區、設備與用電項目；活動圖片改由 `POST /api/images` 個別上傳及替換。
+- 活動草稿允許尚未填完送審必填資料；未填攤位數時不再因 `maxBooths` 型別轉換發生儲存錯誤，無法儲存時補上對應中文 API 訊息。
+- 主辦方活動可設定多個活動分類；攤主品牌仍維持單一品牌分類，並同步調整 Entity、Repository 與 SQL Server 整合測試結構。
+- 新增活動送審／重新送審 API：`POST /api/organizer/events/{eventId}/submit-review`，僅允許 `DRAFT` 與 `REVISION_REQUIRED` 活動送出，成功後更新為 `PENDING_REVIEW`。
+- 送審前完整驗證活動名稱、簡介、介紹、分類、圖片、未來日期、場地、三項交通資訊、攤位分區、費用、設備及用電設定；資料不完整時回傳 `missingFields`，狀態不允許或重複送審時回傳 409。
+- 新增活動送審狀態紀錄，並修正 `submittedAt` 查詢只採用該活動最新一筆成功送審紀錄，避免不同活動或舊送審紀錄互相影響。
+- 補上主辦方活動列表、詳情、儲存、初次送審、重新送審、資料缺漏與狀態紀錄等單元測試及 SQL Server Repository 整合測試。
+
 ### 2026-07-17
 
 #### simon branch
@@ -68,7 +82,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - `JwtAuthenticationFilter` 由逐支維護 `protectedApis` 改為「受保護路徑前綴＋明確公開端點白名單」；`/api/vendor/**`、`/api/organizer/**`、`/api/admin/**`、`/api/auth/**`、`/api/account/**`、`/api/images**` 與 `/api/stalls/**` 預設需要 JWT。
 - 登入、註冊、信箱驗證、密碼重設、公開市集查詢與藍新回呼維持公開；所有 CORS `OPTIONS` 預檢請求亦直接放行。新增前綴保護、公開白名單、管理員角色及 CORS 測試。
 
-最後更新：2026-07-17
+最後更新：2026-07-18
 
 ## 更新紀錄
 
@@ -447,6 +461,10 @@ POST /api/newebpay/return
 | ------ | --------------------------------------------- | ---------------- |
 | GET    | `/api/organizer/profile/load`               | 讀取主辦基本資料 |
 | POST   | `/api/organizer/profile/save`               | 儲存主辦基本資料 |
+| GET    | `/api/organizer/events/search`              | 主辦活動列表查詢 |
+| GET    | `/api/organizer/events/{eventId}`           | 主辦活動詳情     |
+| POST   | `/api/organizer/events`                     | 建立或修改活動   |
+| POST   | `/api/organizer/events/{eventId}/submit-review` | 初次送審或重新送審 |
 | GET    | `/api/organizer/applications/search`        | 報名列表查詢     |
 | GET    | `/api/organizer/applications/{id}`          | 報名詳情         |
 | POST   | `/api/organizer/applications/{id}/approve`  | 審核通過         |
