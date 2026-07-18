@@ -74,23 +74,23 @@ public class MarketEvent {
     }
 
     /** 活動名稱 */
-    @Column(name = "title", length = 200, nullable = false)
+    @Column(name = "title", length = 200)
     private String title;
 
     /** 活動摘要 */
-    @Column(name = "summary", length = 300, nullable = false)
+    @Column(name = "summary", length = 300)
     private String summary;
 
     /** 活動介紹 */
-    @Column(name = "description", columnDefinition = "nvarchar(max)", nullable = false)
+    @Column(name = "description", columnDefinition = "nvarchar(max)")
     private String description;
 
     /** 地點名稱 */
-    @Column(name = "location_name", length = 200, nullable = false)
+    @Column(name = "location_name", length = 200)
     private String locationName;
 
     /** 縣市 */
-    @Column(name = "city", length = 50, nullable = false)
+    @Column(name = "city", length = 50)
     private String city;
 
     /** 地區 */
@@ -98,7 +98,7 @@ public class MarketEvent {
     private String district;
 
     /** 地址 */
-    @Column(name = "address", length = 255, nullable = false)
+    @Column(name = "address", length = 255)
     private String address;
 
     /** 活動注意事項 */
@@ -106,23 +106,23 @@ public class MarketEvent {
     private String notice;
 
     /**活動開始日期時間 */
-    @Column(name = "start_at", nullable = false)
+    @Column(name = "start_at")
     private LocalDateTime startAt;
 
     /** 活動結束日期時間 */
-    @Column(name = "end_at", nullable = false)
+    @Column(name = "end_at")
     private LocalDateTime endAt;
 
     /** 報名開始時間 */
-    @Column(name = "registration_start_at", nullable = false)
+    @Column(name = "registration_start_at")
     private LocalDateTime registrationStartAt;
 
     /** 報名結束時間 */
-    @Column(name = "registration_end_at", nullable = false)
+    @Column(name = "registration_end_at")
     private LocalDateTime registrationEndAt;
 
     /** 攤位總數 */
-    @Column(name = "max_booths", nullable = false)
+    @Column(name = "max_booths")
     private Integer maxBooths;
 
     /** 本活動固定攤位寬度 */
@@ -134,11 +134,11 @@ public class MarketEvent {
     private BigDecimal stallLength;
 
     /** 基本攤位費用 */
-    @Column(name = "base_fee", precision = 10, scale = 2, nullable = false)
+    @Column(name = "base_fee", precision = 10, scale = 2)
     private BigDecimal baseFee;
 
-    @Column(name = "deposit_amount", precision = 10, scale = 2, nullable = false)
-    private BigDecimal depositAmount = BigDecimal.ZERO;
+    @Column(name = "deposit_amount", precision = 10, scale = 2)
+    private BigDecimal depositAmount;
 
     /** 開車交通資訊 */
     @Column(name = "traffic_info_driving", columnDefinition = "nvarchar(max)")
@@ -151,6 +151,15 @@ public class MarketEvent {
     /** 捷運交通資訊 */
     @Column(name = "traffic_info_metro", columnDefinition = "nvarchar(max)")
     private String metro;
+
+    @Column(name = "provides_equipment_rental")
+    private Boolean providesEquipmentRental;
+
+    @Column(name = "provides_basic_power")
+    private Boolean providesBasicPower;
+
+    @Column(name = "allows_extra_power")
+    private Boolean allowsExtraPower;
     
     /** 活動封面url */
     @Column(name = "cover_image_url", length = 500)

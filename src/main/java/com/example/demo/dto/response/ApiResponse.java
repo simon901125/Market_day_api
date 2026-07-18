@@ -172,6 +172,7 @@ public class ApiResponse<T> {
             case "Payment status retrieved successfully" -> "\u4ed8\u6b3e\u72c0\u614b\u53d6\u5f97\u6210\u529f";
             case "NewebPay trade queried successfully" -> "\u85cd\u65b0\u4ea4\u6613\u67e5\u8a62\u6210\u529f";
             case "Image saved successfully" -> "\u5716\u7247\u5df2\u5132\u5b58\u4e26\u7d81\u5b9a\u8cc7\u6599";
+            case "Organizer event submitted for review successfully" -> "\u6d3b\u52d5\u5df2\u9001\u51fa\u5be9\u6838";
             case "Notification marked as read" -> "\u901a\u77e5\u5df2\u6a19\u8a18\u70ba\u5df2\u8b80";
             default -> isLikelyEnglish(message) ? "\u64cd\u4f5c\u6210\u529f" : message;
         };
@@ -303,6 +304,12 @@ public class ApiResponse<T> {
                 "\u7533\u8acb\u65e5\u671f\u4e0d\u5c6c\u65bc\u6b64\u5831\u540d";
             case "Event id is required" -> "\u8acb\u63d0\u4f9b\u6d3b\u52d5 ID";
             case "Event not found" -> "\u627e\u4e0d\u5230\u6d3b\u52d5\u8cc7\u6599";
+            case "Invalid event id" -> "\u6d3b\u52d5 ID \u4e0d\u6b63\u78ba";
+            case "Organizer event not found" -> "\u627e\u4e0d\u5230\u4e3b\u8fa6\u65b9\u6d3b\u52d5\u8cc7\u6599";
+            case "Event cannot be submitted in its current workflow status" ->
+                "\u6d3b\u52d5\u76ee\u524d\u72c0\u614b\u7121\u6cd5\u9001\u51fa\u5be9\u6838";
+            case "Booth numbers and fees are invalid" ->
+                "\u6524\u4f4d\u6578\u91cf\u3001\u5c3a\u5bf8\u6216\u8cbb\u7528\u8a2d\u5b9a\u4e0d\u6b63\u78ba";
             case "Brand id is required" -> "\u8acb\u63d0\u4f9b\u54c1\u724c ID";
             case "Brand not found" -> "\u627e\u4e0d\u5230\u54c1\u724c\u8cc7\u6599";
             case "Stall not found" -> "\u627e\u4e0d\u5230\u6524\u4f4d\u8cc7\u6599";

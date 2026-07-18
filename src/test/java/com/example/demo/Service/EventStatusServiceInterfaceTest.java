@@ -40,6 +40,8 @@ class EventStatusServiceInterfaceTest {
                 .isEqualTo(EventStatus.READY_TO_PUBLISH);
         assertThat(status(WorkflowStatus.PUBLISHED, now.minusHours(1), 5, 10))
                 .isEqualTo(EventStatus.REGISTRATION_OPEN);
+        assertThat(status(WorkflowStatus.PUBLISHED, now.minusHours(1), 10, 10))
+                .isEqualTo(EventStatus.FULL);
         assertThat(status(WorkflowStatus.PUBLISHED, now.minusHours(1), 11, 10))
                 .isEqualTo(EventStatus.FULL);
     }

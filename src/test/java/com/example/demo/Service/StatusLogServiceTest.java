@@ -239,6 +239,21 @@ class StatusLogServiceTest {
     }
 
     @Test
+    void organizerEventSubmitReviewRecordsPendingReviewStatus() {
+        MockHttpServletRequest request = post("/api/organizer/events/21/submit-review");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{}");
+
+        statusLogService.recordForRequest(7L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(21L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("PENDING_REVIEW");
+    }
+
+    @Test
     void adminEventRequestRevisionRecordsRevisionRequiredStatus() {
         MockHttpServletRequest request = post("/api/admin/events/30/request-revision");
         ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "\"缺少營業執照\"");
