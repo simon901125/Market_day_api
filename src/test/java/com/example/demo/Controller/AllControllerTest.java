@@ -75,10 +75,12 @@ class AllControllerTest {
     @Test
     void brandEndpointsDelegateSearchOptionsAndDetail() throws Exception {
         mvc.perform(get("/api/brands/scroll-options")).andExpect(status().isOk());
+        mvc.perform(get("/api/brands/scroll-options").param("categoryName", "Food")).andExpect(status().isOk());
         mvc.perform(get("/api/brands/search").param("keyword", "tea").param("page", "2").param("pageSize", "8"))
                 .andExpect(status().isOk());
         mvc.perform(get("/api/brands/9")).andExpect(status().isOk());
-        verify(brandService).getBrandScrollOptions();
+        verify(brandService).getBrandScrollOptions(null);
+        verify(brandService).getBrandScrollOptions("Food");
         verify(brandService).searchBrands(any(BrandSearchRequest.class));
         verify(brandService).getBrandDetail(9L);
     }

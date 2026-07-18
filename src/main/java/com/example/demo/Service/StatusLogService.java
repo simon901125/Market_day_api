@@ -20,10 +20,12 @@ import com.example.demo.Repository.UserRepository;
 import com.example.demo.dto.log.StatusLogEntry;
 import com.example.demo.dto.request.EmailVerificationRequest;
 import com.example.demo.dto.request.StallSelectionRequest;
+import com.example.demo.dto.request.admin.EventRevisionRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.dto.response.LoginUserResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
+import com.example.demo.dto.response.VendorRefundResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -74,13 +76,13 @@ public class StatusLogService {
                     (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
                             requestLogId, request, "/approve", "MAP_BUILDING")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/request-revision",
-                    (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
-                            requestLogId, request, "/request-revision", "REVISION_REQUIRED")),
+                    this::buildAdminEventRequestRevisionLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/map-complete",
                     (requestLogId, request) -> buildAdminEventWorkflowStatusLogs(
                             requestLogId, request, "/map-complete", "READY_TO_PUBLISH")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/unpublish-confirm",
-                    this::buildAdminEventUnpublishConfirmLogs));
+                    this::buildAdminEventUnpublishConfirmLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/refunds", this::buildVendorRefundLogs));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {
@@ -178,6 +180,31 @@ public class StatusLogService {
                 requestLogId, "EVENT", eventId, "workflow_status", "PENDING_REVIEW")));
     }
 
+    private List<StatusLogEntry> buildAdminEventRequestRevisionLogs(Long requestLogId, HttpServletRequest request) {
+        EventRevisionRequest body = requestBody(request, EventRevisionRequest.class);
+        if (body == null || !Boolean.TRUE.equals(body.isUnpublish())) {
+            return buildAdminEventWorkflowStatusLogs(requestLogId, request, "/request-revision", "REVISION_REQUIRED");
+        }
+
+        Long unpublishRequestId = pathId(request.getRequestURI(), "/api/admin/events/", "/request-revision");
+        List<StatusLogEntry> entries = new ArrayList<>();
+        entries.add(entry(requestLogId, "EventUnpublishRequest", unpublishRequestId, "status", "REJECTED"));
+
+        Map<String, Object> eventInfo = unpublishRequestId == null
+                ? null
+                : statusLogRepository.findEventInfoByUnpublishRequestId(unpublishRequestId);
+        if (eventInfo != null) {
+            entries.add(entry(
+                    requestLogId,
+                    "EVENT",
+                    toLong(eventInfo.get("eventId")),
+                    "workflow_status",
+                    eventInfo.get("workflowStatus")));
+        }
+
+        return validEntries(entries);
+    }
+
     private List<StatusLogEntry> buildAdminEventUnpublishConfirmLogs(Long requestLogId, HttpServletRequest request) {
         Long eventId = pathId(request.getRequestURI(), "/api/admin/events/", "/unpublish-confirm");
         List<StatusLogEntry> entries = new ArrayList<>();
@@ -215,6 +242,20 @@ public class StatusLogService {
                 applicationId,
                 "event_applications.review_status",
                 reviewStatus)));
+    }
+
+    private List<StatusLogEntry> buildVendorRefundLogs(Long requestLogId, HttpServletRequest request) {
+        VendorRefundResponse response = responseData(request, VendorRefundResponse.class);
+        if (response == null) {
+            return List.of();
+        }
+
+        return validEntries(List.of(entry(
+                requestLogId,
+                "REFUND",
+                response.getRefundId(),
+                "refunds.refund_status",
+                response.getRefundStatus())));
     }
 
     private StatusLogEntry entry(Long requestLogId, String targetType, Long targetId, String statusField, Object newStatus) {

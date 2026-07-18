@@ -4,10 +4,10 @@ import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Time;
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,6 +21,10 @@ import org.springframework.stereotype.Repository;
 import com.example.demo.dto.request.MarketSearchRequest;
 import com.example.demo.dto.response.MarketEventCardResponse;
 import com.example.demo.dto.response.MarketEventDetailResponse;
+import com.example.demo.dto.response.MarketEventDetailResponse.OrganizerInfo;
+import com.example.demo.dto.response.MarketEventDetailResponse.SelectedStall;
+import com.example.demo.dto.response.MarketEventDetailResponse.StallBrand;
+import com.example.demo.dto.response.MarketEventDetailResponse.TrafficInfo;
 import com.example.demo.dto.response.CategoryResponse;
 
 @Repository
@@ -43,16 +47,15 @@ public class MarketEventRepository {
                     e.address,
                     CAST(e.start_at AS DATE) AS start_date,
                     CAST(e.end_at AS DATE) AS end_date,
-                    e.cover_image_url,
-                    e.workflow_status AS publish_status
+                    e.cover_image_url
                 FROM dbo.market_events e
                 WHERE e.workflow_status = N'PUBLISHED'
                 """);
 
         Map<String, Object> params = new HashMap<>();
         appendKeywordFilter(sql, params, request);
-        appendCitiesFilter(sql, params, request);
-        appendCategoryIdsFilter(sql, params, request);
+        appendCityFilter(sql, params, request);
+        appendCategoryNamesFilter(sql, params, request);
         appendDateRangeFilter(sql, params, request);
         appendEventTypeFilter(sql, request);
         appendEventStatusesFilter(sql, params, request);
@@ -78,22 +81,29 @@ public class MarketEventRepository {
                     e.city,
                     e.district,
                     e.address,
-                    CONCAT_WS(N' / ', e.traffic_info_metro, e.traffic_info_bus, e.traffic_info_driving) AS traffic_info,
-                    e.notice,
+                    e.traffic_info_metro,
+                    e.traffic_info_bus,
+                    e.traffic_info_driving,
                     CAST(e.start_at AS DATE) AS start_date,
                     CAST(e.end_at AS DATE) AS end_date,
                     CAST(e.start_at AS TIME) AS start_time,
                     CAST(e.end_at AS TIME) AS end_time,
-                    e.registration_start_at,
-                    e.registration_end_at,
-                    e.max_booths,
-                    e.base_fee,
                     e.cover_image_url,
                     e.map_image_url,
-                    e.public_info_at,
-                    e.workflow_status AS review_status,
-                    e.workflow_status AS publish_status
+                    CAST(CASE
+                        WHEN e.brands_public_at IS NOT NULL AND e.brands_public_at <= SYSDATETIME() THEN 1
+                        ELSE 0
+                    END AS BIT) AS brands_public,
+                    op.organizer_name,
+                    up.contact_email,
+                    up.contact_phone,
+                    op.service_days,
+                    op.service_start_time,
+                    op.service_end_time
                 FROM dbo.market_events e
+                LEFT JOIN dbo.user_profiles up
+                    ON up.user_id = e.user_id AND up.profile_type = N'ORGANIZER'
+                LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
                 WHERE e.id = :id
                   AND e.workflow_status = N'PUBLISHED'
                 """;
@@ -105,6 +115,44 @@ public class MarketEventRepository {
                 .map(detail -> withCategories(
                         detail,
                         findCategoriesByEventIds(List.of(detail.id())).getOrDefault(detail.id(), List.of())));
+    }
+
+    public Optional<SelectedStall> findPublicSelectedStall(Long eventId, LocalDate date, String stallNo) {
+        String sql = """
+                SELECT s.stall_no,
+                       vp.id AS vendor_profile_id, vp.brand_name, vp.brand_summary,
+                       vp.facebook_url, vp.instagram_url, vp.website_url,
+                       vp.avatar_image_url, vp.cover_image_url,
+                       c.id AS category_id, c.name AS category_name, c.slug AS category_slug
+                FROM dbo.event_stalls s
+                LEFT JOIN dbo.application_dates ad
+                    ON ad.selected_stall_id = s.id AND ad.apply_date = :date
+                LEFT JOIN dbo.event_applications ea
+                    ON ea.id = ad.application_id
+                   AND ea.event_id = s.event_id
+                   AND ea.is_cancelled = 0
+                   AND ea.review_status = N'APPROVED'
+                LEFT JOIN dbo.vendor_profiles vp ON vp.id = ea.vendor_profile_id
+                LEFT JOIN dbo.categories c ON c.id = vp.category_id
+                WHERE s.event_id = :eventId AND s.stall_no = :stallNo
+                """;
+        Map<String, Object> params = Map.of("eventId", eventId, "date", date, "stallNo", stallNo);
+        return namedParameterJdbcTemplate.query(sql, params, (rs, rowNum) -> {
+            Long vendorProfileId = rs.getObject("vendor_profile_id", Long.class);
+            StallBrand brand = vendorProfileId == null ? null : new StallBrand(
+                    vendorProfileId,
+                    rs.getString("brand_name"),
+                    new CategoryResponse(rs.getLong("category_id"), rs.getString("category_name"),
+                            rs.getString("category_slug")),
+                    rs.getString("brand_summary"),
+                    rs.getString("facebook_url"),
+                    rs.getString("instagram_url"),
+                    rs.getString("website_url"),
+                    rs.getString("avatar_image_url"),
+                    rs.getString("cover_image_url"));
+            return new SelectedStall(
+                    rs.getString("stall_no"), brand);
+        }).stream().findFirst();
     }
 
     private void appendKeywordFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
@@ -126,32 +174,32 @@ public class MarketEventRepository {
         params.put("keyword", "%" + keyword + "%");
     }
 
-    private void appendCitiesFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
-        List<String> cities = normalizeList(request == null ? null : request.cities());
-        if (cities.isEmpty()) {
+    private void appendCityFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
+        String city = normalizeText(request == null ? null : request.city());
+        if (city == null) {
             return;
         }
 
-        sql.append(" AND e.city IN (:cities)");
-        params.put("cities", cities);
+        sql.append(" AND e.city = :city");
+        params.put("city", city);
     }
 
-    private void appendCategoryIdsFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
-        List<Long> categoryIds = request == null || request.categoryIds() == null
-                ? List.of()
-                : request.categoryIds().stream().filter(id -> id != null && id > 0).distinct().toList();
-        if (categoryIds.isEmpty()) {
+    private void appendCategoryNamesFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
+        List<String> categoryNames = normalizeList(request == null ? null : request.categoryNames());
+        if (categoryNames.isEmpty()) {
             return;
         }
         sql.append("""
                  AND EXISTS (
                      SELECT 1
                      FROM dbo.market_event_categories mec
+                     INNER JOIN dbo.categories c ON c.id = mec.category_id
                      WHERE mec.event_id = e.id
-                       AND mec.category_id IN (:categoryIds)
+                       AND c.is_active = 1
+                       AND c.name IN (:categoryNames)
                  )
                 """);
-        params.put("categoryIds", categoryIds);
+        params.put("categoryNames", categoryNames);
     }
 
     private void appendDateRangeFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
@@ -172,44 +220,43 @@ public class MarketEventRepository {
 
     private void appendEventTypeFilter(StringBuilder sql, MarketSearchRequest request) {
         String eventType = normalizeText(request == null ? null : request.eventType());
-        if (eventType == null || "ALL".equalsIgnoreCase(eventType)) {
+        if (eventType == null) {
             return;
         }
 
-        if ("CURRENT".equalsIgnoreCase(eventType)) {
+        if ("目前活動".equals(eventType)) {
             sql.append(" AND CAST(e.end_at AS DATE) >= CAST(GETDATE() AS DATE)");
             return;
         }
 
-        if ("HISTORY".equalsIgnoreCase(eventType)) {
+        if ("歷史活動".equals(eventType)) {
             sql.append(" AND CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)");
         }
     }
 
     private void appendEventStatusesFilter(StringBuilder sql, Map<String, Object> params, MarketSearchRequest request) {
         List<String> statuses = normalizeList(request == null ? null : request.eventStatuses()).stream()
-                .map(String::toUpperCase)
                 .distinct()
                 .toList();
         if (statuses.isEmpty()) {
             return;
         }
 
-        if (statuses.contains("UPCOMING") || statuses.contains("STARTING_SOON")) {
+        if (statuses.contains("籌備中") || statuses.contains("準備開始")) {
             params.put("startingSoonDays", STARTING_SOON_DAYS);
         }
 
         sql.append(" AND (");
         boolean hasCondition = false;
 
-        if (statuses.contains("UPCOMING")) {
+        if (statuses.contains("籌備中")) {
             sql.append("""
                     CAST(e.start_at AS DATE) > DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
                     """);
             hasCondition = true;
         }
 
-        if (statuses.contains("STARTING_SOON")) {
+        if (statuses.contains("準備開始")) {
             if (hasCondition) {
                 sql.append(" OR ");
             }
@@ -222,7 +269,7 @@ public class MarketEventRepository {
             hasCondition = true;
         }
 
-        if (statuses.contains("ONGOING")) {
+        if (statuses.contains("活動進行中")) {
             if (hasCondition) {
                 sql.append(" OR ");
             }
@@ -233,13 +280,6 @@ public class MarketEventRepository {
                     )
                     """);
             hasCondition = true;
-        }
-
-        if (statuses.contains("ENDED")) {
-            if (hasCondition) {
-                sql.append(" OR ");
-            }
-            sql.append("CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)");
         }
 
         sql.append(")");
@@ -258,9 +298,10 @@ public class MarketEventRepository {
                 rs.getString("district"),
                 rs.getString("address"),
                 startDate,
+                toChineseDayOfWeek(startDate),
                 endDate,
+                toChineseDayOfWeek(endDate),
                 rs.getString("cover_image_url"),
-                rs.getString("publish_status"),
                 List.of(),
                 resolveEventStatus(startDate, endDate));
     }
@@ -272,29 +313,34 @@ public class MarketEventRepository {
         return new MarketEventDetailResponse(
                 rs.getLong("id"),
                 rs.getString("title"),
+                rs.getString("cover_image_url"),
+                resolveEventStatus(startDate, endDate),
                 rs.getString("summary"),
-                rs.getString("description"),
-                List.of(),
+                startDate,
+                toChineseDayOfWeek(startDate),
+                endDate,
+                toChineseDayOfWeek(endDate),
+                toLocalTime(rs.getTime("start_time")),
+                toLocalTime(rs.getTime("end_time")),
+                durationDays(startDate, endDate),
                 rs.getString("location_name"),
                 rs.getString("city"),
                 rs.getString("district"),
                 rs.getString("address"),
-                rs.getString("traffic_info"),
-                rs.getString("notice"),
-                startDate,
-                endDate,
-                toLocalTime(rs.getTime("start_time")),
-                toLocalTime(rs.getTime("end_time")),
-                toLocalDateTime(rs.getTimestamp("registration_start_at")),
-                toLocalDateTime(rs.getTimestamp("registration_end_at")),
-                rs.getObject("max_booths", Integer.class),
-                rs.getBigDecimal("base_fee"),
-                rs.getString("cover_image_url"),
+                rs.getString("description"),
+                List.of(),
+                new OrganizerInfo(
+                        rs.getString("organizer_name"),
+                        rs.getString("contact_email"),
+                        rs.getString("contact_phone"),
+                        rs.getString("service_days"),
+                        toLocalTime(rs.getTime("service_start_time")),
+                        toLocalTime(rs.getTime("service_end_time"))),
+                trafficInfos(rs),
+                rs.getBoolean("brands_public"),
                 rs.getString("map_image_url"),
-                toLocalDateTime(rs.getTimestamp("public_info_at")),
-                rs.getString("review_status"),
-                rs.getString("publish_status"),
-                resolveEventStatus(startDate, endDate));
+                null,
+                null);
     }
 
     private static LocalDate toLocalDate(Date date) {
@@ -303,10 +349,6 @@ public class MarketEventRepository {
 
     private static LocalTime toLocalTime(Time time) {
         return time == null ? null : time.toLocalTime();
-    }
-
-    private static LocalDateTime toLocalDateTime(Timestamp timestamp) {
-        return timestamp == null ? null : timestamp.toLocalDateTime();
     }
 
     private Map<Long, List<CategoryResponse>> findCategoriesByEventIds(List<Long> eventIds) {
@@ -331,34 +373,67 @@ public class MarketEventRepository {
     private static MarketEventCardResponse withCategories(
             MarketEventCardResponse card, List<CategoryResponse> categories) {
         return new MarketEventCardResponse(card.id(), card.title(), card.summary(), card.locationName(),
-                card.city(), card.district(), card.address(), card.startDate(), card.endDate(),
-                card.coverImageUrl(), card.publishStatus(), categories, card.eventStatus());
+                card.city(), card.district(), card.address(), card.startDate(), card.startDayOfWeek(),
+                card.endDate(), card.endDayOfWeek(), card.coverImageUrl(), categories, card.eventStatus());
     }
 
     private static MarketEventDetailResponse withCategories(
             MarketEventDetailResponse detail, List<CategoryResponse> categories) {
-        return new MarketEventDetailResponse(detail.id(), detail.title(), detail.summary(), detail.description(),
-                categories, detail.locationName(), detail.city(), detail.district(), detail.address(),
-                detail.trafficInfo(), detail.notice(), detail.startDate(), detail.endDate(), detail.startTime(),
-                detail.endTime(), detail.registrationStartAt(), detail.registrationEndAt(), detail.maxBooths(),
-                detail.baseFee(), detail.coverImageUrl(), detail.mapImageUrl(), detail.publicInfoAt(),
-                detail.reviewStatus(), detail.publishStatus(), detail.eventStatus());
+        return new MarketEventDetailResponse(detail.id(), detail.title(), detail.coverImageUrl(), detail.eventStatus(),
+                detail.summary(), detail.startDate(), detail.startDayOfWeek(), detail.endDate(), detail.endDayOfWeek(),
+                detail.startTime(), detail.endTime(), detail.durationDays(), detail.locationName(), detail.city(),
+                detail.district(), detail.address(), detail.description(), categories, detail.organizer(),
+                detail.trafficInfos(), detail.brandsPublic(), detail.mapImageUrl(),
+                detail.selectedDate(), detail.selectedStall());
+    }
+
+    private static long durationDays(LocalDate startDate, LocalDate endDate) {
+        return startDate == null || endDate == null ? 0 : ChronoUnit.DAYS.between(startDate, endDate) + 1;
+    }
+
+    private static List<TrafficInfo> trafficInfos(ResultSet rs) throws SQLException {
+        List<TrafficInfo> result = new ArrayList<>();
+        addTraffic(result, "捷運", rs.getString("traffic_info_metro"));
+        addTraffic(result, "公車", rs.getString("traffic_info_bus"));
+        addTraffic(result, "開車", rs.getString("traffic_info_driving"));
+        return List.copyOf(result);
+    }
+
+    private static void addTraffic(List<TrafficInfo> result, String method, String details) {
+        if (details != null && !details.isBlank()) {
+            result.add(new TrafficInfo(method, details));
+        }
     }
 
     private static String resolveEventStatus(LocalDate startDate, LocalDate endDate) {
         LocalDate today = LocalDate.now();
 
         if (endDate != null && today.isAfter(endDate)) {
-            return "ENDED";
+            return "已結束";
         }
 
         if (startDate != null && today.isBefore(startDate)) {
             return today.plusDays(STARTING_SOON_DAYS).isBefore(startDate)
-                    ? "UPCOMING"
-                    : "STARTING_SOON";
+                    ? "籌備中"
+                    : "準備開始";
         }
 
-        return "ONGOING";
+        return "活動進行中";
+    }
+
+    private static String toChineseDayOfWeek(LocalDate date) {
+        if (date == null) {
+            return null;
+        }
+        return switch (date.getDayOfWeek()) {
+            case MONDAY -> "(一)";
+            case TUESDAY -> "(二)";
+            case WEDNESDAY -> "(三)";
+            case THURSDAY -> "(四)";
+            case FRIDAY -> "(五)";
+            case SATURDAY -> "(六)";
+            case SUNDAY -> "(日)";
+        };
     }
 
     private static String normalizeText(String value) {

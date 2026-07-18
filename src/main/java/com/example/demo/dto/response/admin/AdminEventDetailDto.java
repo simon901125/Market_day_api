@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.example.demo.dto.response.PageResponse;
+import com.example.demo.dto.response.CategoryResponse;
 import com.example.demo.enums.status.EventStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -19,7 +20,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param locationName 活動地點名稱
  * @param addr 活動地址
  * @param eventStatus 活動前端顯示狀態
- * @param eventType 活動類型
+ * @param categories 活動分類
  * @param description 活動介紹
  * @param registrationStartTime 報名開始時間 yyyy/MM/dd HH:mm
  * @param registrationEndTime 報名結束時間 yyyy/MM/dd HH:mm
@@ -53,7 +54,7 @@ public record AdminEventDetailDto(
     String locationName,
     String addr,
     EventStatus eventStatus,
-    String eventType,
+    List<CategoryResponse> categories,
     String description,
     
     //----------活動時間流程----------

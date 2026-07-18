@@ -121,8 +121,11 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
 
     @Test void paymentReadQueriesCompileAgainstCurrentSchema() {
         assertThat(payment.findPayableApplication("NONE")).isEmpty();
+        assertThat(payment.findRefundableApplication("NONE")).isEmpty();
         assertThat(payment.findPaymentStatusByApplicationNo("NONE")).isEmpty();
         assertThat(payment.findLatestPendingPayment(-1L)).isEmpty();
+        assertThat(payment.findLatestPaidPayment(-1L)).isEmpty();
+        assertThat(payment.findLatestRefundByApplicationId(-1L)).isEmpty();
         assertThat(payment.findPaymentWithApplication("NONE")).isEmpty();
     }
 

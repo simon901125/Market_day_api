@@ -19,20 +19,15 @@ public class BrandRepository {
 
     public List<Map<String, Object>> findBrandCategories() {
         String sql = """
-                SELECT DISTINCT c.id, c.name, c.slug
-                FROM dbo.vendor_profiles vp
-                INNER JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
-                    AND up.profile_type = N'VENDOR'
-                INNER JOIN dbo.users u ON u.id = up.user_id
-                INNER JOIN dbo.categories c ON c.id = vp.category_id
-                WHERE u.status = 'ACTIVE'
-                  AND c.is_active = 1
+                SELECT c.id, c.name, c.slug
+                FROM dbo.categories c
+                WHERE c.is_active = 1
                 ORDER BY c.name ASC, c.id ASC
                 """;
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, Map.of()));
     }
 
-    public List<String> findParticipatedMarketNames() {
+    public List<String> findParticipatedMarketNames(String categoryName) {
         String sql = """
                 SELECT DISTINCT me.title
                 FROM dbo.event_applications ea
@@ -41,13 +36,20 @@ public class BrandRepository {
                     AND up.profile_type = N'VENDOR'
                 INNER JOIN dbo.users u ON u.id = up.user_id
                 INNER JOIN dbo.market_events me ON me.id = ea.event_id
+                INNER JOIN dbo.market_event_categories mec ON mec.event_id = me.id
+                INNER JOIN dbo.categories c ON c.id = mec.category_id
                 WHERE u.status = 'ACTIVE'
                   AND ea.review_status = N'APPROVED'
                   AND ea.is_cancelled = 0
+                  AND me.workflow_status = N'PUBLISHED'
+                  AND c.is_active = 1
+                  AND (:categoryName IS NULL OR c.name = :categoryName)
                 ORDER BY me.title ASC
                 """;
 
-        return namedParameterJdbcTemplate.queryForList(sql, Map.of(), String.class);
+        Map<String, Object> params = new HashMap<>();
+        params.put("categoryName", normalizeText(categoryName));
+        return namedParameterJdbcTemplate.queryForList(sql, params, String.class);
     }
 
     public List<Map<String, Object>> searchBrands(BrandSearchRequest request, int offset, int pageSize) {
@@ -73,7 +75,12 @@ public class BrandRepository {
                           AND ea.is_cancelled = 0
                     ) participation
                     WHERE u.status = 'ACTIVE'
-                      AND (:categoryName IS NULL OR c.name = :categoryName)
+                      AND (:categoryName IS NULL OR EXISTS (
+                            SELECT 1 FROM dbo.categories category_filter
+                            WHERE category_filter.id = vp.category_id
+                              AND category_filter.name = :categoryName
+                              AND category_filter.is_active = 1
+                      ))
                       AND (
                             :keyword IS NULL
                             OR vp.brand_name LIKE N'%' + :keyword + N'%'
