@@ -94,9 +94,7 @@ public class ImageStorageService {
             return ApiResponse.fail("File upload failed");
         }
         if (fileType == null || !purpose.allowedTypes().contains(fileType)) {
-            return ApiResponse.fail(purpose == ImagePurpose.EVENT_MAP
-                    ? "Only JPG, PNG, or PDF files are allowed"
-                    : "Only JPG or PNG files are allowed");
+            return ApiResponse.fail("Only JPG or PNG files are allowed");
         }
 
         String email = jwtService.getEmail(token);
@@ -236,7 +234,7 @@ public class ImageStorageService {
         VENDOR_COVER("vendor-cover", Set.of(StoredFileType.JPEG, StoredFileType.PNG), Set.of("VENDOR"), TargetType.NONE),
         PRODUCT("product", Set.of(StoredFileType.JPEG, StoredFileType.PNG), Set.of("VENDOR"), TargetType.PRODUCT),
         EVENT_COVER("event-cover", Set.of(StoredFileType.JPEG, StoredFileType.PNG), Set.of("ORGANIZER"), TargetType.EVENT),
-        EVENT_MAP("event-map", Set.of(StoredFileType.JPEG, StoredFileType.PNG, StoredFileType.PDF), Set.of("ORGANIZER"), TargetType.EVENT);
+        EVENT_MAP("event-map", Set.of(StoredFileType.JPEG, StoredFileType.PNG), Set.of("ORGANIZER"), TargetType.EVENT);
 
         private final String directory;
         private final Set<StoredFileType> allowedTypes;

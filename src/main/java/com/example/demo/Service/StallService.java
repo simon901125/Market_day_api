@@ -439,8 +439,8 @@ public class StallService {
         }
 
         List<Long> categoryIds = normalizeCategoryIds(body.getCategoryIds());
-        if (categoryIds.isEmpty()) {
-            return ApiResponse.fail("Brand categories are required");
+        if (categoryIds.size() != 1) {
+            return ApiResponse.fail("Exactly one brand category is required");
         }
         if (stallRepository.findActiveCategoriesByIds(categoryIds).size() != categoryIds.size()) {
             return ApiResponse.fail("Brand categories are invalid");
@@ -460,6 +460,7 @@ public class StallService {
                 "city", normalizeText(body.getCity()),
                 "district", normalizeText(body.getDistrict()),
                 "address", normalizeText(body.getAddress()),
+                "categoryId", categoryIds.get(0),
                 "instagramUrl", nullIfBlank(body.getInstagramUrl()),
                 "facebookUrl", nullIfBlank(body.getFacebookUrl()),
                 "websiteUrl", nullIfBlank(body.getWebsiteUrl()),
@@ -488,7 +489,6 @@ public class StallService {
                     return ApiResponse.fail("Vendor profile save failed");
                 }
             }
-            stallRepository.replaceVendorCategories(vendorProfileId, categoryIds);
             int savedProducts = stallRepository.replaceVendorProducts(vendorProfileId, productSnapshots);
             if (savedProducts != productSnapshots.size()) {
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();

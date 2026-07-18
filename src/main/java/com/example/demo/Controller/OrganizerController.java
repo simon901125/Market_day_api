@@ -22,6 +22,7 @@ import com.example.demo.Service.OrganizerNotificationService;
 import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
+import com.example.demo.dto.request.OrganizerEventSaveRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
@@ -59,7 +60,7 @@ public class OrganizerController {
         return organizerService.initOrganizerDashboard(authorizationHeader);
     }
 
-    @Operation(summary = "查詢主辦方活動", description = "回傳主辦方待辦統計與活動列表，支援搜尋、狀態、日期、排序及分頁")
+    @Operation(summary = "查詢主辦方活動", description = "回傳主辦方活動列表，支援搜尋、狀態、日期、排序及分頁；registrationOverview=true 時只回傳適合首頁「活動報名概況」的活動")
     @GetMapping("/api/organizer/events/search")
     public ApiResponse<OrganizerEventSearchResponse> searchOrganizerEvents(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -69,9 +70,11 @@ public class OrganizerController {
             @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(value = "sort", required = false, defaultValue = "DEFAULT") String sort,
             @RequestParam(value = "page", required = false, defaultValue = "1") Integer page,
-            @RequestParam(value = "pageSize", required = false, defaultValue = "6") Integer pageSize) {
+            @RequestParam(value = "pageSize", required = false, defaultValue = "6") Integer pageSize,
+            @RequestParam(value = "registrationOverview", required = false, defaultValue = "false") Boolean registrationOverview) {
         return organizerService.searchOrganizerEvents(
-                authorizationHeader, keyword, status, startDate, endDate, sort, page, pageSize);
+                authorizationHeader, keyword, status, startDate, endDate, sort, page, pageSize,
+                registrationOverview);
     }
 
     @Operation(summary = "取得主辦方活動詳情", description = "取得目前登入主辦方所屬活動的完整查看及編輯資料")
@@ -80,6 +83,14 @@ public class OrganizerController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable Long eventId) {
         return organizerService.getOrganizerEventDetail(authorizationHeader, eventId);
+    }
+
+    @Operation(summary = "儲存活動", description = "建立活動草稿，或修改草稿及待補件活動的完整資料")
+    @PostMapping("/api/organizer/events")
+    public ApiResponse<OrganizerEventDetailResponse> saveOrganizerEvent(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody(required = false) OrganizerEventSaveRequest request) {
+        return organizerService.saveOrganizerEvent(authorizationHeader, request);
     }
 
     @Operation(summary = "取得主辦方通知中心", description = "查詢目前登入主辦方通知；支援全部、未讀、報名相關、付款相關、活動異動及系統公告分類，未讀通知優先。")

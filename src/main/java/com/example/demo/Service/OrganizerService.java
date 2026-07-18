@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
+import com.example.demo.dto.request.OrganizerEventSaveRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.CategoryResponse;
@@ -125,7 +126,8 @@ public class OrganizerService {
             LocalDate endDate,
             String sort,
             Integer page,
-            Integer pageSize) {
+            Integer pageSize,
+            Boolean registrationOverview) {
         Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
@@ -155,12 +157,22 @@ public class OrganizerService {
                 .stream()
                 .map(this::toOrganizerEventSummary)
                 .filter(event -> statusFilter == null || statusFilter.getStatus().equals(event.status()))
+                .filter(event -> !Boolean.TRUE.equals(registrationOverview)
+                        || isRegistrationOverviewEvent(event))
                 .sorted(organizerEventComparator(normalizedSort))
                 .toList();
 
         return ApiResponse.success(
                 "Organizer events retrieved successfully",
                 new OrganizerEventSearchResponse(PageResponse.from(events, page, pageSize)));
+    }
+
+    private boolean isRegistrationOverviewEvent(OrganizerEventSummaryResponse event) {
+        return Set.of(
+                WorkflowStatus.PUBLISHED.name(),
+                WorkflowStatus.FINAL_REVIEW.name(),
+                WorkflowStatus.UNPUBLISH_REQUESTED.name())
+                .contains(event.workflowStatus());
     }
 
     public ApiResponse<OrganizerEventDetailResponse> getOrganizerEventDetail(
@@ -228,6 +240,210 @@ public class OrganizerService {
                 normalizeText(event.get("reviewNote")), availableOrganizerEventActions(workflowStatus, eventStatus),
                 toLocalDateTime(event.get("createdAt")));
         return ApiResponse.success("Organizer event detail retrieved successfully", detail);
+    }
+
+    @Transactional
+    public ApiResponse<OrganizerEventDetailResponse> saveOrganizerEvent(
+            String authorizationHeader, OrganizerEventSaveRequest request) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+
+        if (request == null) {
+            return ApiResponse.fail("Event data is required");
+        }
+        OrganizerEventSaveRequest draft = applyOrganizerEventDraftDefaults(request);
+        String validationError = validateOrganizerEventDraft(draft);
+        if (validationError != null) {
+            return ApiResponse.fail(validationError);
+        }
+
+        Set<Long> categoryIds = new LinkedHashSet<>(draft.categoryIds());
+        if (!categoryIds.isEmpty()
+                && organizerRepository.countActiveCategories(categoryIds) != categoryIds.size()) {
+            return ApiResponse.fail("Event categories are invalid or inactive");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Long eventId = draft.eventId();
+        if (eventId == null) {
+            eventId = organizerRepository.createOrganizerEvent(organizerUserId, draft);
+        } else {
+            if (eventId <= 0) {
+                return ApiResponse.fail("Invalid event id");
+            }
+            Map<String, Object> existing = organizerRepository
+                    .findOrganizerEventDetail(organizerUserId, eventId).orElse(null);
+            if (existing == null) {
+                return ApiResponse.fail(404, "Organizer event not found");
+            }
+            WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(existing.get("workflowStatus")));
+            if (workflowStatus != WorkflowStatus.DRAFT && workflowStatus != WorkflowStatus.REVISION_REQUIRED) {
+                return ApiResponse.fail(409, "Event cannot be edited in its current workflow status");
+            }
+            if (organizerRepository.updateOrganizerEvent(organizerUserId, draft) != 1) {
+                return ApiResponse.fail(409, "Event cannot be edited in its current workflow status");
+            }
+        }
+
+        organizerRepository.replaceEventCategories(eventId, List.copyOf(categoryIds));
+        organizerRepository.replaceEventZones(eventId, draft.booth().zones());
+        List<OrganizerEventSaveRequest.Item> equipmentItems = draft.equipment().items();
+        organizerRepository.replaceEventEquipment(eventId, equipmentItems);
+
+        ApiResponse<OrganizerEventDetailResponse> detail = getOrganizerEventDetail(authorizationHeader, eventId);
+        return new ApiResponse<>(detail.getStatusCode(), "活動儲存成功", detail.getData());
+    }
+
+    private String validateOrganizerEventDraft(OrganizerEventSaveRequest request) {
+        String eventTitle = normalizeText(request.eventTitle());
+        String summary = normalizeText(request.summary());
+        if (eventTitle != null && eventTitle.length() > 200) {
+            return "Event title must not exceed 200 characters";
+        }
+        if (summary != null && summary.length() > 300) {
+            return "Event summary must not exceed 300 characters";
+        }
+        if (request.categoryIds().stream().anyMatch(id -> id == null || id <= 0)) {
+            return "Event category ids must be positive";
+        }
+
+        OrganizerEventSaveRequest.Schedule schedule = request.schedule();
+        if (schedule == null || schedule.startAt() == null || schedule.endAt() == null
+                || schedule.registrationStartAt() == null || schedule.registrationEndAt() == null) {
+            return "Event and registration schedule is required";
+        }
+        if (schedule.endAt().isBefore(schedule.startAt())) {
+            return "Event end time must not be before start time";
+        }
+        if (schedule.registrationEndAt().isBefore(schedule.registrationStartAt())) {
+            return "Registration end time must not be before start time";
+        }
+
+        OrganizerEventSaveRequest.Location location = request.location();
+        if (location.locationName().trim().length() > 200 || location.city().trim().length() > 50
+                || (location.district() != null && location.district().trim().length() > 50)
+                || location.address().trim().length() > 255) {
+            return "Event location exceeds the database length limit";
+        }
+
+        OrganizerEventSaveRequest.Booth booth = request.booth();
+        if (booth.maxBooths() <= 0 || !isNonNegative(booth.baseFee())
+                || !isNonNegative(booth.depositAmount())
+                || (booth.stallWidth() != null && !isPositive(booth.stallWidth()))
+                || (booth.stallLength() != null && !isPositive(booth.stallLength()))) {
+            return "Booth numbers and fees are invalid";
+        }
+        Set<String> zoneNames = new LinkedHashSet<>();
+        for (OrganizerEventSaveRequest.Zone zone : booth.zones()) {
+            String zoneName = zone == null ? null : normalizeText(zone.zoneName());
+            if (zoneName == null || zoneName.length() > 50 || !zoneNames.add(zoneName.toLowerCase())) {
+                return "Booth zone names must be valid and unique";
+            }
+            if (zone.stallCount() == null || zone.stallCount() <= 0) {
+                return "Booth zone stall count must be greater than zero";
+            }
+            if (zone.colorCode() == null || !zone.colorCode().matches("^#[0-9A-Fa-f]{6}$")) {
+                return "Booth zone color must use #RRGGBB format";
+            }
+        }
+
+        for (OrganizerEventSaveRequest.Item item : request.equipment().items()) {
+            String equipmentError = validateOrganizerEventEquipment(item);
+            if (equipmentError != null) {
+                return equipmentError;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 草稿可以缺少業務資料，但資料庫的 NOT NULL 欄位仍需有安全值。
+     * 前端會提供相同預設；此處是直接呼叫 API 時的最後防線。
+     */
+    private OrganizerEventSaveRequest applyOrganizerEventDraftDefaults(OrganizerEventSaveRequest request) {
+        LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+        LocalDateTime defaultStartAt = now.plusDays(30).withHour(10).withMinute(0);
+        OrganizerEventSaveRequest.Schedule sourceSchedule = request.schedule();
+        LocalDateTime startAt = sourceSchedule == null || sourceSchedule.startAt() == null
+                ? defaultStartAt : sourceSchedule.startAt();
+        LocalDateTime endAt = sourceSchedule == null || sourceSchedule.endAt() == null
+                ? startAt.plusHours(8) : sourceSchedule.endAt();
+        LocalDateTime registrationStartAt = sourceSchedule == null || sourceSchedule.registrationStartAt() == null
+                ? now : sourceSchedule.registrationStartAt();
+        LocalDateTime registrationEndAt = sourceSchedule == null || sourceSchedule.registrationEndAt() == null
+                ? startAt.minusDays(1).withHour(23).withMinute(59) : sourceSchedule.registrationEndAt();
+
+        OrganizerEventSaveRequest.Location sourceLocation = request.location();
+        OrganizerEventSaveRequest.Booth sourceBooth = request.booth();
+        List<OrganizerEventSaveRequest.Zone> zones = sourceBooth == null || sourceBooth.zones() == null
+                ? List.of() : sourceBooth.zones();
+        List<OrganizerEventSaveRequest.Item> items = request.equipment() == null
+                || request.equipment().items() == null ? List.of() : request.equipment().items();
+
+        return new OrganizerEventSaveRequest(
+                request.eventId(), defaultText(request.eventTitle()), defaultText(request.summary()),
+                defaultText(request.description()),
+                request.categoryIds() == null ? List.of() : request.categoryIds(),
+                new OrganizerEventSaveRequest.Schedule(startAt, endAt, registrationStartAt, registrationEndAt),
+                new OrganizerEventSaveRequest.Location(
+                        sourceLocation == null ? "" : defaultText(sourceLocation.locationName()),
+                        sourceLocation == null ? "" : defaultText(sourceLocation.city()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.district()),
+                        sourceLocation == null ? "" : defaultText(sourceLocation.address()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoMetro()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoBus()),
+                        sourceLocation == null ? null : normalizeText(sourceLocation.trafficInfoDriving())),
+                new OrganizerEventSaveRequest.Booth(
+                        sourceBooth == null || sourceBooth.maxBooths() == null ? 1 : sourceBooth.maxBooths(),
+                        sourceBooth == null ? null : sourceBooth.stallWidth(),
+                        sourceBooth == null ? null : sourceBooth.stallLength(),
+                        sourceBooth == null || sourceBooth.baseFee() == null ? BigDecimal.ZERO : sourceBooth.baseFee(),
+                        sourceBooth == null || sourceBooth.depositAmount() == null
+                                ? BigDecimal.ZERO : sourceBooth.depositAmount(),
+                        zones),
+                new OrganizerEventSaveRequest.Equipment(items));
+    }
+
+    private String defaultText(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String validateOrganizerEventEquipment(OrganizerEventSaveRequest.Item item) {
+        if (item == null || normalizeText(item.name()) == null || item.name().trim().length() > 100) {
+            return "Equipment name is required and must not exceed 100 characters";
+        }
+        if (!Set.of("FREE", "PAID").contains(item.chargeType())
+                || !Set.of("EQUIPMENT", "POWER").contains(item.itemType())
+                || !"DAY".equals(item.pricingUnit())
+                || !Set.of("ACTIVE", "UNACTIVE").contains(item.rentalStatus())
+                || !isNonNegative(item.rentalFee())) {
+            return "Equipment type, pricing, or status is invalid";
+        }
+        if (item.stockQuantity() != null && item.stockQuantity() < 0) {
+            return "Equipment stock quantity must not be negative";
+        }
+        if (item.perStallRentalLimit() != null && item.perStallRentalLimit() <= 0) {
+            return "Per-stall equipment limit must be greater than zero";
+        }
+        if ("EQUIPMENT".equals(item.itemType())) {
+            if (normalizeText(item.unit()) == null || item.wattageLimit() != null) {
+                return "Equipment unit is required and wattage must be empty";
+            }
+        } else if (normalizeText(item.unit()) != null
+                || item.wattageLimit() == null || item.wattageLimit() <= 0) {
+            return "Power item must have a valid wattage and no unit";
+        }
+        return null;
+    }
+
+    private boolean isPositive(BigDecimal value) {
+        return value != null && value.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private boolean isNonNegative(BigDecimal value) {
+        return value != null && value.compareTo(BigDecimal.ZERO) >= 0;
     }
 
     private OrganizerEventDetailResponse.Item toOrganizerEventEquipmentItem(Map<String, Object> row) {

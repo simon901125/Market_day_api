@@ -1,20 +1,181 @@
 package com.example.demo.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+
+import com.example.demo.dto.request.OrganizerEventSaveRequest;
 
 @Repository
 public class OrganizerRepository {
 
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+
+    public long createOrganizerEvent(Long organizerUserId, OrganizerEventSaveRequest request) {
+        String sql = """
+                INSERT INTO dbo.market_events (
+                    user_id, title, summary, description, location_name, city, district, address,
+                    start_at, end_at, registration_start_at, registration_end_at,
+                    max_booths, stall_width, stall_length, base_fee, deposit_amount,
+                    traffic_info_driving, traffic_info_bus, traffic_info_metro, workflow_status
+                ) VALUES (
+                    :organizerUserId, :eventTitle, :summary, :description, :locationName, :city, :district, :address,
+                    :startAt, :endAt, :registrationStartAt, :registrationEndAt,
+                    :maxBooths, :stallWidth, :stallLength, :baseFee, :depositAmount,
+                    :driving, :bus, :metro, N'DRAFT'
+                )
+                """;
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        namedParameterJdbcTemplate.update(sql, eventParameters(organizerUserId, request), keyHolder, new String[] {"id"});
+        Number key = keyHolder.getKey();
+        if (key == null) {
+            throw new IllegalStateException("Event id was not generated");
+        }
+        return key.longValue();
+    }
+
+    public int updateOrganizerEvent(Long organizerUserId, OrganizerEventSaveRequest request) {
+        String sql = """
+                UPDATE dbo.market_events
+                SET title = :eventTitle,
+                    summary = :summary,
+                    description = :description,
+                    location_name = :locationName,
+                    city = :city,
+                    district = :district,
+                    address = :address,
+                    start_at = :startAt,
+                    end_at = :endAt,
+                    registration_start_at = :registrationStartAt,
+                    registration_end_at = :registrationEndAt,
+                    max_booths = :maxBooths,
+                    stall_width = :stallWidth,
+                    stall_length = :stallLength,
+                    base_fee = :baseFee,
+                    deposit_amount = :depositAmount,
+                    traffic_info_driving = :driving,
+                    traffic_info_bus = :bus,
+                    traffic_info_metro = :metro
+                WHERE id = :eventId
+                  AND user_id = :organizerUserId
+                  AND workflow_status IN (N'DRAFT', N'REVISION_REQUIRED')
+                """;
+        MapSqlParameterSource parameters = eventParameters(organizerUserId, request)
+                .addValue("eventId", request.eventId());
+        return namedParameterJdbcTemplate.update(sql, parameters);
+    }
+
+    public int countActiveCategories(Set<Long> categoryIds) {
+        return namedParameterJdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM dbo.categories
+                WHERE id IN (:categoryIds) AND is_active = 1
+                """, Map.of("categoryIds", categoryIds), Integer.class);
+    }
+
+    public void replaceEventCategories(Long eventId, List<Long> categoryIds) {
+        namedParameterJdbcTemplate.update(
+                "DELETE FROM dbo.market_event_categories WHERE event_id = :eventId",
+                Map.of("eventId", eventId));
+        for (Long categoryId : categoryIds) {
+            namedParameterJdbcTemplate.update("""
+                    INSERT INTO dbo.market_event_categories (event_id, category_id)
+                    VALUES (:eventId, :categoryId)
+                    """, Map.of("eventId", eventId, "categoryId", categoryId));
+        }
+    }
+
+    public void replaceEventZones(Long eventId, List<OrganizerEventSaveRequest.Zone> zones) {
+        namedParameterJdbcTemplate.update(
+                "DELETE FROM dbo.event_stall_zones WHERE event_id = :eventId",
+                Map.of("eventId", eventId));
+        for (OrganizerEventSaveRequest.Zone zone : zones) {
+            namedParameterJdbcTemplate.update("""
+                    INSERT INTO dbo.event_stall_zones (event_id, zone_name, zone_color, stall_count)
+                    VALUES (:eventId, :zoneName, :colorCode, :stallCount)
+                    """, new MapSqlParameterSource()
+                    .addValue("eventId", eventId)
+                    .addValue("zoneName", zone.zoneName().trim())
+                    .addValue("colorCode", zone.colorCode().trim().toUpperCase())
+                    .addValue("stallCount", zone.stallCount()));
+        }
+    }
+
+    public void replaceEventEquipment(Long eventId, List<OrganizerEventSaveRequest.Item> items) {
+        namedParameterJdbcTemplate.update(
+                "DELETE FROM dbo.event_equipments WHERE event_id = :eventId",
+                Map.of("eventId", eventId));
+        for (OrganizerEventSaveRequest.Item item : items) {
+            namedParameterJdbcTemplate.update("""
+                    INSERT INTO dbo.event_equipments (
+                        event_id, equipment_group_key, name, rental_fee, pricing_unit, unit,
+                        charge_type, item_type, description, stock_quantity,
+                        per_stall_rental_limit, rental_status, wattage_limit
+                    ) VALUES (
+                        :eventId, :equipmentGroupKey, :name, :rentalFee, :pricingUnit, :unit,
+                        :chargeType, :itemType, :description, :stockQuantity,
+                        :perStallRentalLimit, :rentalStatus, :wattageLimit
+                    )
+                    """, new MapSqlParameterSource()
+                    .addValue("eventId", eventId)
+                    .addValue("equipmentGroupKey", normalizeNullable(item.equipmentGroupKey()))
+                    .addValue("name", item.name().trim())
+                    .addValue("rentalFee", item.rentalFee())
+                    .addValue("pricingUnit", item.pricingUnit())
+                    .addValue("unit", normalizeNullable(item.unit()))
+                    .addValue("chargeType", item.chargeType())
+                    .addValue("itemType", item.itemType())
+                    .addValue("description", normalizeNullable(item.description()))
+                    .addValue("stockQuantity", item.stockQuantity())
+                    .addValue("perStallRentalLimit", item.perStallRentalLimit())
+                    .addValue("rentalStatus", item.rentalStatus())
+                    .addValue("wattageLimit", item.wattageLimit()));
+        }
+    }
+
+    private MapSqlParameterSource eventParameters(Long organizerUserId, OrganizerEventSaveRequest request) {
+        OrganizerEventSaveRequest.Location location = request.location();
+        OrganizerEventSaveRequest.Schedule schedule = request.schedule();
+        OrganizerEventSaveRequest.Booth booth = request.booth();
+        BigDecimal depositAmount = booth.depositAmount() == null ? BigDecimal.ZERO : booth.depositAmount();
+        return new MapSqlParameterSource()
+                .addValue("organizerUserId", organizerUserId)
+                .addValue("eventTitle", request.eventTitle().trim())
+                .addValue("summary", request.summary().trim())
+                .addValue("description", request.description().trim())
+                .addValue("locationName", location.locationName().trim())
+                .addValue("city", location.city().trim())
+                .addValue("district", normalizeNullable(location.district()))
+                .addValue("address", location.address().trim())
+                .addValue("startAt", schedule.startAt())
+                .addValue("endAt", schedule.endAt())
+                .addValue("registrationStartAt", schedule.registrationStartAt())
+                .addValue("registrationEndAt", schedule.registrationEndAt())
+                .addValue("maxBooths", booth.maxBooths())
+                .addValue("stallWidth", booth.stallWidth())
+                .addValue("stallLength", booth.stallLength())
+                .addValue("baseFee", booth.baseFee())
+                .addValue("depositAmount", depositAmount)
+                .addValue("driving", normalizeNullable(location.trafficInfoDriving()))
+                .addValue("bus", normalizeNullable(location.trafficInfoBus()))
+                .addValue("metro", normalizeNullable(location.trafficInfoMetro()));
+    }
+
+    private String normalizeNullable(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
 
     public Map<String, Object> findOrganizerApplicationTaskSummary(Long organizerUserId) {
         String sql = """
@@ -178,14 +339,14 @@ public class OrganizerRepository {
         }
         String sql = """
                 SELECT
-                    vpc.vendor_profile_id AS vendorProfileId,
+                    vp.id AS vendorProfileId,
                     c.id,
                     c.name,
                     c.slug
-                FROM dbo.vendor_profile_categories vpc
-                INNER JOIN dbo.categories c ON c.id = vpc.category_id
-                WHERE vpc.vendor_profile_id IN (:vendorProfileIds)
-                ORDER BY vpc.vendor_profile_id, c.id
+                FROM dbo.vendor_profiles vp
+                INNER JOIN dbo.categories c ON c.id = vp.category_id
+                WHERE vp.id IN (:vendorProfileIds)
+                ORDER BY vp.id, c.id
                 """;
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
                 sql, Map.of("vendorProfileIds", vendorProfileIds)));

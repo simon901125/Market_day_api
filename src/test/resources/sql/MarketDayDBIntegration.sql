@@ -126,6 +126,7 @@ CREATE TABLE dbo.vendor_profiles
 (
     id BIGINT IDENTITY(1,1) NOT NULL,
     user_profile_id BIGINT NOT NULL,
+    category_id BIGINT NOT NULL,
     brand_name NVARCHAR(150) NULL,
     avatar_image_url NVARCHAR(500) NULL,
     cover_image_url NVARCHAR(500) NULL,
@@ -136,22 +137,12 @@ CREATE TABLE dbo.vendor_profiles
     brand_description NVARCHAR(MAX) NULL,
     CONSTRAINT PK_vendor_profiles PRIMARY KEY (id),
     CONSTRAINT UQ_vendor_profiles_user_profile UNIQUE (user_profile_id),
-    CONSTRAINT FK_vendor_profiles_user_profiles FOREIGN KEY (user_profile_id) REFERENCES dbo.user_profiles(id)
+    CONSTRAINT FK_vendor_profiles_user_profiles FOREIGN KEY (user_profile_id) REFERENCES dbo.user_profiles(id),
+    CONSTRAINT FK_vendor_profiles_categories FOREIGN KEY (category_id) REFERENCES dbo.categories(id)
 );
 GO
 
-CREATE TABLE dbo.vendor_profile_categories
-(
-    vendor_profile_id BIGINT NOT NULL,
-    category_id BIGINT NOT NULL,
-    CONSTRAINT PK_vendor_profile_categories PRIMARY KEY (vendor_profile_id, category_id),
-    CONSTRAINT FK_vendor_profile_categories_vendor_profiles FOREIGN KEY (vendor_profile_id) REFERENCES dbo.vendor_profiles(id) ON DELETE CASCADE,
-    CONSTRAINT FK_vendor_profile_categories_categories FOREIGN KEY (category_id) REFERENCES dbo.categories(id)
-);
-GO
-
-CREATE INDEX IX_vendor_profile_categories_category
-ON dbo.vendor_profile_categories(category_id, vendor_profile_id);
+CREATE INDEX IX_vendor_profiles_category ON dbo.vendor_profiles(category_id, id);
 GO
 
 CREATE TABLE dbo.organizer_profiles
@@ -813,6 +804,7 @@ EXEC dbo.usp_add_column_description N'user_profiles', N'address', N'詳細地址
 
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'id', N'攤主品牌資料 ID';
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'user_profile_id', N'共用個人資料 ID';
+EXEC dbo.usp_add_column_description N'vendor_profiles', N'category_id', N'品牌單一分類 ID';
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'brand_name', N'品牌名稱';
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'avatar_image_url', N'攤主頭像圖片路徑';
 EXEC dbo.usp_add_column_description N'vendor_profiles', N'cover_image_url', N'攤主封面圖片路徑';

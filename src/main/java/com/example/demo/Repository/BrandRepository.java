@@ -24,8 +24,7 @@ public class BrandRepository {
                 INNER JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
                     AND up.profile_type = N'VENDOR'
                 INNER JOIN dbo.users u ON u.id = up.user_id
-                INNER JOIN dbo.vendor_profile_categories vpc ON vpc.vendor_profile_id = vp.id
-                INNER JOIN dbo.categories c ON c.id = vpc.category_id
+                INNER JOIN dbo.categories c ON c.id = vp.category_id
                 WHERE u.status = 'ACTIVE'
                   AND c.is_active = 1
                 ORDER BY c.name ASC, c.id ASC
@@ -65,6 +64,7 @@ public class BrandRepository {
                     INNER JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
                         AND up.profile_type = N'VENDOR'
                     INNER JOIN dbo.users u ON u.id = up.user_id
+                    INNER JOIN dbo.categories c ON c.id = vp.category_id
                     OUTER APPLY (
                         SELECT COUNT(DISTINCT ea.event_id) AS participatedMarketCount
                         FROM dbo.event_applications ea
@@ -73,15 +73,7 @@ public class BrandRepository {
                           AND ea.is_cancelled = 0
                     ) participation
                     WHERE u.status = 'ACTIVE'
-                      AND (:categoryName IS NULL OR EXISTS (
-                            SELECT 1
-                            FROM dbo.vendor_profile_categories vpc_filter
-                            INNER JOIN dbo.categories category_filter
-                                ON category_filter.id = vpc_filter.category_id
-                            WHERE vpc_filter.vendor_profile_id = vp.id
-                              AND category_filter.name = :categoryName
-                              AND category_filter.is_active = 1
-                      ))
+                      AND (:categoryName IS NULL OR c.name = :categoryName)
                       AND (
                             :keyword IS NULL
                             OR vp.brand_name LIKE N'%' + :keyword + N'%'
@@ -157,14 +149,14 @@ public class BrandRepository {
         }
         String sql = """
                 SELECT
-                    vpc.vendor_profile_id AS brandId,
+                    vp.id AS brandId,
                     c.id,
                     c.name,
                     c.slug
-                FROM dbo.vendor_profile_categories vpc
-                INNER JOIN dbo.categories c ON c.id = vpc.category_id
-                WHERE vpc.vendor_profile_id IN (:brandIds)
-                ORDER BY vpc.vendor_profile_id, c.id
+                FROM dbo.vendor_profiles vp
+                INNER JOIN dbo.categories c ON c.id = vp.category_id
+                WHERE vp.id IN (:brandIds)
+                ORDER BY vp.id, c.id
                 """;
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
                 sql, Map.of("brandIds", brandIds)));

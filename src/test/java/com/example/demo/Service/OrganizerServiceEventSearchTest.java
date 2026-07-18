@@ -41,7 +41,7 @@ class OrganizerServiceEventSearchTest {
                 .thenReturn(List.of(eventRow(1L, 100, 100, 96, 88)));
 
         var response = organizerService.searchOrganizerEvents(
-                AUTH, null, null, null, null, "UPCOMING_FIRST", 1, 3);
+                AUTH, null, null, null, null, "UPCOMING_FIRST", 1, 3, false);
 
         assertThat(response.isSuccessStatus()).isTrue();
         assertThat(response.getData().getEvents().getItems()).hasSize(1);
@@ -76,10 +76,35 @@ class OrganizerServiceEventSearchTest {
     @Test
     void rejectsNonEnumStatusAndInvalidDateRange() {
         assertThat(organizerService.searchOrganizerEvents(
-                AUTH, null, "報名中", null, null, "DEFAULT", 1, 6).isSuccessStatus()).isFalse();
+                AUTH, null, "報名中", null, null, "DEFAULT", 1, 6, false).isSuccessStatus()).isFalse();
         assertThat(organizerService.searchOrganizerEvents(
                 AUTH, null, null, java.time.LocalDate.of(2026, 8, 2),
-                java.time.LocalDate.of(2026, 8, 1), "DEFAULT", 1, 6).isSuccessStatus()).isFalse();
+                java.time.LocalDate.of(2026, 8, 1), "DEFAULT", 1, 6, false).isSuccessStatus()).isFalse();
+    }
+
+    @Test
+    void registrationOverviewExcludesActivitiesThatCannotHaveRegistrations() {
+        Map<String, Object> draft = eventRow(1L, 1, 0, 0, 0);
+        draft.put("workflowStatus", "DRAFT");
+        Map<String, Object> pendingReview = eventRow(2L, 20, 0, 0, 0);
+        pendingReview.put("workflowStatus", "PENDING_REVIEW");
+        Map<String, Object> revisionRequired = eventRow(3L, 20, 0, 0, 0);
+        revisionRequired.put("workflowStatus", "REVISION_REQUIRED");
+        Map<String, Object> mapBuilding = eventRow(4L, 20, 0, 0, 0);
+        mapBuilding.put("workflowStatus", "MAP_BUILDING");
+        Map<String, Object> readyToPublish = eventRow(5L, 20, 0, 0, 0);
+        readyToPublish.put("workflowStatus", "READY_TO_PUBLISH");
+        Map<String, Object> published = eventRow(6L, 20, 8, 6, 4);
+        when(organizerRepository.findOrganizerEvents(7L, null, null, null))
+                .thenReturn(List.of(draft, pendingReview, revisionRequired, mapBuilding,
+                        readyToPublish, published));
+
+        var response = organizerService.searchOrganizerEvents(
+                AUTH, null, null, null, null, "UPCOMING_FIRST", 1, 3, true);
+
+        assertThat(response.getData().getEvents().getItems())
+                .extracting(event -> event.eventId())
+                .containsExactly(6L);
     }
 
     private Map<String, Object> eventRow(

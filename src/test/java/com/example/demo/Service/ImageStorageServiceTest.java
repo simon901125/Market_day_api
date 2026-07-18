@@ -164,14 +164,8 @@ class ImageStorageServiceTest {
     }
 
     @Test
-    void organizerCanStoreEventMapPdf() {
+    void organizerEventMapRejectsPdf() {
         when(jwtService.getRole("valid-token")).thenReturn("ORGANIZER");
-        when(jwtService.getEmail("valid-token")).thenReturn("organizer1@example.test");
-        when(imageStorageRepository.updateEventImage(
-                eq("organizer1@example.test"),
-                eq(10L),
-                eq("map_image_url"),
-                anyString())).thenReturn(1);
         MockMultipartFile pdf = new MockMultipartFile(
                 "file",
                 "map.pdf",
@@ -185,8 +179,8 @@ class ImageStorageServiceTest {
                 10L,
                 pdf);
 
-        assertThat(response.isSuccessStatus()).isTrue();
-        assertThat(response.getData().imageUrl()).endsWith(".pdf");
+        assertThat(response.isSuccessStatus()).isFalse();
+        assertThat(response.getData()).isNull();
     }
 
     @Test
