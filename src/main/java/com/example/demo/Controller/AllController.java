@@ -3,6 +3,7 @@ package com.example.demo.Controller;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
+import java.util.Arrays;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,14 +17,19 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.example.demo.Service.BrandService;
 import com.example.demo.Service.ImageStorageService;
+import com.example.demo.Service.MarketEventService;
 import com.example.demo.Service.StallService;
 import com.example.demo.Service.TaiwanAddressService;
 import com.example.demo.dto.request.BrandSearchRequest;
+import com.example.demo.dto.request.MarketSearchRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.BrandDetailResponse;
 import com.example.demo.dto.response.BrandSearchResponse;
 import com.example.demo.dto.response.EventStallStatusResponse;
 import com.example.demo.dto.response.MapBackedResponse;
+import com.example.demo.dto.response.MarketEventCardResponse;
+import com.example.demo.dto.response.MarketEventDetailResponse;
+import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.StoredImageResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,7 +37,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
-@Tag(name = "共用 API", description = "提供公開查詢與登入後共用功能")
+@Tag(name = "共用 API", description = "提供公開查詢與登入前共用功能")
 public class AllController {
 
     @Autowired
@@ -45,6 +51,53 @@ public class AllController {
 
     @Autowired
     private TaiwanAddressService taiwanAddressService;
+
+    @Autowired
+    private MarketEventService marketEventService;
+
+    @Operation(summary = "取得目前或歷史市集活動列表", description = "依活動範圍、關鍵字、日期、城市、單一活動狀態與分類名稱查詢公開活動。")
+    @PostMapping("/api/markets/search")
+    public ApiResponse<PageResponse<MarketEventCardResponse>> searchMarkets(
+            @RequestParam(value = "eventType", defaultValue = "目前活動") String eventType,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "startDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(value = "city", required = false) String city,
+            @RequestParam(value = "eventStatus", required = false) String eventStatus,
+            @RequestParam(value = "categoryNames", required = false) String categoryNames,
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+        MarketSearchRequest request = new MarketSearchRequest(
+                keyword, city, singleValue(eventStatus), startDate, endDate, splitValues(categoryNames), eventType);
+        return marketEventService.searchMarkets(request, page, pageSize);
+    }
+
+    @Operation(summary = "取得公開市集活動詳情", description = "只提供 PUBLISHED 活動；品牌公開時間到達後才回傳攤位地圖與品牌資訊。")
+    @GetMapping("/api/markets/{id}")
+    public ApiResponse<MarketEventDetailResponse> getMarketDetail(
+            @PathVariable Long id,
+            @RequestParam(value = "date", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "stallNo", required = false) String stallNo) {
+        return marketEventService.getMarketDetail(id, date, stallNo);
+    }
+
+    private List<String> singleValue(String value) {
+        return value == null || value.isBlank() ? List.of() : List.of(value.trim());
+    }
+
+    private List<String> splitValues(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .distinct()
+                .toList();
+    }
 
     @Operation(summary = "取得台灣縣市清單", description = "提供縣市下拉式選單使用")
     @GetMapping("/api/addresses/cities")
@@ -87,10 +140,12 @@ public class AllController {
         return stallService.getPublicEventStallsStatus(eventId, applyDate);
     }
 
-    @Operation(summary = "取得品牌搜尋下拉選項", description = "提供品牌搜尋頁面的分類名稱與市集名稱選項")
+    @Operation(summary = "取得品牌搜尋下拉選項", description = "提供全部啟用分類；指定單一分類名稱時，只回傳活動分類包含該種類的市集名稱")
     @GetMapping("/api/brands/scroll-options")
-    public ApiResponse<MapBackedResponse> getBrandScrollOptions() {
-        return brandService.getBrandScrollOptions();
+    public ApiResponse<MapBackedResponse> getBrandScrollOptions(
+            @Parameter(description = "單一分類名稱；未提供時回傳所有可選市集", example = "餐飲美食")
+            @RequestParam(value = "categoryName", required = false) String categoryName) {
+        return brandService.getBrandScrollOptions(categoryName);
     }
 
     @Operation(summary = "搜尋品牌列表", description = "依關鍵字、單一分類名稱、參與市集名稱搜尋品牌")

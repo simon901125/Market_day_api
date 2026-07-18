@@ -11,6 +11,7 @@ import com.example.demo.Repository.projection.admin.AdminEventDetailProjection;
 import com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection;
 import com.example.demo.Repository.projection.admin.EventApprovalProjection;
 import com.example.demo.entity.MarketEvent;
+import com.example.demo.entity.Category;
 import com.example.demo.enums.status.WorkflowStatus;
 
 import java.time.LocalDateTime;
@@ -93,7 +94,6 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             SELECT new com.example.demo.Repository.projection.admin.AdminEventDetailProjection(
                 market.id,
                 market.title,
-                '',
                 market.startAt,
                 market.endAt,
                 market.brandPublicAt,
@@ -134,6 +134,9 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             WHERE market.id = :id
             """)
     Optional<AdminEventDetailProjection> findEventDetailById(@Param("id") Long id);
+
+    @Query("SELECT category FROM MarketEvent market JOIN market.categories category WHERE market.id = :id ORDER BY category.id")
+    List<Category> findCategoriesByEventId(@Param("id") Long id);
 
     /** 管理員後台: 活動審核:查詢操作對象目前活動狀態，只查id、流程狀態、活動名稱、主辦方id、主辦方聯絡人姓名 */
     @Query("""

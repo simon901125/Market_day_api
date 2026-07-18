@@ -5,11 +5,11 @@ import java.util.List;
 
 public record MarketSearchRequest (
     String keyword,
-    List<String> cities,
+    String city,
     List<String> eventStatuses,
     LocalDate startDate,
     LocalDate endDate,
-    List<Long> categoryIds,
+    List<String> categoryNames,
     String eventType
 ){
 }

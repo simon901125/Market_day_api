@@ -1,13 +1,21 @@
 package com.example.demo.Service;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.NotificationRepository;
+import com.example.demo.Repository.UserRepo;
 import com.example.demo.dto.notification.NotificationCreateCommand;
+import com.example.demo.dto.response.ApiResponse;
+import com.example.demo.dto.response.NotificationToggleDto;
+import com.example.demo.entity.Notification;
+import com.example.demo.entity.User;
 import com.example.demo.enums.notification.NotificationCategory;
 import com.example.demo.enums.notification.NotificationTargetType;
 import com.example.demo.enums.notification.NotificationType;
@@ -18,9 +26,60 @@ public class NotificationService {
     private static final int MAX_TITLE_LENGTH = 150;
 
     private final NotificationRepository notificationRepository;
+    private final NotificationRepo notificationRepo;
+    private final UserRepo userRepo;
+    private final JwtService jwtService;
 
-    public NotificationService(NotificationRepository notificationRepository) {
+    public NotificationService(
+            NotificationRepository notificationRepository,
+            NotificationRepo notificationRepo,
+            UserRepo userRepo,
+            JwtService jwtService) {
         this.notificationRepository = notificationRepository;
+        this.notificationRepo = notificationRepo;
+        this.userRepo = userRepo;
+        this.jwtService = jwtService;
+    }
+
+    public ApiResponse<NotificationToggleDto> markAsRead(String authorizationHeader, Long id) {
+        Map<String, Object> auth = authenticatedUser(authorizationHeader);
+        if (auth.containsKey("message")) {
+            return ApiResponse.fail(auth.get("message").toString());
+        }
+        Long userId = ((Number) auth.get("userId")).longValue();
+
+        Notification notification = notificationRepo.findById(id).orElse(null);
+        if (notification == null) {
+            return ApiResponse.fail("Notification not found");
+        }
+        if (!notification.getUser().getId().equals(userId)) {
+            return ApiResponse.fail("Notification does not belong to this account");
+        }
+
+        if (!Boolean.TRUE.equals(notification.getIsRead())) {
+            notification.setIsRead(true);
+            notification.setReadAt(LocalDateTime.now());
+            notificationRepo.save(notification);
+        }
+
+        return ApiResponse.success(
+                "Notification marked as read",
+                new NotificationToggleDto(notification.getId(), notification.getIsRead()));
+    }
+
+    private Map<String, Object> authenticatedUser(String authorizationHeader) {
+        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
+        if (token == null || token.isBlank()) {
+            return Map.of("message", "Authorization token is required");
+        }
+        if (!jwtService.isTokenValid(token)) {
+            return Map.of("message", "Invalid or expired token");
+        }
+        User user = userRepo.findByEmail(jwtService.getEmail(token)).orElse(null);
+        if (user == null) {
+            return Map.of("message", "User not found");
+        }
+        return Map.of("userId", user.getId());
     }
 
     /**
@@ -186,6 +245,17 @@ public class NotificationService {
                 applicationId,
                 "完成選位",
                 brandName(brandName) + "已完成攤位選擇：" + eventName(eventTitle)));
+    }
+
+    public void notifyRefundRequested(Long userId, Long refundId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                userId,
+                NotificationCategory.PAYMENT,
+                NotificationType.REFUND_REQUESTED,
+                NotificationTargetType.REFUND,
+                refundId,
+                "退款申請待審核",
+                eventName(eventTitle) + " 已收到攤主退款申請，請進行審核。"));
     }
 
     private void validate(NotificationCreateCommand command) {

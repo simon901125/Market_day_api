@@ -12,9 +12,10 @@ public record MarketEventCardResponse(
     String district,
     String address,
     LocalDate startDate,
+    String startDayOfWeek,
     LocalDate endDate,
+    String endDayOfWeek,
     String coverImageUrl,
-    String publishStatus,
     List<CategoryResponse> categories,
     String eventStatus) {
 }

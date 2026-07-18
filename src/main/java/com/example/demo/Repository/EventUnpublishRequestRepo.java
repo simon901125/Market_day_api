@@ -8,11 +8,29 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.demo.Repository.projection.admin.EventUnpublishReasonProjection;
+import com.example.demo.Repository.projection.admin.EventUnpublishReviewProjection;
 import com.example.demo.entity.EventUnpublishRequest;
 import com.example.demo.entity.User;
 import com.example.demo.enums.status.UnpublishRequestStatus;
 
 public interface EventUnpublishRequestRepo extends JpaRepository<EventUnpublishRequest, Long> {
+
+    /** 管理員後台: 下架申請退回:查詢指定下架申請單的狀態，及其對應活動的流程狀態、名稱、品牌公開時間與擁有者id */
+    @Query("""
+            SELECT new com.example.demo.Repository.projection.admin.EventUnpublishReviewProjection(
+                r.status,
+                e.id,
+                e.workflowStatus,
+                e.title,
+                e.brandPublicAt,
+                e.user.id
+            )
+            FROM EventUnpublishRequest r
+            JOIN r.event e
+            WHERE r.id = :unpublishRequestId
+            """)
+    Optional<EventUnpublishReviewProjection> findReviewInfoById(
+            @Param("unpublishRequestId") Long unpublishRequestId);
 
     /** 管理員後台: 活動詳細:查詢指定活動、指定狀態中，申請時間最新的一筆下架申請id與原因 */
     @Query("""

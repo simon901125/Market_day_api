@@ -1,8 +1,6 @@
 package com.example.demo.entity;
 
 import java.util.List;
-import java.util.HashSet;
-import java.util.Set;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,8 +11,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.JoinTable;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
@@ -46,12 +42,10 @@ public class VendorProfile {
     /** 品牌分類 */
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "vendor_profile_categories",
-            joinColumns = @JoinColumn(name = "vendor_profile_id"),
-            inverseJoinColumns = @JoinColumn(name = "category_id"))
-    private Set<Category> categories = new HashSet<>();
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false,
+            foreignKey = @ForeignKey(name = "FK_vendor_profiles_categories"))
+    private Category category;
 
     /**品牌名稱 */
     @Column(name = "brand_name", length = 150)

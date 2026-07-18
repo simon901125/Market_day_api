@@ -3,6 +3,8 @@ package com.example.demo.Controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -34,7 +36,6 @@ class AdminControllerTest {
     }
 
     @Test void implementedDashboardAndSearchEndpointsDelegate() throws Exception {
-        mvc.perform(get("/api/admin/dashboard/overview")).andExpect(status().isOk());
         mvc.perform(post("/api/admin/events/search").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pageNumber\":1,\"pageSize\":20}"))
                 .andExpect(status().isOk());
@@ -44,10 +45,28 @@ class AdminControllerTest {
         mvc.perform(post("/api/admin/logs/search").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pageNumber\":1,\"pageSize\":20}"))
                 .andExpect(status().isOk());
-        verify(service).getDashboardResponse();
         verify(service).getEventsList(any(AdminEventSearchDto.class), eq(1), eq(20));
         verify(service).getUserList(any(AdminUserSearchDto.class), eq(1), eq(20));
         verify(service).getLogs(any(AdminLogSearchDto.class), eq(1), eq(20));
+    }
+
+    @Test void getDashboardOverviewDelegatesWithOperatorEmailFromToken() throws Exception {
+        when(jwtService.extractTokenFromAuthorizationHeader("Bearer token")).thenReturn("token");
+        when(jwtService.isTokenValid("token")).thenReturn(true);
+        when(jwtService.getEmail("token")).thenReturn("admin@test.com");
+
+        mvc.perform(get("/api/admin/dashboard/overview").header("Authorization", "Bearer token"))
+                .andExpect(status().isOk());
+
+        verify(service).getDashboardResponse("admin@test.com");
+    }
+
+    @Test void getDashboardOverviewFailsWithoutValidToken() throws Exception {
+        mvc.perform(get("/api/admin/dashboard/overview"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(400));
+
+        verifyNoInteractions(service);
     }
 
     @Test void placeholderRoutesRemainReachable() throws Exception {

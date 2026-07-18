@@ -81,16 +81,15 @@ class StallServiceVendorImageSaveTest {
     }
 
     @Test
-    void profileSaveRejectsMultipleCategoriesForSingleCategorySchema() {
+    void profileSaveRejectsMissingCategory() {
         VendorStallSaveRequest request = validRequest();
-        request.setCategoryIds(List.of(7L, 8L));
+        request.setCategoryId(null);
 
         ApiResponse<MapBackedResponse> response = stallService.saveVendorStallProfile(
                 AUTHORIZATION,
                 request);
 
         assertThat(response.isSuccessStatus()).isFalse();
-        assertThat(response.getMessage()).contains("Only one brand category");
         verify(stallRepository, never()).updateVendorProfile(anyLong(), anyLong(), anyMap());
     }
 
@@ -167,7 +166,7 @@ class StallServiceVendorImageSaveTest {
         request.setAddress("市府路 1 號");
         request.setBrandSummary("測試摘要");
         request.setBrandDescription("測試介紹");
-        request.setCategoryIds(List.of(7L));
+        request.setCategoryId(7L);
         request.setProducts(List.of());
         return request;
     }

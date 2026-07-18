@@ -1,35 +1,61 @@
 package com.example.demo.dto.response;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
 public record MarketEventDetailResponse(
         Long id,
         String title,
+        String coverImageUrl,
+        String eventStatus,
         String summary,
-        String description,
-        List<CategoryResponse> categories,
+        LocalDate startDate,
+        String startDayOfWeek,
+        LocalDate endDate,
+        String endDayOfWeek,
+        LocalTime startTime,
+        LocalTime endTime,
+        long durationDays,
         String locationName,
         String city,
         String district,
         String address,
-        String trafficInfo,
-        String notice,
-        LocalDate startDate,
-        LocalDate endDate,
-        LocalTime startTime,
-        LocalTime endTime,
-        LocalDateTime registrationStartAt,
-        LocalDateTime registrationEndAt,
-        Integer maxBooths,
-        BigDecimal baseFee,
-        String coverImageUrl,
+        String description,
+        List<CategoryResponse> categories,
+        OrganizerInfo organizer,
+        List<TrafficInfo> trafficInfos,
+        boolean brandsPublic,
         String mapImageUrl,
-        LocalDateTime publicInfoAt,
-        String reviewStatus,
-        String publishStatus,
-        String eventStatus) {
+        LocalDate selectedDate,
+        SelectedStall selectedStall) {
+
+    public record OrganizerInfo(
+            String organizerName,
+            String contactEmail,
+            String contactPhone,
+            String serviceDays,
+            LocalTime serviceStartTime,
+            LocalTime serviceEndTime) {
+    }
+
+    public record TrafficInfo(String method, String details) {
+    }
+
+    public record SelectedStall(
+            String stallNo,
+            StallBrand brand) {
+    }
+
+    public record StallBrand(
+            Long vendorProfileId,
+            String brandName,
+            CategoryResponse category,
+            String brandSummary,
+            String facebookUrl,
+            String instagramUrl,
+            String websiteUrl,
+            String avatarImageUrl,
+            String coverImageUrl) {
+    }
 }

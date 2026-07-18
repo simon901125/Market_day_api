@@ -1,11 +1,13 @@
 package com.example.demo.dto.response.admin;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 
+ *
  * 管理員:dashboard首頁
- * 
+ *
  * @param pendingReview    狀態=待審核的活動數量
  * @param mapBuilding      狀態=地圖建置中的活動數量
  * @param pendingUnpublish 狀態=申請下架的活動數量
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param totalVender      平台活動中的攤主數量
  * @param totalActivity    平台目前架上活動數量(狀態= PUBLISHED、FINAL_REVIEW && endAt > now)
  * @param active           狀態=活動中的活動數量
+ * @param notices          通知中心預覽列表(最新6筆，依未讀優先、時間新到舊排序)
  */
 @Schema(description = "管理員首頁回應")
 public record AdminDashboardDto(
@@ -24,5 +27,6 @@ public record AdminDashboardDto(
         int totalOrganizer,
         int totalVender,
         int totalActivity,
-        int active) {
+        int active,
+        List<AdminNoticeDto> notices) {
 }

@@ -22,14 +22,14 @@ public class OrganizerRepository {
         }
         String sql = """
                 SELECT
-                    vpc.vendor_profile_id AS vendorProfileId,
+                    vp.id AS vendorProfileId,
                     c.id,
                     c.name,
                     c.slug
-                FROM dbo.vendor_profile_categories vpc
-                INNER JOIN dbo.categories c ON c.id = vpc.category_id
-                WHERE vpc.vendor_profile_id IN (:vendorProfileIds)
-                ORDER BY vpc.vendor_profile_id, c.id
+                FROM dbo.vendor_profiles vp
+                INNER JOIN dbo.categories c ON c.id = vp.category_id
+                WHERE vp.id IN (:vendorProfileIds)
+                ORDER BY vp.id, c.id
                 """;
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(
                 sql, Map.of("vendorProfileIds", vendorProfileIds)));

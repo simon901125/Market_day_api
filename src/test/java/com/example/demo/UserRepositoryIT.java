@@ -386,8 +386,8 @@ class UserRepositoryIT extends SqlServerIntegrationTestSupport {
 
         jdbcTemplate.update(
                 """
-                INSERT INTO vendor_profiles (user_profile_id, brand_name)
-                SELECT id, N'整合測試品牌'
+                INSERT INTO vendor_profiles (user_profile_id, category_id, brand_name)
+                SELECT id, :categoryId, N'整合測試品牌'
                 FROM user_profiles
                 WHERE user_id = :userId
                   AND profile_type = 'VENDOR'
@@ -404,10 +404,6 @@ class UserRepositoryIT extends SqlServerIntegrationTestSupport {
                 """,
                 parameters,
                 Long.class);
-        jdbcTemplate.update("""
-                INSERT INTO vendor_profile_categories (vendor_profile_id, category_id)
-                VALUES (:vendorProfileId, :categoryId)
-                """, Map.of("vendorProfileId", vendorProfileId, "categoryId", categoryId));
         return vendorProfileId;
     }
 }

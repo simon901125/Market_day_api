@@ -3,11 +3,15 @@ package com.example.demo.Service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.example.demo.Repository.AdminLogRepo;
@@ -25,19 +30,22 @@ import com.example.demo.Repository.EventUnpublishRequestRepo;
 import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.Repository.projection.admin.AdminLookupProjection;
+import com.example.demo.Repository.projection.admin.AdminNoticeProjection;
 import com.example.demo.Repository.projection.admin.EventApprovalProjection;
+import com.example.demo.Repository.projection.admin.EventUnpublishReviewProjection;
 import com.example.demo.Repository.projection.admin.UserAccountStatusProjection;
 import com.example.demo.entity.AdminOperationLog;
 import com.example.demo.entity.Notification;
 import com.example.demo.entity.User;
+import com.example.demo.enums.notification.NotificationCategory;
+import com.example.demo.enums.notification.NotificationTargetType;
+import com.example.demo.enums.notification.NotificationType;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.UnpublishRequestStatus;
 import com.example.demo.enums.status.UserStatus;
 import com.example.demo.enums.status.WorkflowStatus;
 import com.example.demo.enums.type.AdminOperationType;
 import com.example.demo.enums.type.AdminTargetType;
-import com.example.demo.enums.type.NotificationCategory;
-import com.example.demo.enums.type.NotificationTargetType;
 import com.example.demo.enums.type.Role;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,6 +69,15 @@ class AdminServiceTest {
     }
 
     @Test void dashboardAggregatesRepositoryCounters() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(notificationRepo.countUnreadNoticesByCategory(9L, NotificationCategory.EXCEPTION)).thenReturn(8L);
+        AdminNoticeProjection notice = new AdminNoticeProjection(
+                101L, NotificationType.SYSTEM_EXCEPTION, NotificationTargetType.MARKET_EVENT, 1L,
+                "標題", "內容", false, LocalDateTime.of(2026, 1, 1, 12, 0));
+        when(notificationRepo.findAdminNotices(eq(9L), isNull(), isNull(), any(PageRequest.class)))
+                .thenReturn(List.of(notice));
+        when(notificationRepo.countAdminNotices(9L, null, null)).thenReturn(1L);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.PENDING_REVIEW)).thenReturn(1);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.MAP_BUILDING)).thenReturn(2);
         when(eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED)).thenReturn(3);
@@ -68,14 +85,24 @@ class AdminServiceTest {
         when(userRepo.countByRoleAndStatus(Role.VENDOR, UserStatus.ACTIVE)).thenReturn(5);
         when(eventRepo.countByEventInPlatform(any())).thenReturn(6);
         when(eventRepo.countByEventStatusIsACTIVE(any())).thenReturn(7);
-        var result = service.getDashboardResponse();
+        var result = service.getDashboardResponse("op@test.com");
         assertThat(result.pendingReview()).isEqualTo(1);
         assertThat(result.mapBuilding()).isEqualTo(2);
         assertThat(result.pendingUnpublish()).isEqualTo(3);
+        assertThat(result.systemWarning()).isEqualTo(8);
         assertThat(result.totalOrganizer()).isEqualTo(4);
         assertThat(result.totalVender()).isEqualTo(5);
         assertThat(result.totalActivity()).isEqualTo(6);
         assertThat(result.active()).isEqualTo(7);
+        assertThat(result.notices()).hasSize(1);
+        assertThat(result.notices().get(0).id()).isEqualTo(101L);
+    }
+
+    @Test void dashboardRejectsWhenOperatorIsNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.getDashboardResponse("op@test.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該管理員");
     }
 
     @Test void changeStatusRejectsUnsupportedObject() {
@@ -309,7 +336,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Event_Approve");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_APPROVED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("審核通過");
@@ -413,7 +440,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Event_Revision");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_REVISION_REQUIRED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("補件通知");
@@ -491,7 +518,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Event_Map_Complete");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_MAP_COMPLETED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("地圖完成");
@@ -585,7 +612,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(adminRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EXCEPTION);
-        assertThat(savedNotification.getType()).isEqualTo("System_EXCEPTION");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.SYSTEM_EXCEPTION);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("活動狀態異常");
@@ -617,7 +644,7 @@ class AdminServiceTest {
         Notification savedNotification = notificationCaptor.getValue();
         assertThat(savedNotification.getUser()).isSameAs(organizerRef);
         assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
-        assertThat(savedNotification.getType()).isEqualTo("Event_Unpublish");
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_UNPUBLISHED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("活動下架");
@@ -632,6 +659,146 @@ class AdminServiceTest {
         assertThat(savedLog.getTargetId()).isEqualTo(77L);
         assertThat(savedLog.getTargetLabel()).isEqualTo("夏日市集");
         assertThat(savedLog.getContent()).isEqualTo("管理員小明審核通過夏日市集活動下架申請");
+    }
+
+    @Test void setEventUnpublishRequestRejectRejectsWhenOperatorRoleIsNotAdmin() {
+        assertThatThrownBy(() -> service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ORGANIZER, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("權限不足，請重新登入管理員帳號再操作");
+        verifyNoInteractions(userRepo, eventRepo, logRepo, notificationRepo, eventUnpublishRequestRepo);
+    }
+
+    @Test void setEventUnpublishRequestRejectThrowsWhenAdminNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該管理員");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo, eventUnpublishRequestRepo);
+    }
+
+    @Test void setEventUnpublishRequestRejectThrowsWhenNoteIsBlank() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+
+        assertThatThrownBy(() -> service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "  "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("請提供補件原因");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo, eventUnpublishRequestRepo);
+    }
+
+    @Test void setEventUnpublishRequestRejectThrowsWhenRequestNotFound() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventUnpublishRequestRepo.findReviewInfoById(77L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到指定的下架申請");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo);
+        verify(eventUnpublishRequestRepo, never()).reviewIfCurrent(any(), any(), any(), any(), any());
+    }
+
+    @Test void setEventUnpublishRequestRejectThrowsWhenRequestNotPending() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventUnpublishRequestRepo.findReviewInfoById(77L)).thenReturn(Optional.of(
+                new EventUnpublishReviewProjection(
+                        UnpublishRequestStatus.REJECTED, 1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", null, 5L)));
+
+        assertThatThrownBy(() -> service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("該下架申請單不可進行此操作");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo);
+        verify(eventUnpublishRequestRepo, never()).reviewIfCurrent(any(), any(), any(), any(), any());
+    }
+
+    @Test void setEventUnpublishRequestRejectThrowsWhenEventIdIsNull() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventUnpublishRequestRepo.findReviewInfoById(77L)).thenReturn(Optional.of(
+                new EventUnpublishReviewProjection(
+                        UnpublishRequestStatus.PENDING, null, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", null, 5L)));
+
+        assertThatThrownBy(() -> service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("找不到該下架申請對應的活動");
+        verifyNoInteractions(eventRepo, logRepo, notificationRepo);
+        verify(eventUnpublishRequestRepo, never()).reviewIfCurrent(any(), any(), any(), any(), any());
+    }
+
+    @Test void setEventUnpublishRequestRejectThrowsWhenEventNotUnpublishRequested() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventUnpublishRequestRepo.findReviewInfoById(77L)).thenReturn(Optional.of(
+                new EventUnpublishReviewProjection(
+                        UnpublishRequestStatus.PENDING, 1L, WorkflowStatus.PUBLISHED, "夏日市集", null, 5L)));
+
+        assertThatThrownBy(() -> service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("夏日市集當前狀態不可執行此操作");
+        verify(eventRepo, never()).updateWorkflowStatusIfCurrent(any(), any(), any());
+        verifyNoInteractions(logRepo, notificationRepo);
+        verify(eventUnpublishRequestRepo, never()).reviewIfCurrent(any(), any(), any(), any(), any());
+    }
+
+    @Test void setEventUnpublishRequestRejectRestoresToPublishedWhenBrandNotYetPublicAndWritesNotificationAndOperationLog() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventUnpublishRequestRepo.findReviewInfoById(77L)).thenReturn(Optional.of(
+                new EventUnpublishReviewProjection(
+                        UnpublishRequestStatus.PENDING, 1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", null, 5L)));
+        User adminRef = new User();
+        User organizerRef = new User();
+        when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
+        when(userRepo.getReferenceById(5L)).thenReturn(organizerRef);
+
+        var result = service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "缺少營業執照");
+
+        verify(eventRepo).updateWorkflowStatusIfCurrent(1L, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.PUBLISHED);
+        verify(eventUnpublishRequestRepo).reviewIfCurrent(
+                77L, adminRef, UnpublishRequestStatus.PENDING, UnpublishRequestStatus.REJECTED, "缺少營業執照");
+        assertThat(result.eventName()).isEqualTo("夏日市集");
+        assertThat(result.newEventStatus()).isEqualTo(EventStatus.PUBLISHED);
+
+        ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepo).save(notificationCaptor.capture());
+        Notification savedNotification = notificationCaptor.getValue();
+        assertThat(savedNotification.getUser()).isSameAs(organizerRef);
+        assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EVENT_CHANGE);
+        assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED);
+        assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.EVENT_UNPUBLISH_REQUEST);
+        assertThat(savedNotification.getTargetId()).isEqualTo(77L);
+        assertThat(savedNotification.getTitle()).isEqualTo("補件通知");
+        assertThat(savedNotification.getContent())
+                .isEqualTo("夏日市集的下架申請需要補件，請修改後重新送出審核，若有問題請洽公司聯絡電話");
+
+        ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
+        verify(logRepo).save(logCaptor.capture());
+        AdminOperationLog savedLog = logCaptor.getValue();
+        assertThat(savedLog.getUser()).isSameAs(adminRef);
+        assertThat(savedLog.getOperationType()).isEqualTo(AdminOperationType.REQUEST_REVISION);
+        assertThat(savedLog.getTargetType()).isEqualTo(AdminTargetType.EVENT_UNPUBLISH_REQUEST);
+        assertThat(savedLog.getTargetId()).isEqualTo(77L);
+        assertThat(savedLog.getTargetLabel()).isEqualTo("夏日市集");
+        assertThat(savedLog.getContent()).isEqualTo("管理員小明退回夏日市集下架申請, 原因:缺少營業執照");
+    }
+
+    @Test void setEventUnpublishRequestRejectRestoresToFinalReviewWhenBrandAlreadyPublic() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventUnpublishRequestRepo.findReviewInfoById(77L)).thenReturn(Optional.of(
+                new EventUnpublishReviewProjection(
+                        UnpublishRequestStatus.PENDING, 1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集",
+                        LocalDateTime.of(2026, 1, 1, 0, 0), 5L)));
+        when(userRepo.getReferenceById(9L)).thenReturn(new User());
+        when(userRepo.getReferenceById(5L)).thenReturn(new User());
+
+        var result = service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "缺少營業執照");
+
+        verify(eventRepo).updateWorkflowStatusIfCurrent(1L, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.FINAL_REVIEW);
+        assertThat(result.eventName()).isEqualTo("夏日市集");
+        assertThat(result.newEventStatus()).isEqualTo(EventStatus.PUBLISHED);
     }
 
 }
