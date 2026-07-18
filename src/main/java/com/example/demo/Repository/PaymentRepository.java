@@ -7,7 +7,10 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -50,6 +53,29 @@ public class PaymentRepository {
                     FROM dbo.event_applications a
                     INNER JOIN dbo.market_events me ON me.id = a.event_id
                     WHERE a.application_no = :applicationNo
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("applicationNo", applicationNo);
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    public Optional<Map<String, Object>> findRefundableApplication(String applicationNo) {
+        String sql = """
+                SELECT
+                    a.id AS applicationId,
+                    a.application_no AS applicationNo,
+                    a.user_id AS userId,
+                    a.deposit_amount AS depositAmount,
+                    a.review_status AS reviewStatus,
+                    a.payment_status AS paymentStatus,
+                    a.is_cancelled AS isCancelled,
+                    me.id AS eventId,
+                    me.user_id AS organizerUserId,
+                    me.title AS eventName
+                FROM dbo.event_applications a
+                INNER JOIN dbo.market_events me ON me.id = a.event_id
+                WHERE a.application_no = :applicationNo
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -110,6 +136,50 @@ public class PaymentRepository {
         return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
+    public Optional<Map<String, Object>> findLatestPaidPayment(Long applicationId) {
+        String sql = """
+                SELECT TOP 1
+                    id AS paymentId,
+                    payment_no AS paymentNo,
+                    application_id AS applicationId,
+                    amount,
+                    provider,
+                    provider_trade_no AS providerTradeNo,
+                    status,
+                    paid_at AS paidAt,
+                    created_at AS createdAt
+                FROM dbo.payments
+                WHERE application_id = :applicationId
+                  AND status = N'PAID'
+                ORDER BY paid_at DESC, created_at DESC, id DESC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("applicationId", applicationId);
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    public Optional<Map<String, Object>> findLatestRefundByApplicationId(Long applicationId) {
+        String sql = """
+                SELECT TOP 1
+                    id AS refundId,
+                    refund_no AS refundNo,
+                    application_id AS applicationId,
+                    payment_id AS paymentId,
+                    amount,
+                    reason,
+                    refund_status AS refundStatus,
+                    refunded_at AS refundedAt
+                FROM dbo.refunds
+                WHERE application_id = :applicationId
+                ORDER BY id DESC
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("applicationId", applicationId);
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
     public void createPendingPayment(String paymentNo, Long applicationId, BigDecimal amount) {
         String sql = """
                 INSERT INTO dbo.payments (
@@ -133,6 +203,43 @@ public class PaymentRepository {
         map.put("applicationId", applicationId);
         map.put("amount", amount);
         namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public Long createRefund(
+            String refundNo,
+            Long applicationId,
+            Long paymentId,
+            BigDecimal amount,
+            String reason) {
+        String sql = """
+                INSERT INTO dbo.refunds (
+                    refund_no,
+                    application_id,
+                    payment_id,
+                    amount,
+                    reason,
+                    refund_status
+                )
+                VALUES (
+                    :refundNo,
+                    :applicationId,
+                    :paymentId,
+                    :amount,
+                    :reason,
+                    N'REFUND_REQUESTED'
+                )
+                """;
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("refundNo", refundNo)
+                .addValue("applicationId", applicationId)
+                .addValue("paymentId", paymentId)
+                .addValue("amount", amount)
+                .addValue("reason", reason);
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        namedParameterJdbcTemplate.update(sql, params, keyHolder, new String[] { "id" });
+        Number key = keyHolder.getKey();
+        return key == null ? null : key.longValue();
     }
 
     public Optional<Map<String, Object>> findPaymentWithApplication(String paymentNo) {

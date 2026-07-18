@@ -1,9 +1,22 @@
-# Market Day API
+﻿# Market Day API
 
 Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登入註冊、攤主資料、主辦資料、活動查詢、攤位選位、主辦後台管理、設備統計與帳務匯出等功能。
 
 
 ## 更新紀錄
+
+### 2026-07-17
+
+#### yushuan branch
+
+- 新增攤主退款申請 API：`POST /api/vendor/refunds`，攤主可針對已付款報名單送出退款申請。
+- 後端會驗證 Bearer Token、攤主身分、報名單歸屬、審核狀態、付款狀態與是否已有退款紀錄。
+- 退款金額依規則計算為 `payments.amount - event_applications.deposit_amount`，保證金不退還。
+- 新增退款資料至 `refunds`，狀態為 `REFUND_REQUESTED`。
+- 成功後寫入 `status_logs`，紀錄 `refunds.refund_status = REFUND_REQUESTED`。
+- 成功後新增通知給主辦方，通知主辦方有新的退款申請待審核。
+- 本 API 只處理「攤主提出退款申請」，不執行主辦方審核與藍新退款金流。
+
 
 ### 2026-07-17
 
@@ -18,6 +31,15 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 新增主辦方通知中心 `GET /api/organizer/notices`，支援主辦方通知分類、未讀數、分頁及通知關聯資料，並串接既有報名與付款狀態異動。
 - 新增及調整分類、品牌、市集、通知相關 Repository／Service 測試與整合測試資料庫結構。
 
+#### yushuan branch
+
+- 新增攤主退款申請 API：`POST /api/vendor/refunds`，攤主可針對已付款報名單送出退款申請。
+- 後端會驗證 Bearer Token、攤主身分、報名單歸屬、審核狀態、付款狀態與是否已有退款紀錄。
+- 退款金額依規則計算為 `payments.amount - event_applications.deposit_amount`，保證金不退還。
+- 新增退款資料至 `refunds`，狀態為 `REFUND_REQUESTED`。
+- 成功後寫入 `status_logs`，紀錄 `refunds.refund_status = REFUND_REQUESTED`。
+- 成功後新增通知給主辦方，通知主辦方有新的退款申請待審核。
+- 本 API 只處理「攤主提出退款申請」，不執行主辦方審核與藍新退款金流。
 ### 2026-07-16
 
 #### yushuan branch
@@ -589,3 +611,4 @@ account-report-{eventId}.xlsx
 - 商品刪除目前使用 `POST /api/vendor/stall/deleteproduct/{id}`。
 - 商品編輯 API 路徑目前維持既有拼字：`POST /api/vendor/stall/edituct/{id}`。
 - README 不記錄測試資料腳本內容，正式 API 行為以 Controller、Service、Swagger 與本文件為準。
+
