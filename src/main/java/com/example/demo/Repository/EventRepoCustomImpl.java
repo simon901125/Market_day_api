@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 import com.example.demo.Repository.specification.EventSpecification;
 import com.example.demo.Repository.support.AbstractTupleQuerySupport;
 import com.example.demo.entity.MarketEvent;
+import com.example.demo.entity.OrganizerProfile;
 import com.example.demo.entity.RequestLog;
 import com.example.demo.entity.User;
 import com.example.demo.entity.UserProfile;
@@ -36,6 +37,7 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
         Root<MarketEvent> root = ctx.root();
         Join<MarketEvent, User> user = root.join("user");
         Join<User, UserProfile> userProfile = user.join("userProfile");
+        Join<UserProfile, OrganizerProfile> organizerProfile = userProfile.join("organizerProfile");
 
         // 設定搜尋條件
         applyPredicate(root, cq, cb, spec);
@@ -45,7 +47,7 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
                 root.get("id").alias("id"),
                 root.get("coverImageUrl").alias("coverImageUrl"),
                 root.get("title").alias("title"),
-                userProfile.get("name").alias("organizerName"),
+                organizerProfile.get("organizerName").alias("organizerName"),
                 root.get("startAt").alias("startAt"),
                 root.get("endAt").alias("endAt"),
                 root.get("workflowStatus").alias("workflowStatus"),
