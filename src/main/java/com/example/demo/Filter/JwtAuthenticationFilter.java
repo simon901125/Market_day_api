@@ -28,7 +28,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/auth/",
             "/api/account/",
             "/api/images",
-            "/api/stalls/");
+            "/api/stalls/",
+            "/api/notification/");
     // ------------------------不過濾的端口(提供非登入使用者使用)------------------------
     private static final Set<PublicApi> PUBLIC_APIS = Set.of(
             new PublicApi(HttpMethod.POST.name(), "/api/vendor/local-register"),

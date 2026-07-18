@@ -33,6 +33,24 @@ public class StatusLogRepository {
         return ids.isEmpty() ? null : ids.get(0);
     }
 
+    /** 查詢指定下架申請單對應的活動id與目前流程狀態，供組裝下架申請退回的狀態變更紀錄使用 */
+    public Map<String, Object> findEventInfoByUnpublishRequestId(Long unpublishRequestId) {
+        if (unpublishRequestId == null) {
+            return null;
+        }
+
+        String sql = """
+                SELECT TOP 1 e.id AS eventId, e.workflow_status AS workflowStatus
+                FROM dbo.event_unpublish_requests r
+                JOIN dbo.market_events e ON e.id = r.event_id
+                WHERE r.id = :unpublishRequestId
+                """;
+
+        List<Map<String, Object>> rows = namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("unpublishRequestId", unpublishRequestId));
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     public void createStatusLogs(Long requestLogId, List<StatusLogEntry> entries) {
         if (requestLogId == null || entries == null || entries.isEmpty()) {
             return;

@@ -35,4 +35,14 @@ class ApiResponseTest {
         assertThat(response.getStatusCode()).isEqualTo(200);
         assertThat(response.getData()).isEqualTo(Map.of("id", 1));
     }
+
+    @Test
+    void translatesNotificationMarkAsReadMessages() {
+        assertThat(ApiResponse.fail("Notification not found").getMessage())
+                .isEqualTo("找不到通知");
+        assertThat(ApiResponse.fail("Notification does not belong to this account").getMessage())
+                .isEqualTo("此通知不屬於目前登入帳號");
+        assertThat(ApiResponse.success("Notification marked as read", null).getMessage())
+                .isEqualTo("通知已標記為已讀");
+    }
 }
