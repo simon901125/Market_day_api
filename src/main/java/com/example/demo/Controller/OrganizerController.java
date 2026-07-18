@@ -35,6 +35,7 @@ import com.example.demo.dto.response.OrganizerNotificationSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEventSearchResponse;
 import com.example.demo.dto.response.OrganizerEventDetailResponse;
+import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -91,6 +92,14 @@ public class OrganizerController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestBody(required = false) OrganizerEventSaveRequest request) {
         return organizerService.saveOrganizerEvent(authorizationHeader, request);
+    }
+
+    @Operation(summary = "送出活動審核", description = "將草稿或補件中的活動送出／重新送出審核")
+    @PostMapping("/api/organizer/events/{eventId}/submit-review")
+    public ApiResponse<OrganizerEventSubmitReviewResponse> submitOrganizerEventReview(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId) {
+        return organizerService.submitOrganizerEventReview(authorizationHeader, eventId);
     }
 
     @Operation(summary = "取得主辦方通知中心", description = "查詢目前登入主辦方通知；支援全部、未讀、報名相關、付款相關、活動異動及系統公告分類，未讀通知優先。")

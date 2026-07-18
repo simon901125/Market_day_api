@@ -82,6 +82,16 @@ public class OrganizerRepository {
         return namedParameterJdbcTemplate.update(sql, parameters);
     }
 
+    public int submitOrganizerEventReview(Long organizerUserId, Long eventId) {
+        return namedParameterJdbcTemplate.update("""
+                UPDATE dbo.market_events
+                SET workflow_status = N'PENDING_REVIEW'
+                WHERE id = :eventId
+                  AND user_id = :organizerUserId
+                  AND workflow_status IN (N'DRAFT', N'REVISION_REQUIRED')
+                """, Map.of("organizerUserId", organizerUserId, "eventId", eventId));
+    }
+
     public int countActiveCategories(Set<Long> categoryIds) {
         return namedParameterJdbcTemplate.queryForObject("""
                 SELECT COUNT(*)

@@ -70,11 +70,14 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
         Root<RequestLog> requestLog = subquery.from(RequestLog.class);
         Root<MarketEvent> correlatedEvent = subquery.correlate(root);
 
-        subquery.select(cb.least(requestLog.<LocalDateTime>get("createdAt")));
+        Expression<String> submittedPath = cb.concat(
+                cb.concat("/api/organizer/events/", correlatedEvent.get("id").as(String.class)),
+                "/submit-review");
+        subquery.select(cb.greatest(requestLog.<LocalDateTime>get("createdAt")));
         subquery.where(
                 cb.equal(requestLog.get("user"), correlatedEvent.get("user")),
                 cb.equal(requestLog.get("statusCode"), 200),
-                cb.like(requestLog.get("path"), "/api/organizer/events%submit-review"));
+                cb.equal(requestLog.get("path"), submittedPath));
 
         return subquery;
     }
