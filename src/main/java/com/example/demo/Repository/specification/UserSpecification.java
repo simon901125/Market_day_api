@@ -42,7 +42,9 @@ public class UserSpecification {
 
         return (root, cq, cb) -> {
             if (role == null) {
-                return null;
+                return cb.or(
+                    cb.equal(root.get("role"), Role.ORGANIZER),
+                    cb.equal(root.get("role"), Role.VENDOR));
             }
             return cb.equal(root.get("role"), role);
         };
@@ -58,7 +60,10 @@ public class UserSpecification {
         return(root, cq, cb) -> {
 
             if (status == null) {
-                return null;
+                return cb.or(
+                    cb.equal(root.get("status"), UserStatus.ACTIVE),
+                    cb.equal(root.get("status"), UserStatus.DISABLED)
+                );
             }
             return cb.equal(root.get("status"), status);
         };
