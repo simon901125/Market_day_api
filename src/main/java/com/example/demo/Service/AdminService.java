@@ -332,6 +332,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 event.mapImg(),
                 unpublishReason == null ? null : unpublishReason.id(),
                 unpublishReason == null ? null : unpublishReason.reason(),
+                unpublishReason == null ? null : unpublishReason.requestedAt().format(DATE_TIME_FORMATTER),
                 getEventStatusLogs(eventId, 1, pageSize));
     }
 

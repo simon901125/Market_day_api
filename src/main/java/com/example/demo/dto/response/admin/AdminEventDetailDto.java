@@ -42,6 +42,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param boothLayoutImage 攤位地圖底圖url
  * @param unpublishRequestId 下架申請id，僅當eventStatus=UNPUBLISH_REQUESTED時有值，否則為null
  * @param unpublishReason 下架申請原因，僅當eventStatus=UNPUBLISH_REQUESTED時有值，否則為null
+ * @param unpublishRequestedAt 下架申請時間 yyyy/MM/dd HH:mm，僅當eventStatus=UNPUBLISH_REQUESTED時有值，否則為null
  * @param logs 活動狀態logs
  */
 @Schema(description = "管理員活動詳細頁面")
@@ -86,6 +87,7 @@ public record AdminEventDetailDto(
     //----------活動下架申請----------
     Long unpublishRequestId,
     String unpublishReason,
+    String unpublishRequestedAt,
 
     //----------活動狀態Logs----------
     PageResponse<StatusLog> logs
