@@ -115,18 +115,15 @@ class VendorApplicationRepositoryIT extends SqlServerIntegrationTestSupport {
                 "SELECT id FROM user_profiles WHERE user_id = :userId AND profile_type = N'VENDOR'",
                 Map.of("userId", userId), Long.class);
         jdbc.update("""
-                INSERT INTO vendor_profiles (user_profile_id, brand_name)
-                VALUES (:userProfileId, :brandName)
+                INSERT INTO vendor_profiles (user_profile_id, category_id, brand_name)
+                VALUES (:userProfileId, :categoryId, :brandName)
                 """, new MapSqlParameterSource()
                 .addValue("userProfileId", userProfileId)
+                .addValue("categoryId", categoryId)
                 .addValue("brandName", brandName));
         Long vendorProfileId = jdbc.queryForObject(
                 "SELECT id FROM vendor_profiles WHERE user_profile_id = :userProfileId",
                 Map.of("userProfileId", userProfileId), Long.class);
-        jdbc.update("""
-                INSERT INTO vendor_profile_categories (vendor_profile_id, category_id)
-                VALUES (:vendorProfileId, :categoryId)
-                """, Map.of("vendorProfileId", vendorProfileId, "categoryId", categoryId));
         return new Vendor(userId, vendorProfileId);
     }
 

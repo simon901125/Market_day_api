@@ -29,20 +29,29 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
 
     @Test void publishedEventCanBeSearchedAndLoadedByCurrentSchema() {
         Long eventId = createPublishedEvent();
-        Long categoryId = jdbc.queryForObject(
-                "SELECT category_id FROM market_event_categories WHERE event_id = :eventId",
-                Map.of("eventId", eventId), Long.class);
-        var request = new MarketSearchRequest("Integration Market", List.of("Taipei"),
-                List.of("UPCOMING"), LocalDate.now(), LocalDate.now().plusDays(30), List.of(categoryId), "CURRENT");
-        var cards = repository.searchMarketEvents(request);
-        assertThat(cards).extracting(card -> card.id()).contains(eventId);
-        assertThat(cards.stream().filter(card -> card.id().equals(eventId)).findFirst().orElseThrow().categories())
-                .extracting(category -> category.id()).containsExactly(categoryId);
+        List<Map<String, Object>> categories = jdbc.queryForList("""
+                SELECT c.id, c.name
+                FROM market_event_categories mec
+                INNER JOIN categories c ON c.id = mec.category_id
+                WHERE mec.event_id = :eventId
+                ORDER BY c.id
+                """, Map.of("eventId", eventId));
+        List<Long> categoryIds = categories.stream().map(row -> ((Number) row.get("id")).longValue()).toList();
+        List<String> categoryNames = categories.stream().map(row -> row.get("name").toString()).toList();
+
+        assertThat(categoryIds).hasSize(3);
+        for (String categoryName : categoryNames) {
+            var request = new MarketSearchRequest("Integration Market", "Taipei",
+                    List.of("籌備中"), LocalDate.now(), LocalDate.now().plusDays(30), List.of(categoryName), "目前活動");
+            var cards = repository.searchMarketEvents(request);
+            assertThat(cards).extracting(card -> card.id()).contains(eventId);
+            assertThat(cards.stream().filter(card -> card.id().equals(eventId)).findFirst().orElseThrow().categories())
+                    .extracting(category -> category.id()).containsExactlyElementsOf(categoryIds);
+        }
         var detail = repository.findMarketEventDetailById(eventId).orElseThrow();
         assertThat(detail.title()).isEqualTo("Integration Market");
         assertThat(detail.startTime()).isNotNull();
-        assertThat(detail.publishStatus()).isEqualTo("PUBLISHED");
-        assertThat(detail.categories()).extracting(category -> category.id()).containsExactly(categoryId);
+        assertThat(detail.categories()).extracting(category -> category.id()).containsExactlyElementsOf(categoryIds);
     }
 
     @Test void draftEventIsNotPublic() {
@@ -52,7 +61,7 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
     }
 
     private Long createPublishedEvent() {
-        Long categoryId = jdbc.queryForObject("SELECT TOP 1 id FROM categories ORDER BY id", Map.of(), Long.class);
+        List<Long> categoryIds = jdbc.queryForList("SELECT TOP 3 id FROM categories ORDER BY id", Map.of(), Long.class);
         String email = "market-it-" + java.util.UUID.randomUUID() + "@example.test";
         Long organizerId = userRepository.createLocalUser("ORGANIZER", email, "hash");
         userRepository.markEmailVerified(organizerId);
@@ -69,10 +78,12 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
                 """, new MapSqlParameterSource().addValue("userId", organizerId)
                         .addValue("startAt", now.plusDays(10).withHour(10)).addValue("endAt", now.plusDays(11).withHour(18))
                         .addValue("regStart", now.minusDays(1)).addValue("regEnd", now.plusDays(5)), Long.class);
-        jdbc.update("""
-                INSERT INTO market_event_categories (event_id, category_id)
-                VALUES (:eventId, :categoryId)
-                """, Map.of("eventId", eventId, "categoryId", categoryId));
+        for (Long categoryId : categoryIds) {
+            jdbc.update("""
+                    INSERT INTO market_event_categories (event_id, category_id)
+                    VALUES (:eventId, :categoryId)
+                    """, Map.of("eventId", eventId, "categoryId", categoryId));
+        }
         return eventId;
     }
 }

@@ -22,13 +22,19 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 #### simon branch
 
-- 將活動與品牌分類由單一分類調整為多對多關聯；`MarketEvent`、`VendorProfile` 改用 `ManyToMany`，測試資料庫新增 `market_event_categories`、`vendor_profile_categories` 關聯表。
-- 攤主品牌儲存改以 `categoryIds` 接收多筆分類；品牌與攤主相關 Response 改回傳 `categories` 陣列，品牌分類篩選則以單一分類名稱輸入。
+- 活動分類維持多對多關聯，由 `market_event_categories` 保存；品牌分類改回多對一，由 `vendor_profiles.category_id` 保存單一分類。
+- 攤主品牌儲存改回以 `categoryId` 接收單一分類；品牌與攤主相關 Response 改回傳單一 `category`，品牌分類篩選仍以單一分類名稱輸入。
 - 分類相關列表採活動／品牌基本資料與分類集合分段查詢，避免 JOIN 多筆分類後產生重複活動或品牌。
 - 公開活動 API `POST /api/markets/search` 改以 `categoryIds` 篩選並回傳 `categories` 陣列；`GET /api/markets/{id}` 同步改為回傳完整分類集合。
+- 管理員 `GET /api/admin/events/{id}` 改為回傳活動 `categories` 陣列；`GET /api/admin/users/{id}` 的攤主品牌種類則連接單一品牌分類。
 - 調整攤主市集列表卡片資料，補上報名剩餘天數及各活動日期剩餘攤位；移除對不存在的 `event_images`、`event_traffic_infos` 資料表查詢。
 - 補齊攤主市集詳情所需的多分類、每日攤位、費用、設備、用電、主辦方及交通資料；攤主報名流程與報名須知不列入此 API 回傳。
 - 新增主辦方通知中心 `GET /api/organizer/notices`，支援主辦方通知分類、未讀數、分頁及通知關聯資料，並串接既有報名與付款狀態異動。
+- 公開活動搜尋移至 `AllController`；`POST /api/markets/search` 改用 Query Parameter，支援目前／歷史活動、關鍵字、日期、城市、單一中文活動狀態、多分類名稱及分頁，且只查詢 `PUBLISHED` 活動。
+- 公開活動列表的活動狀態改回傳中文，活動起訖日期附帶星期（一至日）；分類查詢會命中活動擁有的任一分類。
+- 公開活動詳情 `GET /api/markets/{id}` 移至 `AllController` 並移除 `MarketController`；依 `brands_public_at` 回傳公開狀態，品牌公開後可用 `date`、`stallNo` 查詢指定日期與攤位的單一品牌資料。
+- 公開活動詳情不回傳 `brandsPublicAt`、分區清單、攤位 ID 或攤位狀態；品牌未公開時隱藏地圖及攤位品牌資訊。
+- 公開活動詳情補上明確操作錯誤訊息，包含活動不存在或未公開、日期超出活動範圍，以及指定日期找不到攤位編號。
 - 新增及調整分類、品牌、市集、通知相關 Repository／Service 測試與整合測試資料庫結構。
 
 #### yushuan branch
