@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
-@Tag(name = "Market API", description = "提供市集活動查詢與篩選功能")
+@Tag(name = "市集API", description = "提供市集活動查詢與篩選功能")
 public class MarketController {
 
     @Autowired

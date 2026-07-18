@@ -32,6 +32,8 @@ import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
 import com.example.demo.dto.response.OrganizerDashboardInitResponse;
 import com.example.demo.dto.response.OrganizerNotificationSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
+import com.example.demo.dto.response.OrganizerEventSearchResponse;
+import com.example.demo.dto.response.OrganizerEventDetailResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,6 +57,29 @@ public class OrganizerController {
     public ApiResponse<OrganizerDashboardInitResponse> initOrganizerDashboard(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         return organizerService.initOrganizerDashboard(authorizationHeader);
+    }
+
+    @Operation(summary = "查詢主辦方活動", description = "回傳主辦方待辦統計與活動列表，支援搜尋、狀態、日期、排序及分頁")
+    @GetMapping("/api/organizer/events/search")
+    public ApiResponse<OrganizerEventSearchResponse> searchOrganizerEvents(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(value = "sort", required = false, defaultValue = "DEFAULT") String sort,
+            @RequestParam(value = "page", required = false, defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", required = false, defaultValue = "6") Integer pageSize) {
+        return organizerService.searchOrganizerEvents(
+                authorizationHeader, keyword, status, startDate, endDate, sort, page, pageSize);
+    }
+
+    @Operation(summary = "取得主辦方活動詳情", description = "取得目前登入主辦方所屬活動的完整查看及編輯資料")
+    @GetMapping("/api/organizer/events/{eventId}")
+    public ApiResponse<OrganizerEventDetailResponse> getOrganizerEventDetail(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId) {
+        return organizerService.getOrganizerEventDetail(authorizationHeader, eventId);
     }
 
     @Operation(summary = "取得主辦方通知中心", description = "查詢目前登入主辦方通知；支援全部、未讀、報名相關、付款相關、活動異動及系統公告分類，未讀通知優先。")

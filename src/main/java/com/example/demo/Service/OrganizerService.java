@@ -11,6 +11,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -46,9 +47,15 @@ import com.example.demo.dto.response.OrganizerAccountingSummaryResponse;
 import com.example.demo.dto.response.OrganizerDashboardInitResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSummaryResponse;
+import com.example.demo.dto.response.OrganizerEventSearchResponse;
+import com.example.demo.dto.response.OrganizerEventDetailResponse;
+import com.example.demo.dto.response.OrganizerEventSummaryResponse;
+import com.example.demo.dto.response.OrganizerTaskSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.OrganizerStallEventSummaryResponse;
+import com.example.demo.enums.status.EventStatus;
+import com.example.demo.enums.status.WorkflowStatus;
 
 @Service
 public class OrganizerService {
@@ -108,6 +115,266 @@ public class OrganizerService {
         return ApiResponse.success(
                 "Organizer dashboard initialized successfully",
                 new OrganizerDashboardInitResponse(needsProfile));
+    }
+
+    public ApiResponse<OrganizerEventSearchResponse> searchOrganizerEvents(
+            String authorizationHeader,
+            String keyword,
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
+            String sort,
+            Integer page,
+            Integer pageSize) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ApiResponse.fail("Invalid date range");
+        }
+
+        EventStatus statusFilter = parseEventStatus(status);
+        if (normalizeText(status) != null && statusFilter == null) {
+            return ApiResponse.fail("Invalid event status");
+        }
+        String normalizedSort = normalizeText(sort);
+        if (normalizedSort == null) {
+            normalizedSort = "DEFAULT";
+        }
+        normalizedSort = normalizedSort.toUpperCase();
+        if (!Set.of("DEFAULT", "UPCOMING_FIRST").contains(normalizedSort)) {
+            return ApiResponse.fail("Invalid sort option");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        LocalDateTime startAt = startDate == null ? null : startDate.atStartOfDay();
+        LocalDateTime endExclusive = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        List<OrganizerEventSummaryResponse> events = organizerRepository
+                .findOrganizerEvents(organizerUserId, keyword, startAt, endExclusive)
+                .stream()
+                .map(this::toOrganizerEventSummary)
+                .filter(event -> statusFilter == null || statusFilter.getStatus().equals(event.status()))
+                .sorted(organizerEventComparator(normalizedSort))
+                .toList();
+
+        return ApiResponse.success(
+                "Organizer events retrieved successfully",
+                new OrganizerEventSearchResponse(PageResponse.from(events, page, pageSize)));
+    }
+
+    public ApiResponse<OrganizerEventDetailResponse> getOrganizerEventDetail(
+            String authorizationHeader, Long eventId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (eventId == null || eventId <= 0) {
+            return ApiResponse.fail("Invalid event id");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> event = organizerRepository
+                .findOrganizerEventDetail(organizerUserId, eventId).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail(404, "Organizer event not found");
+        }
+
+        WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(event.get("workflowStatus")));
+        EventStatus eventStatus = resolveOrganizerEventStatus(
+                event, workflowStatus, intValue(event.get("maxBooths")), intValue(event.get("registeredCount")));
+        String detailStatus = workflowStatus == WorkflowStatus.CANCELLED ? "cancelled" : eventStatus.getStatus();
+        String detailStatusText = workflowStatus == WorkflowStatus.CANCELLED ? "\u5df2\u53d6\u6d88" : eventStatus.getDescription();
+        List<OrganizerEventDetailResponse.Category> categories = organizerRepository
+                .findOrganizerEventCategories(eventId).stream()
+                .map(row -> new OrganizerEventDetailResponse.Category(
+                        longValue(row.get("categoryId")), statusText(row.get("categoryName")),
+                        statusText(row.get("categorySlug"))))
+                .toList();
+        List<OrganizerEventDetailResponse.Zone> zones = organizerRepository
+                .findOrganizerEventZones(eventId).stream()
+                .map(row -> new OrganizerEventDetailResponse.Zone(
+                        longValue(row.get("zoneId")), statusText(row.get("zoneName")),
+                        intValue(row.get("stallCount")), normalizeText(row.get("colorCode"))))
+                .toList();
+        List<OrganizerEventDetailResponse.Item> items = organizerRepository.findEventEquipments(eventId).stream()
+                .map(this::toOrganizerEventEquipmentItem)
+                .toList();
+
+        OrganizerEventDetailResponse detail = new OrganizerEventDetailResponse(
+                eventId,
+                statusText(event.get("eventTitle")),
+                statusText(event.get("summary")),
+                statusText(event.get("description")),
+                categories,
+                normalizeText(event.get("coverImageUrl")),
+                new OrganizerEventDetailResponse.Schedule(
+                        toLocalDateTime(event.get("startAt")), toLocalDateTime(event.get("endAt")),
+                        toLocalDateTime(event.get("registrationStartAt")),
+                        toLocalDateTime(event.get("registrationEndAt")),
+                        toLocalDateTime(event.get("publicInfoAt")),
+                        toLocalDateTime(event.get("brandsPublicAt"))),
+                new OrganizerEventDetailResponse.Location(
+                        statusText(event.get("locationName")), statusText(event.get("city")),
+                        normalizeText(event.get("district")), statusText(event.get("address")),
+                        normalizeText(event.get("trafficInfoMetro")), normalizeText(event.get("trafficInfoBus")),
+                        normalizeText(event.get("trafficInfoDriving"))),
+                new OrganizerEventDetailResponse.Booth(
+                        intValue(event.get("maxBooths")), toBigDecimal(event.get("stallWidth")),
+                        toBigDecimal(event.get("stallLength")), toBigDecimal(event.get("baseFee")),
+                        toBigDecimal(event.get("depositAmount")), normalizeText(event.get("mapImageUrl")), zones),
+                new OrganizerEventDetailResponse.Equipment(items),
+                workflowStatus.name(), detailStatus, detailStatusText,
+                normalizeText(event.get("reviewNote")), availableOrganizerEventActions(workflowStatus, eventStatus),
+                toLocalDateTime(event.get("createdAt")));
+        return ApiResponse.success("Organizer event detail retrieved successfully", detail);
+    }
+
+    private OrganizerEventDetailResponse.Item toOrganizerEventEquipmentItem(Map<String, Object> row) {
+        return new OrganizerEventDetailResponse.Item(
+                longValue(row.get("eventEquipmentId")), normalizeText(row.get("equipmentGroupKey")),
+                statusText(row.get("equipmentName")), toBigDecimal(row.get("rentalFee")),
+                statusText(row.get("pricingUnit")), normalizeText(row.get("unit")),
+                statusText(row.get("chargeType")), statusText(row.get("itemType")),
+                normalizeText(row.get("equipmentDescription")), nullableInteger(row.get("stockQuantity")),
+                nullableInteger(row.get("perStallRentalLimit")), statusText(row.get("rentalStatus")),
+                nullableInteger(row.get("wattageLimit")));
+    }
+
+    private List<String> availableOrganizerEventActions(WorkflowStatus workflowStatus, EventStatus eventStatus) {
+        return switch (workflowStatus) {
+            case DRAFT -> List.of("EDIT", "SUBMIT_REVIEW", "DELETE");
+            case REVISION_REQUIRED -> List.of("EDIT", "RESUBMIT_REVIEW");
+            case READY_TO_PUBLISH -> List.of("PUBLISH");
+            case PUBLISHED -> eventStatus == EventStatus.REGISTRATION_OPEN
+                    ? List.of("REQUEST_UNPUBLISH") : List.of();
+            default -> List.of();
+        };
+    }
+
+    private Integer nullableInteger(Object value) {
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private OrganizerEventSummaryResponse toOrganizerEventSummary(Map<String, Object> event) {
+        WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(event.get("workflowStatus")));
+        int capacity = intValue(event.get("capacity"));
+        int registeredCount = intValue(event.get("registeredCount"));
+        EventStatus eventStatus = resolveOrganizerEventStatus(event, workflowStatus, capacity, registeredCount);
+        return new OrganizerEventSummaryResponse(
+                ((Number) event.get("eventId")).longValue(),
+                statusText(event.get("eventTitle")),
+                normalizeText(event.get("coverImageUrl")),
+                toLocalDateTime(event.get("createdAt")),
+                toLocalDateTime(event.get("eventStartAt")),
+                toLocalDateTime(event.get("eventEndAt")),
+                toLocalDateTime(event.get("registrationStartAt")),
+                toLocalDateTime(event.get("registrationEndAt")),
+                normalizeText(event.get("locationName")),
+                normalizeText(event.get("city")),
+                normalizeText(event.get("district")),
+                normalizeText(event.get("address")),
+                workflowStatus.name(),
+                eventStatus.getStatus(),
+                eventStatus.getDescription(),
+                capacity,
+                registeredCount,
+                intValue(event.get("pendingReviewCount")),
+                intValue(event.get("paidCount")),
+                intValue(event.get("selectedCount")));
+    }
+
+    private EventStatus resolveOrganizerEventStatus(
+            Map<String, Object> event,
+            WorkflowStatus workflowStatus,
+            int capacity,
+            int registeredCount) {
+        return switch (workflowStatus) {
+            case DRAFT -> EventStatus.DRAFT;
+            case PENDING_REVIEW -> EventStatus.PENDING_REVIEW;
+            case REVISION_REQUIRED -> EventStatus.REVISION_REQUIRED;
+            case MAP_BUILDING -> EventStatus.MAP_BUILDING;
+            case READY_TO_PUBLISH -> EventStatus.READY_TO_PUBLISH;
+            case UNPUBLISH_REQUESTED -> EventStatus.UNPUBLISH_REQUESTED;
+            case UNPUBLISHED -> EventStatus.UNPUBLISHED;
+            case CANCELLED -> EventStatus.UNPUBLISHED;
+            case PUBLISHED -> {
+                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
+                LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+                if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
+                    yield EventStatus.READY_TO_PUBLISH;
+                }
+                if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
+                    yield registeredCount < capacity ? EventStatus.REGISTRATION_OPEN : EventStatus.FULL;
+                }
+                yield EventStatus.FULL;
+            }
+            case FINAL_REVIEW -> {
+                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime startAt = toLocalDateTime(firstPresent(event.get("eventStartAt"), event.get("startAt")));
+                LocalDateTime endAt = toLocalDateTime(firstPresent(event.get("eventEndAt"), event.get("endAt")));
+                if (endAt != null && now.isAfter(endAt)) yield EventStatus.ENDED;
+                if (startAt != null && !now.isBefore(startAt)) yield EventStatus.ACTIVE;
+                yield EventStatus.PUBLISHED;
+            }
+        };
+    }
+
+    private EventStatus parseEventStatus(String status) {
+        String normalized = normalizeText(status);
+        if (normalized == null) return null;
+        try {
+            return EventStatus.valueOf(normalized.toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private Comparator<OrganizerEventSummaryResponse> organizerEventComparator(String sort) {
+        LocalDateTime now = LocalDateTime.now();
+        boolean upcomingFirst = "UPCOMING_FIRST".equals(sort);
+        return (left, right) -> {
+            int leftGroup = organizerEventSortGroup(left, now, upcomingFirst);
+            int rightGroup = organizerEventSortGroup(right, now, upcomingFirst);
+            int groupComparison = Integer.compare(leftGroup, rightGroup);
+            if (groupComparison != 0) return groupComparison;
+
+            Comparator<OrganizerEventSummaryResponse> withinGroup;
+            boolean draftGroup = WorkflowStatus.DRAFT.name().equals(left.workflowStatus())
+                    && WorkflowStatus.DRAFT.name().equals(right.workflowStatus());
+            boolean endedGroup = left.eventEndAt() != null && left.eventEndAt().isBefore(now)
+                    && right.eventEndAt() != null && right.eventEndAt().isBefore(now);
+            if (draftGroup) {
+                withinGroup = Comparator.comparing(OrganizerEventSummaryResponse::createdAt,
+                        Comparator.nullsLast(Comparator.reverseOrder()));
+            } else if (endedGroup) {
+                withinGroup = Comparator.comparing(OrganizerEventSummaryResponse::eventEndAt,
+                        Comparator.nullsLast(Comparator.reverseOrder()));
+            } else {
+                withinGroup = Comparator.comparing(OrganizerEventSummaryResponse::eventStartAt,
+                        Comparator.nullsLast(Comparator.naturalOrder()));
+            }
+            return withinGroup.thenComparing(
+                    OrganizerEventSummaryResponse::eventId,
+                    Comparator.reverseOrder()).compare(left, right);
+        };
+    }
+
+    private int organizerEventSortGroup(
+            OrganizerEventSummaryResponse event,
+            LocalDateTime now,
+            boolean upcomingFirst) {
+        boolean draft = WorkflowStatus.DRAFT.name().equals(event.workflowStatus());
+        boolean unfinished = event.eventEndAt() == null || !event.eventEndAt().isBefore(now);
+        if (!upcomingFirst && draft) return 0;
+        if (unfinished && !draft) return upcomingFirst ? 0 : 1;
+        if (!unfinished) return upcomingFirst ? 1 : 2;
+        return 2;
+    }
+
+    private long longValue(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
     }
 
     private ApiResponse<OrganizerAccountResponse> loadOrganizerAccount(String authorizationHeader, String successMessage) {
@@ -362,6 +629,11 @@ public class OrganizerService {
         }
 
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> summary = organizerRepository.findOrganizerApplicationTaskSummary(organizerUserId);
+        OrganizerTaskSummaryResponse taskSummary = new OrganizerTaskSummaryResponse(
+                longValue(summary.get("pendingReviewCount")),
+                longValue(summary.get("pendingRefundConfirmationCount")),
+                longValue(summary.get("pendingStallSelectionCount")));
         LocalDateTime appliedStartAt = registrationStartAt == null ? null : registrationStartAt.atStartOfDay();
         LocalDateTime appliedEndExclusive = registrationEndAt == null ? null : registrationEndAt.plusDays(1).atStartOfDay();
         List<Map<String, Object>> applicationRows = organizerRepository
@@ -376,7 +648,9 @@ public class OrganizerService {
                 .toList();
         return ApiResponse.success(
                 "Organizer applications retrieved successfully",
-                new OrganizerApplicationSearchResponse(PageResponse.from(applications, page, pageSize)));
+                new OrganizerApplicationSearchResponse(
+                        taskSummary,
+                        PageResponse.from(applications, page, pageSize)));
     }
 
     public ApiResponse<OrganizerStallEventSearchResponse> searchOrganizerStallEvents(

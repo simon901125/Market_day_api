@@ -345,6 +345,7 @@ CREATE TABLE dbo.event_stall_zones
     id BIGINT IDENTITY(1,1) NOT NULL,
     event_id BIGINT NOT NULL,
     zone_name NVARCHAR(50) NOT NULL,
+    zone_color NVARCHAR(20) NULL,
     stall_count INT NOT NULL,
     CONSTRAINT PK_event_stall_zones PRIMARY KEY (id),
     CONSTRAINT FK_event_stall_zones_market_events FOREIGN KEY (event_id) REFERENCES dbo.market_events(id),
@@ -885,6 +886,7 @@ EXEC dbo.usp_add_column_description N'event_unpublish_requests', N'reviewed_at',
 EXEC dbo.usp_add_column_description N'event_stall_zones', N'id', N'分區 ID';
 EXEC dbo.usp_add_column_description N'event_stall_zones', N'event_id', N'活動 ID';
 EXEC dbo.usp_add_column_description N'event_stall_zones', N'zone_name', N'分區名稱';
+EXEC dbo.usp_add_column_description N'event_stall_zones', N'zone_color', N'分區顏色（例如 #FF8A00）';
 EXEC dbo.usp_add_column_description N'event_stall_zones', N'stall_count', N'分區攤位數量';
 
 EXEC dbo.usp_add_column_description N'event_stalls', N'id', N'攤位 ID';

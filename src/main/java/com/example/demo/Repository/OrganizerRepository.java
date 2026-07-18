@@ -16,6 +16,162 @@ public class OrganizerRepository {
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
+    public Map<String, Object> findOrganizerApplicationTaskSummary(Long organizerUserId) {
+        String sql = """
+                SELECT
+                    (SELECT COUNT(*)
+                     FROM dbo.event_applications a
+                     INNER JOIN dbo.market_events e ON e.id = a.event_id
+                     WHERE e.user_id = :organizerUserId
+                       AND a.review_status = N'PENDING'
+                       AND a.is_cancelled = 0) AS pendingReviewCount,
+                    (SELECT COUNT(*)
+                     FROM dbo.refunds r
+                     INNER JOIN dbo.event_applications a ON a.id = r.application_id
+                     INNER JOIN dbo.market_events e ON e.id = a.event_id
+                     WHERE e.user_id = :organizerUserId
+                       AND r.refund_status = N'REFUND_REQUESTED') AS pendingRefundConfirmationCount,
+                    (SELECT COUNT(*)
+                     FROM dbo.application_dates ad
+                     INNER JOIN dbo.event_applications a ON a.id = ad.application_id
+                     INNER JOIN dbo.market_events e ON e.id = a.event_id
+                     WHERE e.user_id = :organizerUserId
+                       AND a.review_status = N'APPROVED'
+                       AND a.payment_status = N'PAID'
+                       AND a.is_cancelled = 0
+                       AND ad.selected_stall_id IS NULL) AS pendingStallSelectionCount
+                """;
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("organizerUserId", organizerUserId)).stream().findFirst()).orElse(Map.of());
+    }
+
+    public List<Map<String, Object>> findOrganizerEvents(
+            Long organizerUserId,
+            String keyword,
+            LocalDateTime startAt,
+            LocalDateTime endExclusive) {
+        String sql = """
+                SELECT
+                    e.id AS eventId,
+                    e.title AS eventTitle,
+                    e.cover_image_url AS coverImageUrl,
+                    e.start_at AS eventStartAt,
+                    e.end_at AS eventEndAt,
+                    e.registration_start_at AS registrationStartAt,
+                    e.registration_end_at AS registrationEndAt,
+                    e.location_name AS locationName,
+                    e.city,
+                    e.district,
+                    e.address,
+                    e.workflow_status AS workflowStatus,
+                    e.create_at AS createdAt,
+                    e.max_booths AS capacity,
+                    COALESCE(stats.registeredCount, 0) AS registeredCount,
+                    COALESCE(stats.pendingReviewCount, 0) AS pendingReviewCount,
+                    COALESCE(stats.paidCount, 0) AS paidCount,
+                    COALESCE(stats.selectedCount, 0) AS selectedCount
+                FROM dbo.market_events e
+                OUTER APPLY (
+                    SELECT
+                        COUNT(*) AS registeredCount,
+                        SUM(applicationStats.isPending) AS pendingReviewCount,
+                        SUM(applicationStats.isPaid) AS paidCount,
+                        SUM(applicationStats.isSelected) AS selectedCount
+                    FROM (
+                        SELECT
+                            CASE WHEN a.review_status = N'PENDING' THEN 1 ELSE 0 END AS isPending,
+                            CASE
+                                WHEN a.payment_status = N'PAID'
+                                 AND refundStats.hasRefund = 0
+                                THEN 1 ELSE 0
+                            END AS isPaid,
+                            CASE
+                                WHEN a.review_status = N'APPROVED'
+                                 AND a.payment_status = N'PAID'
+                                 AND refundStats.hasRefund = 0
+                                 AND selectionStats.dateCount > 0
+                                 AND selectionStats.unselectedCount = 0
+                                THEN 1 ELSE 0
+                            END AS isSelected
+                        FROM dbo.event_applications a
+                        OUTER APPLY (
+                            SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS hasRefund
+                            FROM dbo.refunds r
+                            WHERE r.application_id = a.id
+                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                        ) refundStats
+                        OUTER APPLY (
+                            SELECT
+                                COUNT(*) AS dateCount,
+                                SUM(CASE WHEN ad.selected_stall_id IS NULL THEN 1 ELSE 0 END) AS unselectedCount
+                            FROM dbo.application_dates ad
+                            WHERE ad.application_id = a.id
+                        ) selectionStats
+                        WHERE a.event_id = e.id
+                          AND a.is_cancelled = 0
+                          AND a.review_status <> N'REJECTED'
+                    ) applicationStats
+                ) stats
+                WHERE e.user_id = :organizerUserId
+                  AND e.workflow_status <> N'CANCELLED'
+                  AND (:keyword IS NULL OR e.title LIKE N'%' + :keyword + N'%')
+                  AND (:startAt IS NULL OR e.end_at >= :startAt)
+                  AND (:endExclusive IS NULL OR e.start_at < :endExclusive)
+                """;
+        Map<String, Object> params = new HashMap<>();
+        params.put("organizerUserId", organizerUserId);
+        params.put("keyword", normalizeText(keyword));
+        params.put("startAt", startAt);
+        params.put("endExclusive", endExclusive);
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, params));
+    }
+
+    public Optional<Map<String, Object>> findOrganizerEventDetail(Long organizerUserId, Long eventId) {
+        String sql = """
+                SELECT e.id AS eventId, e.title AS eventTitle, e.summary, e.description,
+                       e.cover_image_url AS coverImageUrl, e.start_at AS startAt, e.end_at AS endAt,
+                       e.registration_start_at AS registrationStartAt,
+                       e.registration_end_at AS registrationEndAt,
+                       e.public_info_at AS publicInfoAt, e.brands_public_at AS brandsPublicAt,
+                       e.location_name AS locationName, e.city, e.district, e.address,
+                       e.traffic_info_metro AS trafficInfoMetro, e.traffic_info_bus AS trafficInfoBus,
+                       e.traffic_info_driving AS trafficInfoDriving, e.max_booths AS maxBooths,
+                       e.stall_width AS stallWidth, e.stall_length AS stallLength,
+                       e.base_fee AS baseFee, e.deposit_amount AS depositAmount,
+                       e.map_image_url AS mapImageUrl, e.workflow_status AS workflowStatus,
+                       e.review_note AS reviewNote, e.create_at AS createdAt,
+                       (SELECT COUNT(*) FROM dbo.event_applications a
+                        WHERE a.event_id = e.id AND a.is_cancelled = 0
+                          AND a.review_status <> N'REJECTED') AS registeredCount
+                FROM dbo.market_events e
+                WHERE e.id = :eventId AND e.user_id = :organizerUserId
+                """;
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("organizerUserId", organizerUserId, "eventId", eventId)).stream().findFirst());
+    }
+
+    public List<Map<String, Object>> findOrganizerEventCategories(Long eventId) {
+        String sql = """
+                SELECT c.id AS categoryId, c.name AS categoryName, c.slug AS categorySlug
+                FROM dbo.market_event_categories mec
+                INNER JOIN dbo.categories c ON c.id = mec.category_id
+                WHERE mec.event_id = :eventId
+                ORDER BY c.id
+                """;
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)));
+    }
+
+    public List<Map<String, Object>> findOrganizerEventZones(Long eventId) {
+        String sql = """
+                SELECT z.id AS zoneId, z.zone_name AS zoneName, z.stall_count AS stallCount,
+                       z.zone_color AS colorCode
+                FROM dbo.event_stall_zones z
+                WHERE z.event_id = :eventId
+                ORDER BY z.id
+                """;
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)));
+    }
+
     public List<Map<String, Object>> findVendorCategoriesByProfileIds(List<Long> vendorProfileIds) {
         if (vendorProfileIds == null || vendorProfileIds.isEmpty()) {
             return List.of();

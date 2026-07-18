@@ -57,6 +57,14 @@ class OrganizerControllerTest {
         verify(organizerService).saveOrganizerProfile(AUTH, request);
     }
 
+    @Test void eventSearchEndpointDelegatesAllFiltersAndPages() {
+        LocalDate start = LocalDate.of(2026, 7, 1);
+        LocalDate end = LocalDate.of(2026, 7, 31);
+        controller.searchOrganizerEvents(AUTH, "market", "FULL", start, end, "UPCOMING_FIRST", 1, 3);
+        verify(organizerService).searchOrganizerEvents(
+                AUTH, "market", "FULL", start, end, "UPCOMING_FIRST", 1, 3);
+    }
+
     @Test void applicationSearchDetailApproveAndRejectDelegate() {
         LocalDate start = LocalDate.of(2026, 2, 1);
         LocalDate end = LocalDate.of(2026, 2, 28);

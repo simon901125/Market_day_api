@@ -49,6 +49,10 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
 
     @Test void organizerReadQueriesCompileAgainstCurrentSchema() {
         assertThat(organizer.findOrganizerAccountByEmail("none@example.test")).isEmpty();
+        assertThat(organizer.findOrganizerEvents(-1L, null, null, null)).isEmpty();
+        assertThat(organizer.findOrganizerEventDetail(-1L, -1L)).isEmpty();
+        assertThat(organizer.findOrganizerEventCategories(-1L)).isEmpty();
+        assertThat(organizer.findOrganizerEventZones(-1L)).isEmpty();
         assertThat(organizer.findOrganizerAccountingEvents(-1L, null, null, null)).isEmpty();
         assertThat(organizer.findOrganizerAccountingEventDetail(-1L, -1L)).isEmpty();
         assertThat(organizer.findOrganizerAccountingPaymentDetails(-1L)).isEmpty();
