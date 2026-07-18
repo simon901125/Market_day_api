@@ -232,7 +232,7 @@ public class OrganizerService {
                         normalizeText(event.get("trafficInfoMetro")), normalizeText(event.get("trafficInfoBus")),
                         normalizeText(event.get("trafficInfoDriving"))),
                 new OrganizerEventDetailResponse.Booth(
-                        intValue(event.get("maxBooths")), toBigDecimal(event.get("stallWidth")),
+                        nullableInteger(event.get("maxBooths")), toBigDecimal(event.get("stallWidth")),
                         toBigDecimal(event.get("stallLength")), toBigDecimal(event.get("baseFee")),
                         toBigDecimal(event.get("depositAmount")), normalizeText(event.get("mapImageUrl")), zones),
                 new OrganizerEventDetailResponse.Equipment(

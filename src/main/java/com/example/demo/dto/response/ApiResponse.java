@@ -302,6 +302,8 @@ public class ApiResponse<T> {
                 "\u7533\u8acb\u65e5\u671f\u4e0d\u5c6c\u65bc\u6b64\u5831\u540d";
             case "Event id is required" -> "\u8acb\u63d0\u4f9b\u6d3b\u52d5 ID";
             case "Event not found" -> "\u627e\u4e0d\u5230\u6d3b\u52d5\u8cc7\u6599";
+            case "Booth numbers and fees are invalid" ->
+                "\u6524\u4f4d\u6578\u91cf\u3001\u5c3a\u5bf8\u6216\u8cbb\u7528\u8a2d\u5b9a\u4e0d\u6b63\u78ba";
             case "Brand id is required" -> "\u8acb\u63d0\u4f9b\u54c1\u724c ID";
             case "Brand not found" -> "\u627e\u4e0d\u5230\u54c1\u724c\u8cc7\u6599";
             case "Stall not found" -> "\u627e\u4e0d\u5230\u6524\u4f4d\u8cc7\u6599";
