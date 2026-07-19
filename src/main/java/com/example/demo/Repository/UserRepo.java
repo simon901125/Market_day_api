@@ -1,6 +1,7 @@
 package com.example.demo.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -22,6 +23,12 @@ public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExe
     int countByRoleAndStatus(Role role, UserStatus status);
     Optional<User> findByEmail(String email);
     long countByIdAndRole(Long id, Role role);
+
+    @Query("SELECT user.id FROM User user WHERE user.status = :status ORDER BY user.id")
+    List<Long> findIdsByStatus(@Param("status") UserStatus status);
+
+    @Query("SELECT user.id FROM User user WHERE user.role = :role AND user.status = :status ORDER BY user.id")
+    List<Long> findIdsByRoleAndStatus(@Param("role") Role role, @Param("status") UserStatus status);
 
     /** 管理員後台: 攤主詳細:帳號與品牌基本資料 (不含最後登入時間、活動數統計，需另外查詢) */
     @Query("""

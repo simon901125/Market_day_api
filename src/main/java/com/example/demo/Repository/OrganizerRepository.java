@@ -930,6 +930,86 @@ public class OrganizerRepository {
         return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, map));
     }
 
+    public List<Map<String, Object>> findOrganizerPayments(
+            Long organizerUserId,
+            String keyword,
+            String paymentStatus,
+            LocalDateTime paidStartAt,
+            LocalDateTime paidEndExclusive) {
+        String sql = """
+                SELECT
+                    a.id AS applicationId,
+                    e.cover_image_url AS eventCoverImageUrl,
+                    e.title AS eventTitle,
+                    vp.brand_name AS brandName,
+                    vendor_up.contact_name AS vendorName,
+                    a.total_amount AS paymentAmount,
+                    a.deposit_amount AS depositAmount,
+                    a.deposit_status AS depositStatus,
+                    a.review_status AS reviewStatus,
+                    a.is_cancelled AS isCancelled,
+                    e.end_at AS eventEndAt,
+                    application_dates.applicationDateCount,
+                    application_dates.selectedStallCount,
+                    COALESCE(latest_payment.paymentTime, a.created_at) AS paymentTime,
+                    a.payment_status AS paymentStatus,
+                    latest_refund.refundStatus,
+                    payment_stage.paymentStage
+                FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
+                INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
+                INNER JOIN dbo.user_profiles vendor_up ON vendor_up.id = vp.user_profile_id
+                OUTER APPLY (
+                    SELECT
+                        COUNT(*) AS applicationDateCount,
+                        SUM(CASE WHEN ad.selected_stall_id IS NULL THEN 0 ELSE 1 END) AS selectedStallCount
+                    FROM dbo.application_dates ad
+                    WHERE ad.application_id = a.id
+                ) application_dates
+                OUTER APPLY (
+                    SELECT TOP (1) COALESCE(p.paid_at, p.created_at) AS paymentTime
+                    FROM dbo.payments p
+                    WHERE p.application_id = a.id
+                    ORDER BY
+                        CASE WHEN p.status = N'PAID' THEN 0 ELSE 1 END,
+                        COALESCE(p.paid_at, p.created_at) DESC,
+                        p.id DESC
+                ) latest_payment
+                OUTER APPLY (
+                    SELECT TOP (1) r.refund_status AS refundStatus
+                    FROM dbo.refunds r
+                    WHERE r.application_id = a.id
+                    ORDER BY r.id DESC
+                ) latest_refund
+                CROSS APPLY (
+                    VALUES (CASE
+                        WHEN latest_refund.refundStatus IS NOT NULL THEN latest_refund.refundStatus
+                        ELSE a.payment_status
+                    END)
+                ) payment_stage(paymentStage)
+                WHERE e.user_id = :organizerUserId
+                  AND a.review_status = N'APPROVED'
+                  AND (:keyword IS NULL
+                       OR e.title LIKE N'%' + :keyword + N'%'
+                       OR vp.brand_name LIKE N'%' + :keyword + N'%')
+                  AND (:paymentStatus IS NULL OR payment_stage.paymentStage = :paymentStatus)
+                  AND (:paidStartAt IS NULL OR COALESCE(latest_payment.paymentTime, a.created_at) >= :paidStartAt)
+                  AND (:paidEndExclusive IS NULL OR COALESCE(latest_payment.paymentTime, a.created_at) < :paidEndExclusive)
+                ORDER BY
+                    COALESCE(latest_payment.paymentTime, a.created_at) DESC,
+                    a.created_at DESC,
+                    a.id DESC
+                """;
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("organizerUserId", organizerUserId);
+        parameters.put("keyword", keyword);
+        parameters.put("paymentStatus", paymentStatus);
+        parameters.put("paidStartAt", paidStartAt);
+        parameters.put("paidEndExclusive", paidEndExclusive);
+        return RepositoryResultMapper.normalizeList(namedParameterJdbcTemplate.queryForList(sql, parameters));
+    }
+
     public List<Map<String, Object>> findOrganizerStallEvents(
             Long organizerUserId,
             String eventTitle,

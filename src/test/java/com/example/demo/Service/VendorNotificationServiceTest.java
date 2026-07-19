@@ -83,6 +83,28 @@ class VendorNotificationServiceTest {
     }
 
     @Test
+    void systemFilterReturnsVendorSystemNotifications() {
+        authenticateVendor(7L);
+        when(notificationRepository.countVendorNotifications(
+                eq(7L), eq(NotificationCategory.SYSTEM), eq(false), any(LocalDateTime.class)))
+                .thenReturn(0L);
+        when(notificationRepository.countVendorNotifications(
+                eq(7L), eq(null), eq(true), any(LocalDateTime.class)))
+                .thenReturn(0L);
+        when(notificationRepository.findVendorNotifications(
+                eq(7L), eq(NotificationCategory.SYSTEM), eq(false),
+                any(LocalDateTime.class), eq(0), eq(10)))
+                .thenReturn(List.of());
+
+        var response = service.getNotifications("Bearer token", "系統通知", 1, 10);
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        verify(notificationRepository).findVendorNotifications(
+                eq(7L), eq(NotificationCategory.SYSTEM), eq(false),
+                any(LocalDateTime.class), eq(0), eq(10));
+    }
+
+    @Test
     void newVendorWithoutProfileReturnsEmptyNotificationPage() {
         authenticateVendor(7L);
         when(notificationRepository.countVendorNotifications(

@@ -64,6 +64,10 @@ public class Notification {
     @Column(name = "target_id")
     private Long targetId;
 
+    /** Optional idempotency key used by NotificationService notifications. */
+    @Column(name = "dedup_key", length = 255, unique = true)
+    private String dedupKey;
+
     /** 通知標題 */
     @Column(name = "title", length = 150, nullable = false)
     private String title;

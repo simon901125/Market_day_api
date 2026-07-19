@@ -10,6 +10,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -61,6 +62,9 @@ public class UserService {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Value("${google.client-id}")
     private String googleClientId;
@@ -523,6 +527,13 @@ public class UserService {
             return ApiResponse.fail("Password reset failed");
         }
 
+        Map<String, Object> account = userRepository.findUserAccountById(userId)
+                .orElseThrow(() -> new IllegalStateException("Password reset account not found"));
+        notificationService.notifyPasswordResetCompleted(
+                userId,
+                String.valueOf(account.get("email")),
+                UUID.randomUUID().toString());
+
         return ApiResponse.success("Password reset successfully");
     }
 
@@ -556,6 +567,13 @@ public class UserService {
         if (updatedRows == 0) {
             return ApiResponse.fail("Password reset failed");
         }
+
+        Long userId = ((Number) userData.get().get("id")).longValue();
+        setResolvedRequestUserId(userId);
+        notificationService.notifyPasswordResetCompleted(
+                userId,
+                email,
+                UUID.randomUUID().toString());
 
         return ApiResponse.success("Password reset successfully");
     }

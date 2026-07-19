@@ -168,13 +168,18 @@ public class StallRepository {
     public Optional<Map<String, Object>> findVendorApplicationForCancellation(Long applicationId, Long vendorUserId) {
         String sql = """
                 SELECT
-                    id AS applicationId,
-                    review_status AS reviewStatus,
-                    payment_status AS paymentStatus,
-                    is_cancelled AS isCancelled
-                FROM dbo.event_applications
-                WHERE id = :applicationId
-                  AND user_id = :vendorUserId
+                    a.id AS applicationId,
+                    a.review_status AS reviewStatus,
+                    a.payment_status AS paymentStatus,
+                    a.is_cancelled AS isCancelled,
+                    e.user_id AS organizerUserId,
+                    e.title AS eventTitle,
+                    vp.brand_name AS brandName
+                FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
+                INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
+                WHERE a.id = :applicationId
+                  AND a.user_id = :vendorUserId
                 """;
 
         Map<String, Object> parameters = new HashMap<>();

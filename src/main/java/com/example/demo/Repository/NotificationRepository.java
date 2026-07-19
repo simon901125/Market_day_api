@@ -27,18 +27,25 @@ public class NotificationRepository {
                 type,
                 target_type,
                 target_id,
+                dedup_key,
                 title,
                 content
             )
-            VALUES (
+            SELECT
                 :userId,
                 :category,
                 :type,
                 :targetType,
                 :targetId,
+                :dedupKey,
                 :title,
                 :content
-            )
+            WHERE :dedupKey IS NULL
+               OR NOT EXISTS (
+                    SELECT 1
+                    FROM dbo.notifications WITH (UPDLOCK, HOLDLOCK)
+                    WHERE dedup_key = :dedupKey
+               )
             """;
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
@@ -242,6 +249,7 @@ public class NotificationRepository {
                 .addValue("type", command.type().name())
                 .addValue("targetType", command.targetType().name())
                 .addValue("targetId", command.targetId())
+                .addValue("dedupKey", command.dedupKey())
                 .addValue("title", command.title())
                 .addValue("content", command.content());
     }

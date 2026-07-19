@@ -69,6 +69,7 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
         assertThat(organizer.findOrganizerAccountingEvents(-1L, null, null, null)).isEmpty();
         assertThat(organizer.findOrganizerAccountingEventDetail(-1L, -1L)).isEmpty();
         assertThat(organizer.findOrganizerAccountingPaymentDetails(-1L)).isEmpty();
+        assertThat(organizer.findOrganizerPayments(-1L, null, null, null, null)).isEmpty();
         assertThat(organizer.findOrganizerStallEvents(-1L, null, null, null)).isEmpty();
         assertThat(organizer.findOrganizerEquipmentEvents(-1L, null, null, null)).isEmpty();
         assertThat(organizer.findOrganizerApplications(-1L, null, null, null, null)).isEmpty();

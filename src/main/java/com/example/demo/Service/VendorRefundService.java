@@ -104,6 +104,10 @@ public class VendorRefundService {
         }
 
         notifyOrganizer(application, refundId);
+        notificationService.notifyVendorRefundRequested(
+                vendorUserId,
+                refundId,
+                stringValue(application.get("eventName")));
 
         String paymentNo = stringValue(paidPayment.get("paymentNo"));
         VendorRefundResponse response = new VendorRefundResponse(

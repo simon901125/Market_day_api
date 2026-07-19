@@ -34,6 +34,8 @@ import com.example.demo.dto.response.OrganizerApplicationDetailResponse;
 import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
 import com.example.demo.dto.response.OrganizerDashboardInitResponse;
 import com.example.demo.dto.response.OrganizerNotificationSearchResponse;
+import com.example.demo.dto.response.OrganizerPaymentSearchResponse;
+import com.example.demo.dto.response.OrganizerPaymentDetailResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEventSearchResponse;
 import com.example.demo.dto.response.OrganizerEventDetailResponse;
@@ -169,6 +171,28 @@ public class OrganizerController {
                 eventEndAt,
                 page,
                 pageSize);
+    }
+
+    @Operation(summary = "取得付款列表", description = "查詢目前登入主辦方所有活動中已進入付款流程的報名資料；退款狀態優先於付款狀態")
+    @PostMapping("/api/organizer/payments/search")
+    public ApiResponse<OrganizerPaymentSearchResponse> searchOrganizerPayments(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "paymentStatus", required = false) String paymentStatus,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(value = "page", required = false, defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", required = false, defaultValue = "10") Integer pageSize) {
+        return organizerService.searchOrganizerPayments(
+                authorizationHeader, keyword, paymentStatus, startDate, endDate, page, pageSize);
+    }
+
+    @Operation(summary = "取得付款詳情", description = "依報名 ID 取得目前登入主辦方的付款、退款、費用及設備明細")
+    @GetMapping("/api/organizer/payments/{id}")
+    public ApiResponse<OrganizerPaymentDetailResponse> getOrganizerPaymentDetail(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long id) {
+        return organizerService.getOrganizerPaymentDetail(authorizationHeader, id);
     }
 
     @Operation(summary = "查詢主辦方活動帳務詳情", description = "依活動 ID 查詢帳務摘要、統計與付款明細。")

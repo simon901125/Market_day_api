@@ -24,12 +24,15 @@ import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.NotificationRepository;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.dto.notification.NotificationCreateCommand;
+import com.example.demo.dto.request.SystemAnnouncementRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.entity.Notification;
 import com.example.demo.entity.User;
 import com.example.demo.enums.notification.NotificationCategory;
 import com.example.demo.enums.notification.NotificationTargetType;
 import com.example.demo.enums.notification.NotificationType;
+import com.example.demo.enums.status.UserStatus;
+import com.example.demo.enums.type.Role;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -78,6 +81,8 @@ class NotificationServiceTest {
         assertThat(command.type()).isEqualTo(NotificationType.APPLICATION_SUBMITTED);
         assertThat(command.targetType()).isEqualTo(NotificationTargetType.EVENT_APPLICATION);
         assertThat(command.targetId()).isEqualTo(20L);
+        assertThat(command.dedupKey()).isEqualTo(
+                "10:APPLICATION_SUBMITTED:EVENT_APPLICATION:20:v1");
         assertThat(command.content()).contains("夏日市集");
     }
 
@@ -144,6 +149,16 @@ class NotificationServiceTest {
     }
 
     @Test
+    void repositoryFailureIsPropagatedToTheCallingApiTransaction() {
+        when(notificationRepository.create(any(NotificationCreateCommand.class)))
+                .thenThrow(new IllegalStateException("notification insert failed"));
+
+        assertThatThrownBy(() -> notificationService.notifyApplicationSubmitted(10L, 20L, "夏日市集"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("notification insert failed");
+    }
+
+    @Test
     void systemAnnouncementCreatesOneTargetlessNotificationPerDistinctRecipient() {
         notificationService.notifySystemAnnouncement(
                 List.of(10L, 20L, 10L),
@@ -162,6 +177,37 @@ class NotificationServiceTest {
                     assertThat(command.targetType()).isEqualTo(NotificationTargetType.SYSTEM);
                     assertThat(command.targetId()).isNull();
                 });
+    }
+
+    @Test
+    void administratorCanBroadcastAnnouncementToEveryActiveAccount() {
+        User admin = userWithId(1L);
+        admin.setRole(Role.ADMIN);
+        authenticate("token", "admin@example.com", admin);
+        when(userRepo.findIdsByStatus(UserStatus.ACTIVE)).thenReturn(List.of(1L, 2L, 3L));
+
+        var response = notificationService.broadcastSystemAnnouncement(
+                "Bearer token", new SystemAnnouncementRequest("系統維護", "今晚進行維護"));
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        assertThat(response.getData().getValues()).containsEntry("recipientCount", 3);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<NotificationCreateCommand>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(notificationRepository).createAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(3);
+    }
+
+    @Test
+    void nonAdministratorCannotBroadcastAnnouncement() {
+        User vendor = userWithId(2L);
+        vendor.setRole(Role.VENDOR);
+        authenticate("token", "vendor@example.com", vendor);
+
+        var response = notificationService.broadcastSystemAnnouncement(
+                "Bearer token", new SystemAnnouncementRequest("系統維護", "今晚進行維護"));
+
+        assertThat(response.getStatusCode()).isEqualTo(403);
+        verify(notificationRepository, never()).createAll(any());
     }
 
     @Test
