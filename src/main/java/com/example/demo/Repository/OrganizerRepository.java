@@ -97,6 +97,30 @@ public class OrganizerRepository {
                 """, Map.of("organizerUserId", organizerUserId, "eventId", eventId));
     }
 
+    public int publishOrganizerEvent(
+            Long organizerUserId, Long eventId, LocalDateTime firstPublishedAt) {
+        return namedParameterJdbcTemplate.update("""
+                UPDATE dbo.market_events
+                SET workflow_status = N'PUBLISHED',
+                    public_info_at = COALESCE(public_info_at, :firstPublishedAt)
+                WHERE id = :eventId
+                  AND user_id = :organizerUserId
+                  AND workflow_status = N'READY_TO_PUBLISH'
+                """, Map.of(
+                        "organizerUserId", organizerUserId,
+                        "eventId", eventId,
+                        "firstPublishedAt", firstPublishedAt));
+    }
+
+    public int countEventStalls(Long eventId) {
+        Integer count = namedParameterJdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM dbo.event_stalls
+                WHERE event_id = :eventId
+                """, Map.of("eventId", eventId), Integer.class);
+        return count == null ? 0 : count;
+    }
+
     public int countActiveCategories(Set<Long> categoryIds) {
         return namedParameterJdbcTemplate.queryForObject("""
                 SELECT COUNT(*)

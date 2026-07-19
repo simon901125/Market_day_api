@@ -874,7 +874,11 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
         }
 
-        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.MAP_BUILDING, WorkflowStatus.READY_TO_PUBLISH);
+        int updatedRows = eventRepo.updateWorkflowStatusIfCurrent(
+                eventId, WorkflowStatus.MAP_BUILDING, WorkflowStatus.READY_TO_PUBLISH);
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException(event.title() + "狀態已變更，請重新載入後再操作");
+        }
 
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(event.organizerId()));

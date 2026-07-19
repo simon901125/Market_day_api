@@ -53,6 +53,7 @@ import com.example.demo.dto.response.OrganizerEventDetailResponse;
 import com.example.demo.dto.response.OrganizerEventSummaryResponse;
 import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
 import com.example.demo.dto.response.OrganizerEventWithdrawResponse;
+import com.example.demo.dto.response.OrganizerEventPublishResponse;
 import com.example.demo.dto.response.OrganizerTaskSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 import com.example.demo.dto.response.PageResponse;
@@ -389,6 +390,91 @@ public class OrganizerService {
                         availableOrganizerEventActions(WorkflowStatus.DRAFT, EventStatus.DRAFT)));
     }
 
+    @Transactional
+    public ApiResponse<OrganizerEventPublishResponse> publishOrganizerEvent(
+            String authorizationHeader, Long eventId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (eventId == null || eventId <= 0) {
+            return ApiResponse.fail("Invalid event id");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> event = organizerRepository
+                .findOrganizerEventDetail(organizerUserId, eventId).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail(404, "Organizer event not found");
+        }
+
+        WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(event.get("workflowStatus")));
+        if (workflowStatus != WorkflowStatus.READY_TO_PUBLISH) {
+            return ApiResponse.fail(409, "Event cannot be published in its current workflow status");
+        }
+
+        List<String> missingFields = validateOrganizerEventPublish(eventId, event);
+        if (!missingFields.isEmpty()) {
+            EventStatus status = EventStatus.READY_TO_PUBLISH;
+            OrganizerEventPublishResponse validation = new OrganizerEventPublishResponse(
+                    eventId,
+                    workflowStatus.name(),
+                    status.getStatus(),
+                    status.getDescription(),
+                    toLocalDateTime(event.get("publicInfoAt")),
+                    availableOrganizerEventActions(workflowStatus, status),
+                    missingFields);
+            return new ApiResponse<>(400, "活動尚未符合發布條件", "請確認活動資料與攤位地圖", validation);
+        }
+
+        if (organizerRepository.publishOrganizerEvent(
+                organizerUserId, eventId, LocalDateTime.now()) != 1) {
+            return ApiResponse.fail(409, "Event workflow status changed before publication");
+        }
+
+        Map<String, Object> published = organizerRepository
+                .findOrganizerEventDetail(organizerUserId, eventId).orElseThrow();
+        EventStatus status = resolveOrganizerEventStatus(
+                published,
+                WorkflowStatus.PUBLISHED,
+                intValue(published.get("maxBooths")),
+                intValue(published.get("registeredCount")));
+        return ApiResponse.success("Organizer event published successfully",
+                new OrganizerEventPublishResponse(
+                        eventId,
+                        WorkflowStatus.PUBLISHED.name(),
+                        status.getStatus(),
+                        status.getDescription(),
+                        toLocalDateTime(published.get("publicInfoAt")),
+                        availableOrganizerEventActions(WorkflowStatus.PUBLISHED, status),
+                        List.of()));
+    }
+
+    private List<String> validateOrganizerEventPublish(Long eventId, Map<String, Object> event) {
+        Set<String> errors = new LinkedHashSet<>();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startAt = toLocalDateTime(event.get("startAt"));
+        LocalDateTime endAt = toLocalDateTime(event.get("endAt"));
+        LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+
+        if (normalizeText(event.get("coverImageUrl")) == null) errors.add("coverImage");
+        if (normalizeText(event.get("mapImageUrl")) == null) errors.add("booth.mapImage");
+        if (organizerRepository.findOrganizerEventCategories(eventId).isEmpty()) errors.add("categoryIds");
+        if (organizerRepository.findOrganizerEventZones(eventId).isEmpty()) errors.add("booth.zones");
+
+        Integer maxBooths = nullableInteger(event.get("maxBooths"));
+        if (maxBooths == null || maxBooths <= 0
+                || organizerRepository.countEventStalls(eventId) != maxBooths) {
+            errors.add("booth.stalls");
+        }
+        if (startAt == null || !startAt.isAfter(now)) errors.add("schedule.startAt");
+        if (endAt == null || startAt == null || !endAt.isAfter(startAt)) errors.add("schedule.endAt");
+        if (registrationEndAt == null || !registrationEndAt.isAfter(now)) {
+            errors.add("schedule.registrationEndAt");
+        }
+        return List.copyOf(errors);
+    }
+
     private List<String> validateOrganizerEventReview(
             Map<String, Object> event,
             List<Map<String, Object>> categories,
@@ -691,8 +777,7 @@ public class OrganizerService {
             case PENDING_REVIEW -> List.of("WITHDRAW_REVIEW");
             case REVISION_REQUIRED -> List.of("EDIT", "RESUBMIT_REVIEW");
             case READY_TO_PUBLISH -> List.of("PUBLISH");
-            case PUBLISHED -> eventStatus == EventStatus.REGISTRATION_OPEN
-                    ? List.of("REQUEST_UNPUBLISH") : List.of();
+            case PUBLISHED -> List.of("REQUEST_UNPUBLISH");
             default -> List.of();
         };
     }
@@ -747,13 +832,17 @@ public class OrganizerService {
                 LocalDateTime now = LocalDateTime.now();
                 LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
                 LocalDateTime registrationEndAt = toLocalDateTime(event.get("registrationEndAt"));
+                LocalDateTime startAt = toLocalDateTime(firstPresent(event.get("eventStartAt"), event.get("startAt")));
+                LocalDateTime endAt = toLocalDateTime(firstPresent(event.get("eventEndAt"), event.get("endAt")));
                 if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
-                    yield EventStatus.READY_TO_PUBLISH;
+                    yield EventStatus.PUBLISHED;
                 }
                 if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
                     yield registeredCount < capacity ? EventStatus.REGISTRATION_OPEN : EventStatus.FULL;
                 }
-                yield EventStatus.FULL;
+                if (startAt != null && now.isBefore(startAt)) yield EventStatus.FINAL_CONFIRMATION;
+                if (endAt != null && now.isAfter(endAt)) yield EventStatus.ENDED;
+                yield EventStatus.ACTIVE;
             }
             case FINAL_REVIEW -> {
                 LocalDateTime now = LocalDateTime.now();

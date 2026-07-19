@@ -174,6 +174,7 @@ public class ApiResponse<T> {
             case "Image saved successfully" -> "\u5716\u7247\u5df2\u5132\u5b58\u4e26\u7d81\u5b9a\u8cc7\u6599";
             case "Organizer event submitted for review successfully" -> "\u6d3b\u52d5\u5df2\u9001\u51fa\u5be9\u6838";
             case "Organizer event review withdrawn successfully" -> "\u6d3b\u52d5\u5be9\u6838\u7533\u8acb\u5df2\u64a4\u56de";
+            case "Organizer event published successfully" -> "活動已成功發布";
             case "Notification marked as read" -> "\u901a\u77e5\u5df2\u6a19\u8a18\u70ba\u5df2\u8b80";
             default -> isLikelyEnglish(message) ? "\u64cd\u4f5c\u6210\u529f" : message;
         };
@@ -313,6 +314,10 @@ public class ApiResponse<T> {
                 "\u6d3b\u52d5\u76ee\u524d\u72c0\u614b\u7121\u6cd5\u64a4\u56de\u5be9\u6838\u7533\u8acb";
             case "Event workflow status changed before withdrawal" ->
                 "\u6d3b\u52d5\u72c0\u614b\u5df2\u8b8a\u66f4\uff0c\u8acb\u91cd\u65b0\u8f09\u5165\u5f8c\u518d\u78ba\u8a8d";
+            case "Event cannot be published in its current workflow status" ->
+                "活動目前狀態無法發布";
+            case "Event workflow status changed before publication" ->
+                "活動狀態已變更，請重新載入後再確認";
             case "Booth numbers and fees are invalid" ->
                 "\u6524\u4f4d\u6578\u91cf\u3001\u5c3a\u5bf8\u6216\u8cbb\u7528\u8a2d\u5b9a\u4e0d\u6b63\u78ba";
             case "Brand id is required" -> "\u8acb\u63d0\u4f9b\u54c1\u724c ID";

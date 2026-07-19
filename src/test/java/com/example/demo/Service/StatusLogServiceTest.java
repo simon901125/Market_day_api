@@ -299,6 +299,21 @@ class StatusLogServiceTest {
     }
 
     @Test
+    void organizerEventPublishRecordsPublishedStatus() {
+        MockHttpServletRequest request = post("/api/organizer/events/30/publish");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{}");
+
+        statusLogService.recordForRequest(13L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("PUBLISHED");
+    }
+
+    @Test
     void adminEventUnpublishConfirmRecordsUnpublishedAndApprovedRequestStatus() {
         MockHttpServletRequest request = post("/api/admin/events/30/unpublish-confirm");
         ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "\"庫存已清空\"");

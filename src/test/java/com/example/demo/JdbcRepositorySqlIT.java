@@ -134,6 +134,25 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
         assertThat(withdrawn.get("workflowStatus")).isEqualTo("DRAFT");
         assertThat(withdrawn.get("reviewNote")).isEqualTo("保留補件原因");
         assertThat(organizer.withdrawOrganizerEventReview(organizerUserId, eventId)).isZero();
+
+        Long zoneId = jdbc.queryForObject(
+                "SELECT id FROM dbo.event_stall_zones WHERE event_id = :eventId",
+                Map.of("eventId", eventId), Long.class);
+        for (int number = 1; number <= 10; number++) {
+            jdbc.update("""
+                    INSERT INTO dbo.event_stalls (event_id, zone_id, stall_no, status)
+                    VALUES (:eventId, :zoneId, :stallNo, N'AVAILABLE')
+                    """, Map.of("eventId", eventId, "zoneId", zoneId, "stallNo", "A" + number));
+        }
+        jdbc.update("UPDATE dbo.market_events SET workflow_status = N'READY_TO_PUBLISH' WHERE id = :eventId",
+                Map.of("eventId", eventId));
+        LocalDateTime firstPublishedAt = LocalDateTime.of(2026, 7, 19, 18, 0);
+        assertThat(organizer.countEventStalls(eventId)).isEqualTo(10);
+        assertThat(organizer.publishOrganizerEvent(organizerUserId, eventId, firstPublishedAt)).isOne();
+        Map<String, Object> published = organizer.findOrganizerEventDetail(organizerUserId, eventId).orElseThrow();
+        assertThat(published.get("workflowStatus")).isEqualTo("PUBLISHED");
+        assertThat(published.get("publicInfoAt")).isEqualTo(firstPublishedAt);
+        assertThat(organizer.publishOrganizerEvent(organizerUserId, eventId, firstPublishedAt.plusDays(1))).isZero();
     }
 
     @Test void paymentReadQueriesCompileAgainstCurrentSchema() {

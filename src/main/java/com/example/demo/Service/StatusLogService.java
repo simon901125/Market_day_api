@@ -68,6 +68,8 @@ public class StatusLogService {
                     this::buildOrganizerEventSubmitReviewLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/withdraw",
                     this::buildOrganizerEventWithdrawLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/publish",
+                    this::buildOrganizerEventPublishLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/CancelApplication/{id}",
                     this::buildVendorApplicationCancellationLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/deposits/refund",
@@ -191,6 +193,13 @@ public class StatusLogService {
         Long eventId = pathId(request.getRequestURI(), "/api/organizer/events/", "/withdraw");
         return validEntries(List.of(entry(
                 requestLogId, "EVENT", eventId, "workflow_status", "DRAFT")));
+    }
+
+    private List<StatusLogEntry> buildOrganizerEventPublishLogs(
+            Long requestLogId, HttpServletRequest request) {
+        Long eventId = pathId(request.getRequestURI(), "/api/organizer/events/", "/publish");
+        return validEntries(List.of(entry(
+                requestLogId, "EVENT", eventId, "workflow_status", "PUBLISHED")));
     }
 
     private List<StatusLogEntry> buildAdminEventRequestRevisionLogs(Long requestLogId, HttpServletRequest request) {

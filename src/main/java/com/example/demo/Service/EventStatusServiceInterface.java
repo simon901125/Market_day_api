@@ -38,16 +38,20 @@ public interface EventStatusServiceInterface<T> {
                 return EventStatus.READY_TO_PUBLISH;
             case PUBLISHED:
                 if (regStartTime == null) {
-                    return EventStatus.FULL;
+                    return EventStatus.PUBLISHED;
                 } else if (regStartTime.isAfter(now)) {
-                    return EventStatus.READY_TO_PUBLISH;
+                    return EventStatus.PUBLISHED;
                 } else if (regEndTime != null
-                        && regStartTime.isBefore(now)
-                        && regEndTime.isAfter(now)
-                        && nowBooth < maxBooth) {
-                    return EventStatus.REGISTRATION_OPEN;
+                        && !regEndTime.isBefore(now)) {
+                    return nowBooth < maxBooth ? EventStatus.REGISTRATION_OPEN : EventStatus.FULL;
                 }
-                return EventStatus.FULL;
+                if (startTime != null && startTime.isAfter(now)) {
+                    return EventStatus.FINAL_CONFIRMATION;
+                }
+                if (endTime != null && endTime.isBefore(now)) {
+                    return EventStatus.ENDED;
+                }
+                return EventStatus.ACTIVE;
             case FINAL_REVIEW:
                 if (brandPublicTime == null || brandPublicTime.isAfter(now)) {
                     return EventStatus.FULL;
