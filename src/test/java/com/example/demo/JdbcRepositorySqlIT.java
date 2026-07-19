@@ -214,6 +214,8 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
     }
 
     @Test void paymentReadQueriesCompileAgainstCurrentSchema() {
+        assertThat(payment.findVendorPaymentUserByEmail("none@example.test")).isEmpty();
+        assertThat(payment.findOrganizerPaymentUserByEmail("none@example.test")).isEmpty();
         assertThat(payment.findPayableApplication("NONE")).isEmpty();
         assertThat(payment.findRefundableApplication("NONE")).isEmpty();
         assertThat(payment.findPaymentStatusByApplicationNo("NONE")).isEmpty();
@@ -221,6 +223,7 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
         assertThat(payment.findLatestPaidPayment(-1L)).isEmpty();
         assertThat(payment.findLatestRefundByApplicationId(-1L)).isEmpty();
         assertThat(payment.findPaymentWithApplication("NONE")).isEmpty();
+        assertThat(payment.findRefundForOrganizerProcessing("NONE")).isEmpty();
     }
 
     @Test void imageUpdateQueriesUseAllowedColumnsAndOwnershipChecks() {

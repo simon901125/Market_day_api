@@ -12,6 +12,7 @@ public class NewebPayProperties {
     private String version;
     private String gateway;
     private String queryUrl;
+    private String closeUrl;
     private String notifyUrl;
     private String returnUrl;
 
@@ -61,6 +62,14 @@ public class NewebPayProperties {
 
     public void setQueryUrl(String queryUrl) {
         this.queryUrl = queryUrl;
+    }
+
+    public String getCloseUrl() {
+        return closeUrl;
+    }
+
+    public void setCloseUrl(String closeUrl) {
+        this.closeUrl = closeUrl;
     }
 
     public String getNotifyUrl() {

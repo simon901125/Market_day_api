@@ -14,12 +14,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.NewebPayService;
+import com.example.demo.Service.OrganizerRefundService;
 import com.example.demo.Service.VendorRefundService;
+import com.example.demo.dto.request.OrganizerRefundRequest;
 import com.example.demo.dto.request.VendorPaymentRequest;
 import com.example.demo.dto.request.VendorRefundRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.NewebPayPaymentResponse;
 import com.example.demo.dto.response.NewebPayQueryResponse;
+import com.example.demo.dto.response.OrganizerRefundResponse;
 import com.example.demo.dto.response.PaymentStatusResponse;
 import com.example.demo.dto.response.VendorRefundResponse;
 
@@ -35,14 +38,17 @@ public class PaymentController {
 
     private final NewebPayService newebPayService;
     private final VendorRefundService vendorRefundService;
+    private final OrganizerRefundService organizerRefundService;
     private final String frontendUrl;
 
     public PaymentController(
             NewebPayService newebPayService,
             VendorRefundService vendorRefundService,
+            OrganizerRefundService organizerRefundService,
             @Value("${frontend.url:http://localhost:4200}") String frontendUrl) {
         this.newebPayService = newebPayService;
         this.vendorRefundService = vendorRefundService;
+        this.organizerRefundService = organizerRefundService;
         this.frontendUrl = frontendUrl;
     }
 
@@ -70,6 +76,29 @@ public class PaymentController {
         return vendorRefundService.requestRefund(authorizationHeader, request);
     }
 
+    @Operation(
+            summary = "主辦方退款確認",
+            description = "主辦方確認攤主退款申請，並呼叫藍新信用卡請退款 API。")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/api/organizer/refunds/review")
+    public ApiResponse<OrganizerRefundResponse> reviewOrganizerRefund(
+            @Parameter(hidden = true)
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @Valid @RequestBody OrganizerRefundRequest request) {
+        return organizerRefundService.reviewRefund(authorizationHeader, request);
+    }
+
+    @Operation(
+            summary = "主辦方退款金流重試",
+            description = "針對退款處理中或退款失敗的退款單，重新呼叫藍新信用卡請退款 API。")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/api/organizer/refunds/payment")
+    public ApiResponse<OrganizerRefundResponse> retryOrganizerRefundPayment(
+            @Parameter(hidden = true)
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @Valid @RequestBody OrganizerRefundRequest request) {
+        return organizerRefundService.retryRefundPayment(authorizationHeader, request);
+    }
     @Operation(
             summary = "取得本地端付款狀態",
             description = "依申請編號取得本地報名付款狀態、付款單狀態、付款金額、藍新交易編號與付款時間。")

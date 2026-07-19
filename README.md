@@ -28,6 +28,19 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 刪除活動採狀態保留方式，將 `workflow_status` 由 `DRAFT` 更新為 `CANCELLED`，不實體刪除活動、分類、設備、分區、圖片 URL 或圖片檔案，並保留所有送審、撤回及稽核紀錄。
 - 已刪除的 `CANCELLED` 活動不再出現在主辦方活動列表與詳情；刪除使用資料列鎖與條件更新防止和送審同時執行，成功回傳 `eventId`、`eventTitle` 並寫入活動狀態紀錄。
 - 補齊撤回、發布、下架申請、地圖攤位建立、分區驗證、活動刪除、狀態判斷與競態處理的 Service、Controller、狀態紀錄及 SQL Server 整合測試。
+#### yushuan branch
+
+- 新增主辦方退款確認 API：`POST /api/organizer/refunds/review`，主辦方可針對攤主已送出的退款申請進行第一次同意退款確認。
+- `POST /api/organizer/refunds/review` 會驗證 Bearer Token、主辦方身分、退款單歸屬、原付款狀態、付款金流來源與藍新交易編號。
+- 主辦方退款確認只允許處理 `refunds.refund_status = REFUND_REQUESTED` 的退款申請；通過後會先更新為 `REFUNDING`，再呼叫藍新信用卡請退款 API。
+- 新增主辦方退款金流重試 API：`POST /api/organizer/refunds/payment`，僅允許 `REFUNDING` 或 `REFUND_FAILED` 狀態的退款單重試藍新退款金流。
+- 藍新退款金流使用 `payments.payment_no` 作為 `MerchantOrderNo`，使用 `payments.provider_trade_no` 作為藍新 `TradeNo`，並以 `refunds.amount` 作為退款規則金額。
+- 退款前會先查詢藍新交易狀態；若交易尚未請款完成，改以保留請款金額處理，確保保證金不退還，只退還扣除保證金後的金額。
+- 藍新退款成功後更新 `refunds.refund_status = REFUNDED`、寫入 `refunded_at`，並清空 `failed_reason`。
+- 藍新退款失敗後更新 `refunds.refund_status = REFUND_FAILED`，並將藍新錯誤訊息或例外原因寫入 `failed_reason`。
+- 成功或失敗皆會寫入 `status_logs`，紀錄 `refunds.refund_status` 的退款處理狀態變化。
+- 退款成功時通知攤主與主辦方；退款失敗時通知主辦方，以利後續人工確認或重試。
+- 目前資料庫現有可保存退款狀態、退款成功時間、退款失敗原因、本地付款編號MerchantOrderNo、藍新交易序號
 
 #### simon branch
 
