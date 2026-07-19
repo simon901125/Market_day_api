@@ -1323,6 +1323,73 @@ public class OrganizerService {
                         "reviewNoteDetail", reviewNoteDetail)));
     }
 
+    @Transactional
+    public ApiResponse<MapBackedResponse> refundOrganizerDeposit(
+            String authorizationHeader,
+            Long applicationId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(401, organizer.get("message").toString());
+        }
+        if (applicationId == null) {
+            return ApiResponse.fail(400, "請提供 applicationId");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> application = organizerRepository.findDepositRefundCandidate(
+                organizerUserId,
+                applicationId).orElse(null);
+        if (application == null) {
+            return ApiResponse.fail(404, "找不到報名單，或該報名活動不屬於目前主辦方");
+        }
+        if (!isTrue(application.get("eventOngoing"))) {
+            return ApiResponse.fail(409, "目前不在活動進行時間內，無法退還保證金");
+        }
+        if (isTrue(application.get("isCancelled"))) {
+            return ApiResponse.fail(409, "此報名單已取消，無法退還保證金");
+        }
+        String refundStatus = statusText(application.get("refundStatus"));
+        if (refundStatus != null
+                && Set.of("REFUND_REQUESTED", "REFUNDING", "REFUND_FAILED", "REFUNDED").contains(refundStatus)) {
+            return ApiResponse.fail(409, "此報名單已有退款流程（" + refundStatus + "），無法退還保證金");
+        }
+        if (!"APPROVED".equals(statusText(application.get("reviewStatus")))
+                || !"PAID".equals(statusText(application.get("paymentStatus")))) {
+            return ApiResponse.fail(409, "此報名單尚未完成審核及付款，無法退還保證金");
+        }
+        BigDecimal depositAmount = toBigDecimal(application.get("depositAmount"));
+        if (depositAmount == null || depositAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return ApiResponse.fail(409, "此報名單沒有可退還的保證金");
+        }
+        if ("RETURNED".equals(statusText(application.get("depositStatus")))) {
+            return ApiResponse.fail(409, "此報名單的保證金已經退還，請勿重複操作");
+        }
+
+        Long applicationDateCountValue = toLong(application.get("applicationDateCount"));
+        Long selectedStallCountValue = toLong(application.get("selectedStallCount"));
+        long applicationDateCount = applicationDateCountValue == null ? 0L : applicationDateCountValue;
+        long selectedStallCount = selectedStallCountValue == null ? 0L : selectedStallCountValue;
+        if (applicationDateCount == 0 || selectedStallCount != applicationDateCount) {
+            return ApiResponse.fail(409, "此報名單尚未完成所有活動日期的選位，無法退還保證金");
+        }
+        if (organizerRepository.markDepositReturned(
+                organizerUserId,
+                applicationId) != 1) {
+            return ApiResponse.fail(409, "保證金狀態已變更，請重新整理後再試");
+        }
+
+        return ApiResponse.success(
+                "保證金現金退還登記成功",
+                new MapBackedResponse(orderedMap(
+                        "applicationId", applicationId,
+                        "applicationNo", application.get("applicationNo"),
+                        "eventId", application.get("eventId"),
+                        "userId", application.get("vendorUserId"),
+                        "depositAmount", application.get("depositAmount"),
+                        "depositStatus", "RETURNED",
+                        "refundMethod", "CASH")));
+    }
+
     private Map<String, Object> withDisplayApplicationStatus(Map<String, Object> application) {
         Map<String, Object> response = new LinkedHashMap<>(application);
         response.put("applicationStatus", applicationStatusService.resolveApplicationStatus(application));

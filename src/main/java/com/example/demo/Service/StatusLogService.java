@@ -66,6 +66,10 @@ public class StatusLogService {
                             requestLogId, request, "/reject", "REJECTED")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/submit-review",
                     this::buildOrganizerEventSubmitReviewLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/CancelApplication/{id}",
+                    this::buildVendorApplicationCancellationLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/deposits/refund",
+                    this::buildOrganizerDepositRefundLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/disable",
                     (requestLogId, request) -> buildAdminUserAccountStatusLogs(
                             requestLogId, request, "/disable", "DISABLED")),
@@ -256,6 +260,30 @@ public class StatusLogService {
                 response.getRefundId(),
                 "refunds.refund_status",
                 response.getRefundStatus())));
+    }
+
+    private List<StatusLogEntry> buildVendorApplicationCancellationLogs(
+            Long requestLogId,
+            HttpServletRequest request) {
+        Long applicationId = pathId(request.getRequestURI(), "/api/vendor/CancelApplication/", "");
+        return validEntries(List.of(entry(
+                requestLogId,
+                "EVENT_APPLICATION",
+                applicationId,
+                "event_applications.is_cancelled",
+                true)));
+    }
+
+    private List<StatusLogEntry> buildOrganizerDepositRefundLogs(
+            Long requestLogId,
+            HttpServletRequest request) {
+        Long applicationId = toLong(request.getParameter("applicationId"));
+        return validEntries(List.of(entry(
+                requestLogId,
+                "EVENT_APPLICATION",
+                applicationId,
+                "event_applications.deposit_status",
+                "RETURNED")));
     }
 
     private StatusLogEntry entry(Long requestLogId, String targetType, Long targetId, String statusField, Object newStatus) {

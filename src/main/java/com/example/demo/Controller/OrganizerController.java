@@ -289,6 +289,19 @@ public class OrganizerController {
         return organizerService.rejectOrganizerApplication(authorizationHeader, id, body);
     }
 
+    @Operation(
+            summary = "主辦方現金退還保證金",
+            description = "僅活動進行中、已完成付款且所有報名日期皆已選位的報名可退還保證金；本 API 只更新行政狀態，不串接金流。")
+    @PostMapping("/api/organizer/deposits/refund")
+    public ResponseEntity<ApiResponse<MapBackedResponse>> refundOrganizerDeposit(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestParam Long applicationId) {
+        ApiResponse<MapBackedResponse> response = organizerService.refundOrganizerDeposit(
+                authorizationHeader,
+                applicationId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
     @Operation(summary = "查詢主辦方攤位地圖", description = "依活動 ID 與日期查詢活動資訊與攤位地圖。")
     @GetMapping("/api/organizer/stall/{eventId}")
     public ApiResponse<MapBackedResponse> getOrganizerStallMap(
