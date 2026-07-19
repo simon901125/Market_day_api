@@ -462,9 +462,10 @@ public class NewebPayService {
                 syncPaymentStatusFromCallback(payment, result);
             }
             String applicationNo = stringValue(payment.get("applicationNo"));
+            String applicationId = stringValue(payment.get("applicationId"));
             return trimTrailingSlash(frontendUrl)
-                    + "/vendor/dash-board/application-record"
-                    + "?applicationNo=" + urlEncode(applicationNo)
+                    + "/vendor/dash-board/application-record/detail/" + urlEncode(applicationNo) + "/payment"
+                    + "?applicationId=" + urlEncode(applicationId)
                     + "&paymentNo=" + urlEncode(paymentNo)
                     + "&merchantOrderNo=" + urlEncode(paymentNo)
                     + "&status=" + urlEncode(status);
@@ -565,7 +566,6 @@ public class NewebPayService {
         tradeInfo.put("ItemDesc", limitItemDesc(application.get("eventName")));
         tradeInfo.put("NotifyURL", newebPayProperties.getNotifyUrl());
         tradeInfo.put("ReturnURL", newebPayProperties.getReturnUrl());
-        tradeInfo.put("ClientBackURL", newebPayProperties.getReturnUrl());
         tradeInfo.put("CREDIT", "1");
         tradeInfo.put("LangType", "zh-tw");
         return tradeInfo;

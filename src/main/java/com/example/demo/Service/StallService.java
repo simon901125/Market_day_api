@@ -1384,12 +1384,12 @@ public class StallService {
             Integer pageSize) {
 
         List<Map<String, Object>> marketRows = stallRepository.findMarkets(
-                        keyword,
-                        city,
-                        district,
-                        status,
-                        eventStartAt,
-                        eventEndAt);
+                keyword,
+                city,
+                district,
+                status,
+                eventStartAt,
+                eventEndAt);
         Map<Long, List<CategoryResponse>> categoriesByEventId = eventCategoriesByEventId(
                 marketRows.stream().map(row -> toLong(row.get("eventId"))).toList());
         Map<Long, List<Map<String, Object>>> availabilityByEventId = marketAvailabilityByEventId(
@@ -1556,7 +1556,8 @@ public class StallService {
 
         Long vendorUserId = ((Number) vendor.get("userId")).longValue();
         Long vendorProfileId = ((Number) vendor.get("vendorProfileId")).longValue();
-        // Serialize capacity checks and inserts for the same event to prevent overbooking.
+        // Serialize capacity checks and inserts for the same event to prevent
+        // overbooking.
         stallRepository.lockMarketForApplication(body.getEventId());
         // 同一個品牌在同一活動只能建立一筆報名資料
         if (stallRepository.existsVendorApplication(body.getEventId(), vendorProfileId)) {

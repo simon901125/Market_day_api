@@ -1425,6 +1425,7 @@ public class StallRepository {
         String sql = """
                 SELECT
                     e.id AS eventId,
+                    e.user_id AS organizerUserId,
                     e.title AS eventTitle,
                     e.start_at AS startAt,
                     e.end_at AS endAt,
