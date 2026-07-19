@@ -25,7 +25,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.example.demo.Repository.RequestLogRepository;
 import com.example.demo.Repository.StatusLogRepository;
@@ -340,6 +343,8 @@ class UserServiceTest {
     @Test
     void resetsPasswordWithOneTimeResetToken() {
         ResetPasswordRequest request = resetPasswordRequest("plain-reset-token");
+        MockHttpServletRequest servletRequest = new MockHttpServletRequest();
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(servletRequest));
         Map<String, Object> token = tokenData(71L, 10L, LocalDateTime.now().plusMinutes(5));
         when(jwtService.extractTokenFromAuthorizationHeader(null)).thenReturn(null);
         when(userRepository.findUserToken(sha256("plain-reset-token"), UserRepository.TOKEN_TYPE_PASSWORD_RESET))
@@ -348,9 +353,15 @@ class UserServiceTest {
         when(authService.hashPassword("newPassword1")).thenReturn("new-hash");
         when(userRepository.updateLocalPasswordByUserId(10L, "new-hash")).thenReturn(1);
 
-        ApiResponse<Void> response = userService.resetPassword(null, request);
+        ApiResponse<Void> response;
+        try {
+            response = userService.resetPassword(null, request);
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
 
         assertThat(response.isSuccessStatus()).isTrue();
+        assertThat(servletRequest.getAttribute(RequestLogService.RESOLVED_USER_ID_ATTRIBUTE)).isEqualTo(10L);
         verify(userRepository).updateLocalPasswordByUserId(10L, "new-hash");
     }
 

@@ -133,7 +133,7 @@ class AdminServiceTest {
 
         assertThatThrownBy(() -> service.setUserAccountDisable(1L, "op@test.com", Role.ADMIN))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("找不到指定的使用者");
+                .hasMessage("找不到指定的帳號: id:1");
         verifyNoInteractions(logRepo);
     }
 
@@ -163,18 +163,16 @@ class AdminServiceTest {
         assertThat(savedLog.getContent()).isEqualTo("管理員小明停用攤主小華的帳號");
     }
 
-    @Test void setUserAccountDisableSkipsUpdateWhenTargetAlreadyNotActiveButStillLogs() {
+    @Test void setUserAccountDisableRejectsWhenTargetAlreadyNotActive() {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(userRepo.findAccountStatusById(1L))
                 .thenReturn(Optional.of(new UserAccountStatusProjection(1L, UserStatus.DISABLED, "vendor@test.com", "攤主小華")));
-        when(userRepo.getReferenceById(9L)).thenReturn(new User());
-
-        var result = service.setUserAccountDisable(1L, "op@test.com", Role.ADMIN);
-
+        assertThatThrownBy(() -> service.setUserAccountDisable(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("帳號狀態不可執行此操作");
         verify(userRepo, never()).updateStatusIfCurrent(any(), any(), any());
-        assertThat(result.newAccountStatus()).isEqualTo(UserStatus.DISABLED);
-        verify(logRepo).save(any(AdminOperationLog.class));
+        verifyNoInteractions(logRepo);
     }
 
     @Test void setUserAccountDisableFallsBackToEmailWhenContactNameMissing() {
@@ -215,7 +213,7 @@ class AdminServiceTest {
 
         assertThatThrownBy(() -> service.setUserAccountRestore(1L, "op@test.com", Role.ADMIN))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("找不到指定的使用者");
+                .hasMessage("找不到指定的帳號: id:1");
         verifyNoInteractions(logRepo);
     }
 
@@ -245,18 +243,16 @@ class AdminServiceTest {
         assertThat(savedLog.getContent()).isEqualTo("管理員小明恢復攤主小華的帳號");
     }
 
-    @Test void setUserAccountRestoreSkipsUpdateWhenTargetAlreadyNotDisabledButStillLogs() {
+    @Test void setUserAccountRestoreRejectsWhenTargetAlreadyNotDisabled() {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(userRepo.findAccountStatusById(1L))
                 .thenReturn(Optional.of(new UserAccountStatusProjection(1L, UserStatus.ACTIVE, "vendor@test.com", "攤主小華")));
-        when(userRepo.getReferenceById(9L)).thenReturn(new User());
-
-        var result = service.setUserAccountRestore(1L, "op@test.com", Role.ADMIN);
-
+        assertThatThrownBy(() -> service.setUserAccountRestore(1L, "op@test.com", Role.ADMIN))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("帳號狀態不可執行此操作");
         verify(userRepo, never()).updateStatusIfCurrent(any(), any(), any());
-        assertThat(result.newAccountStatus()).isEqualTo(UserStatus.ACTIVE);
-        verify(logRepo).save(any(AdminOperationLog.class));
+        verifyNoInteractions(logRepo);
     }
 
     @Test void setUserAccountRestoreFallsBackToEmailWhenContactNameMissing() {
