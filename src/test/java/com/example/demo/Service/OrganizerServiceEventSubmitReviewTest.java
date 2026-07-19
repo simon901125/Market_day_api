@@ -29,6 +29,7 @@ class OrganizerServiceEventSubmitReviewTest {
 
     @Mock OrganizerRepository organizerRepository;
     @Mock JwtService jwtService;
+    @Mock NotificationService notificationService;
     @InjectMocks OrganizerService organizerService;
 
     @BeforeEach
@@ -51,6 +52,7 @@ class OrganizerServiceEventSubmitReviewTest {
         assertThat(response.getData().workflowStatus()).isEqualTo("PENDING_REVIEW");
         assertThat(response.getData().missingFields()).isEmpty();
         verify(organizerRepository).submitOrganizerEventReview(7L, EVENT_ID);
+        verify(notificationService).notifyAdminsEventSubmitted(EVENT_ID, "Test Market", false);
     }
 
     @Test
@@ -62,6 +64,7 @@ class OrganizerServiceEventSubmitReviewTest {
 
         assertThat(response.isSuccessStatus()).isTrue();
         assertThat(response.getData().workflowStatus()).isEqualTo("PENDING_REVIEW");
+        verify(notificationService).notifyAdminsEventSubmitted(EVENT_ID, "Test Market", true);
     }
 
     @Test
