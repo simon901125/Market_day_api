@@ -29,14 +29,12 @@ public class OrganizerRepository {
                     user_id, title, summary, description, location_name, city, district, address,
                     start_at, end_at, registration_start_at, registration_end_at,
                     max_booths, stall_width, stall_length, base_fee, deposit_amount,
-                    traffic_info_driving, traffic_info_bus, traffic_info_metro,
-                    provides_equipment_rental, provides_basic_power, allows_extra_power, workflow_status
+                    traffic_info_driving, traffic_info_bus, traffic_info_metro, workflow_status
                 ) VALUES (
                     :organizerUserId, :eventTitle, :summary, :description, :locationName, :city, :district, :address,
                     :startAt, :endAt, :registrationStartAt, :registrationEndAt,
                     :maxBooths, :stallWidth, :stallLength, :baseFee, :depositAmount,
-                    :driving, :bus, :metro,
-                    :providesEquipmentRental, :providesBasicPower, :allowsExtraPower, N'DRAFT'
+                    :driving, :bus, :metro, N'DRAFT'
                 )
                 """;
         KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -69,10 +67,7 @@ public class OrganizerRepository {
                     deposit_amount = :depositAmount,
                     traffic_info_driving = :driving,
                     traffic_info_bus = :bus,
-                    traffic_info_metro = :metro,
-                    provides_equipment_rental = :providesEquipmentRental,
-                    provides_basic_power = :providesBasicPower,
-                    allows_extra_power = :allowsExtraPower
+                    traffic_info_metro = :metro
                 WHERE id = :eventId
                   AND user_id = :organizerUserId
                   AND workflow_status IN (N'DRAFT', N'REVISION_REQUIRED')
@@ -89,6 +84,16 @@ public class OrganizerRepository {
                 WHERE id = :eventId
                   AND user_id = :organizerUserId
                   AND workflow_status IN (N'DRAFT', N'REVISION_REQUIRED')
+                """, Map.of("organizerUserId", organizerUserId, "eventId", eventId));
+    }
+
+    public int withdrawOrganizerEventReview(Long organizerUserId, Long eventId) {
+        return namedParameterJdbcTemplate.update("""
+                UPDATE dbo.market_events
+                SET workflow_status = N'DRAFT'
+                WHERE id = :eventId
+                  AND user_id = :organizerUserId
+                  AND workflow_status = N'PENDING_REVIEW'
                 """, Map.of("organizerUserId", organizerUserId, "eventId", eventId));
     }
 
@@ -184,10 +189,7 @@ public class OrganizerRepository {
                 .addValue("depositAmount", booth.depositAmount())
                 .addValue("driving", normalizeNullable(location.trafficInfoDriving()))
                 .addValue("bus", normalizeNullable(location.trafficInfoBus()))
-                .addValue("metro", normalizeNullable(location.trafficInfoMetro()))
-                .addValue("providesEquipmentRental", request.equipment().providesEquipmentRental())
-                .addValue("providesBasicPower", request.equipment().providesBasicPower())
-                .addValue("allowsExtraPower", request.equipment().allowsExtraPower());
+                .addValue("metro", normalizeNullable(location.trafficInfoMetro()));
     }
 
     private String normalizeNullable(String value) {
@@ -316,9 +318,20 @@ public class OrganizerRepository {
                        e.traffic_info_driving AS trafficInfoDriving, e.max_booths AS maxBooths,
                        e.stall_width AS stallWidth, e.stall_length AS stallLength,
                        e.base_fee AS baseFee, e.deposit_amount AS depositAmount,
-                       e.provides_equipment_rental AS providesEquipmentRental,
-                       e.provides_basic_power AS providesBasicPower,
-                       e.allows_extra_power AS allowsExtraPower,
+                       CAST(CASE WHEN EXISTS (
+                           SELECT 1 FROM dbo.event_equipments equipment
+                           WHERE equipment.event_id = e.id AND equipment.item_type = N'EQUIPMENT'
+                       ) THEN 1 ELSE 0 END AS bit) AS providesEquipmentRental,
+                       CAST(CASE WHEN EXISTS (
+                           SELECT 1 FROM dbo.event_equipments equipment
+                           WHERE equipment.event_id = e.id
+                             AND equipment.item_type = N'POWER' AND equipment.charge_type = N'FREE'
+                       ) THEN 1 ELSE 0 END AS bit) AS providesBasicPower,
+                       CAST(CASE WHEN EXISTS (
+                           SELECT 1 FROM dbo.event_equipments equipment
+                           WHERE equipment.event_id = e.id
+                             AND equipment.item_type = N'POWER' AND equipment.charge_type = N'PAID'
+                       ) THEN 1 ELSE 0 END AS bit) AS allowsExtraPower,
                        e.map_image_url AS mapImageUrl, e.workflow_status AS workflowStatus,
                        e.review_note AS reviewNote, e.create_at AS createdAt,
                        (SELECT COUNT(*) FROM dbo.event_applications a

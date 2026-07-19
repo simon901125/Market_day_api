@@ -52,6 +52,7 @@ import com.example.demo.dto.response.OrganizerEventSearchResponse;
 import com.example.demo.dto.response.OrganizerEventDetailResponse;
 import com.example.demo.dto.response.OrganizerEventSummaryResponse;
 import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
+import com.example.demo.dto.response.OrganizerEventWithdrawResponse;
 import com.example.demo.dto.response.OrganizerTaskSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 import com.example.demo.dto.response.PageResponse;
@@ -355,6 +356,39 @@ public class OrganizerService {
                         List.of()));
     }
 
+    @Transactional
+    public ApiResponse<OrganizerEventWithdrawResponse> withdrawOrganizerEventReview(
+            String authorizationHeader, Long eventId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (eventId == null || eventId <= 0) {
+            return ApiResponse.fail("Invalid event id");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> event = organizerRepository
+                .findOrganizerEventDetail(organizerUserId, eventId).orElse(null);
+        if (event == null) {
+            return ApiResponse.fail(404, "Organizer event not found");
+        }
+        if (!WorkflowStatus.PENDING_REVIEW.name().equals(statusText(event.get("workflowStatus")))) {
+            return ApiResponse.fail(409, "Event cannot be withdrawn in its current workflow status");
+        }
+        if (organizerRepository.withdrawOrganizerEventReview(organizerUserId, eventId) != 1) {
+            return ApiResponse.fail(409, "Event workflow status changed before withdrawal");
+        }
+
+        return ApiResponse.success("Organizer event review withdrawn successfully",
+                new OrganizerEventWithdrawResponse(
+                        eventId,
+                        WorkflowStatus.DRAFT.name(),
+                        EventStatus.DRAFT.getStatus(),
+                        EventStatus.DRAFT.getDescription(),
+                        availableOrganizerEventActions(WorkflowStatus.DRAFT, EventStatus.DRAFT)));
+    }
+
     private List<String> validateOrganizerEventReview(
             Map<String, Object> event,
             List<Map<String, Object>> categories,
@@ -654,6 +688,7 @@ public class OrganizerService {
     private List<String> availableOrganizerEventActions(WorkflowStatus workflowStatus, EventStatus eventStatus) {
         return switch (workflowStatus) {
             case DRAFT -> List.of("EDIT", "SUBMIT_REVIEW", "DELETE");
+            case PENDING_REVIEW -> List.of("WITHDRAW_REVIEW");
             case REVISION_REQUIRED -> List.of("EDIT", "RESUBMIT_REVIEW");
             case READY_TO_PUBLISH -> List.of("PUBLISH");
             case PUBLISHED -> eventStatus == EventStatus.REGISTRATION_OPEN

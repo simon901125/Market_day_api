@@ -315,6 +315,8 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+        when(eventRepo.updateWorkflowStatusIfCurrent(
+                1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING)).thenReturn(1);
         User adminRef = new User();
         User organizerRef = new User();
         when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
@@ -354,6 +356,8 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+        when(eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+                1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING, "已補充審查資料")).thenReturn(1);
         when(userRepo.getReferenceById(9L)).thenReturn(new User());
         when(userRepo.getReferenceById(5L)).thenReturn(new User());
 
@@ -362,6 +366,21 @@ class AdminServiceTest {
         verify(eventRepo).updateWorkflowStatusAndReviewNoteIfCurrent(
                 1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING, "已補充審查資料");
         verify(eventRepo, never()).updateWorkflowStatusIfCurrent(any(), any(), any());
+    }
+
+    @Test void setEventApproveStopsWhenPendingReviewWasWithdrawnConcurrently() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(
+                        1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+        when(eventRepo.updateWorkflowStatusIfCurrent(
+                1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING)).thenReturn(0);
+
+        assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("夏日市集狀態已變更，請重新載入後再操作");
+        verifyNoInteractions(logRepo, notificationRepo);
     }
 
     @Test void setEventRevisionRejectsWhenOperatorRoleIsNotAdmin() {
@@ -419,6 +438,8 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+        when(eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+                1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.REVISION_REQUIRED, "缺少營業執照")).thenReturn(1);
         User adminRef = new User();
         User organizerRef = new User();
         when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
@@ -451,6 +472,23 @@ class AdminServiceTest {
         assertThat(savedLog.getTargetId()).isEqualTo(1L);
         assertThat(savedLog.getTargetLabel()).isEqualTo("夏日市集");
         assertThat(savedLog.getContent()).isEqualTo("管理員小明退回夏日市集申請, 原因:缺少營業執照");
+    }
+
+    @Test void setEventRevisionStopsWhenPendingReviewWasWithdrawnConcurrently() {
+        when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
+                .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
+        when(eventRepo.findApprovalStatusById(1L))
+                .thenReturn(Optional.of(new EventApprovalProjection(
+                        1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+        when(eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+                1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.REVISION_REQUIRED, "缺少營業執照"))
+                .thenReturn(0);
+
+        assertThatThrownBy(() -> service.setEventRevision(
+                1L, "op@test.com", Role.ADMIN, "缺少營業執照"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("夏日市集狀態已變更，請重新載入後再操作");
+        verifyNoInteractions(logRepo, notificationRepo);
     }
 
     @Test void setEventMapCompleteRejectsWhenOperatorRoleIsNotAdmin() {

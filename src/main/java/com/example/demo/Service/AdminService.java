@@ -771,11 +771,13 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
         }
 
-        if (note == null || note.isBlank()) {
-            eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING);
-        } else {
-            eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
-                    eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING, note);
+        int updatedRows = note == null || note.isBlank()
+                ? eventRepo.updateWorkflowStatusIfCurrent(
+                        eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING)
+                : eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+                        eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING, note);
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException(event.title() + "狀態已變更，請重新載入後再操作");
         }
 
         Notification notification = new Notification();
@@ -824,8 +826,11 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
         }
 
-        eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
+        int updatedRows = eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
                 eventId, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.REVISION_REQUIRED, note);
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException(event.title() + "狀態已變更，請重新載入後再操作");
+        }
 
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(event.organizerId()));

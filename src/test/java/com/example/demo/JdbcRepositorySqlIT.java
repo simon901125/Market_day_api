@@ -99,24 +99,41 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
                         10, BigDecimal.valueOf(3), BigDecimal.valueOf(3), BigDecimal.valueOf(1000),
                         BigDecimal.valueOf(500),
                         List.of(new OrganizerEventSaveRequest.Zone(null, "A 區", 10, "#F97316"))),
-                new OrganizerEventSaveRequest.Equipment(false, false, false, List.of()));
+                new OrganizerEventSaveRequest.Equipment(false, true, false, List.of(
+                        new OrganizerEventSaveRequest.Item(
+                                null, null, "110", BigDecimal.ZERO, "DAY", null,
+                                "FREE", "POWER", null, null, null, "ACTIVE", 1000))));
 
         Long eventId = organizer.createOrganizerEvent(organizerUserId, request);
         organizer.replaceEventCategories(eventId, request.categoryIds());
         organizer.replaceEventZones(eventId, request.booth().zones());
-        organizer.replaceEventEquipment(eventId, List.of());
+        organizer.replaceEventEquipment(eventId, request.equipment().items());
 
         assertThat(eventId).isPositive();
         assertThat(organizer.countActiveCategories(Set.of(categoryId))).isEqualTo(1);
-        assertThat(organizer.findOrganizerEventDetail(organizerUserId, eventId)).isPresent();
+        Map<String, Object> saved = organizer.findOrganizerEventDetail(organizerUserId, eventId).orElseThrow();
+        assertThat(saved.get("providesEquipmentRental")).isEqualTo(false);
+        assertThat(saved.get("providesBasicPower")).isEqualTo(true);
+        assertThat(saved.get("allowsExtraPower")).isEqualTo(false);
         assertThat(organizer.findOrganizerEventCategories(eventId)).hasSize(1);
         assertThat(organizer.findOrganizerEventZones(eventId)).hasSize(1);
+        assertThat(organizer.findEventEquipments(eventId)).hasSize(1);
         assertThat(images.updateEventImage(
                 "event-write-it@example.test", eventId, "cover_image_url", "/images/cover.png")).isOne();
-        jdbc.update("UPDATE dbo.market_events SET workflow_status = N'PENDING_REVIEW' WHERE id = :eventId",
+        jdbc.update("""
+                UPDATE dbo.market_events
+                SET workflow_status = N'PENDING_REVIEW', review_note = N'保留補件原因'
+                WHERE id = :eventId
+                """,
                 Map.of("eventId", eventId));
         assertThat(images.updateEventImage(
                 "event-write-it@example.test", eventId, "map_image_url", "/images/map.png")).isZero();
+        assertThat(organizer.withdrawOrganizerEventReview(-1L, eventId)).isZero();
+        assertThat(organizer.withdrawOrganizerEventReview(organizerUserId, eventId)).isOne();
+        Map<String, Object> withdrawn = organizer.findOrganizerEventDetail(organizerUserId, eventId).orElseThrow();
+        assertThat(withdrawn.get("workflowStatus")).isEqualTo("DRAFT");
+        assertThat(withdrawn.get("reviewNote")).isEqualTo("保留補件原因");
+        assertThat(organizer.withdrawOrganizerEventReview(organizerUserId, eventId)).isZero();
     }
 
     @Test void paymentReadQueriesCompileAgainstCurrentSchema() {

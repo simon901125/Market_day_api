@@ -74,6 +74,11 @@ class OrganizerControllerTest {
         verify(organizerService).saveOrganizerEvent(AUTH, request);
     }
 
+    @Test void eventWithdrawEndpointDelegatesEventId() {
+        controller.withdrawOrganizerEventReview(AUTH, 21L);
+        verify(organizerService).withdrawOrganizerEventReview(AUTH, 21L);
+    }
+
     @Test void applicationSearchDetailApproveAndRejectDelegate() {
         LocalDate start = LocalDate.of(2026, 2, 1);
         LocalDate end = LocalDate.of(2026, 2, 28);
