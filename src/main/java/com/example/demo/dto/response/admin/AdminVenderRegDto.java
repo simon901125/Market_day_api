@@ -4,12 +4,14 @@ import java.util.List;
 
 /**
  * 活動報名紀錄
+ * @param eventId 活動編號
  * @param eventName 活動名稱
  * @param regBooths 報名攤位
  * @param regStatus 報名狀態
  * @param paymentStatus 付款狀態
  */
 public record AdminVenderRegDto(
+    Long eventId,
     String eventName,
     String regStatus,
     String paymentStatus,

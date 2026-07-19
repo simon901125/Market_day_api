@@ -486,7 +486,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                     hasRefundByApplication, hasRefundedAtByApplication);
             List<RegBooth> regBooths = regBoothsByApplication.getOrDefault(application.applicationId(), List.of());
 
-            dtoList.add(new AdminVenderRegDto(application.eventName(), regStatus, paymentStatusStr, regBooths));
+            dtoList.add(new AdminVenderRegDto(application.eventId(), application.eventName(), regStatus, paymentStatusStr, regBooths));
         }
 
         return new PageResponse<>(dtoList, pageNumber, pageSize, total);
@@ -588,7 +588,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
             String eventName = event.title() == null ? "" : event.title();
 
-            dtoList.add(new AdminOrgEventManagementDto(eventName, eventDate, eventStatus, registrationCount));
+            dtoList.add(new AdminOrgEventManagementDto(event.eventId(), eventName, eventDate, eventStatus, registrationCount));
         }
 
         return new PageResponse<>(dtoList, pageNumber, pageSize, total);
