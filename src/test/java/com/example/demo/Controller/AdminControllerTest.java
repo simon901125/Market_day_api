@@ -50,6 +50,22 @@ class AdminControllerTest {
         verify(service).getLogs(any(AdminLogSearchDto.class), eq(1), eq(20));
     }
 
+    @Test void searchEndpointsDefaultPagingWhenBodyOmitsPageNumberAndPageSize() throws Exception {
+        mvc.perform(post("/api/admin/events/search").contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/admin/users/search").contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/admin/logs/search").contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isOk());
+        int standardPageSize = 6;
+        verify(service).getEventsList(any(AdminEventSearchDto.class), eq(1), eq(standardPageSize));
+        verify(service).getUserList(any(AdminUserSearchDto.class), eq(1), eq(standardPageSize));
+        verify(service).getLogs(any(AdminLogSearchDto.class), eq(1), eq(standardPageSize));
+    }
+
     @Test void getDashboardOverviewDelegatesWithOperatorEmailFromToken() throws Exception {
         when(jwtService.extractTokenFromAuthorizationHeader("Bearer token")).thenReturn("token");
         when(jwtService.isTokenValid("token")).thenReturn(true);

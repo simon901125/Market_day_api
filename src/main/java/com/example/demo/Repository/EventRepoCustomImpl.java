@@ -22,6 +22,9 @@ import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
+import org.hibernate.query.criteria.JpaExpression;
+
 public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements EventRepoCustom {
 
     public EventRepoCustomImpl(EntityManager entityManager) {
@@ -72,8 +75,13 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
         Root<RequestLog> requestLog = subquery.from(RequestLog.class);
         Root<MarketEvent> correlatedEvent = subquery.correlate(root);
 
+        // Expression.as() 只是型別轉換，不會真的產生 SQL CAST，直接 concat 會讓 SQL Server
+        // 誤判成 bigint 運算 (nvarchar 轉 bigint 失敗)，所以要用 HibernateCriteriaBuilder.cast() 產生真正的 CAST
+        HibernateCriteriaBuilder hibernateCb = (HibernateCriteriaBuilder) cb;
+        JpaExpression<String> eventIdAsString = hibernateCb.cast(
+                (JpaExpression<Long>) correlatedEvent.<Long>get("id"), String.class);
         Expression<String> submittedPath = cb.concat(
-                cb.concat("/api/organizer/events/", correlatedEvent.get("id").as(String.class)),
+                cb.concat("/api/organizer/events/", eventIdAsString),
                 "/submit-review");
         subquery.select(cb.greatest(requestLog.<LocalDateTime>get("createdAt")));
         subquery.where(

@@ -689,15 +689,17 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
 
         UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的帳號: id:"+ userId));
 
         UserStatus newStatus = target.status();
+        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
+
         if (target.status() == UserStatus.ACTIVE) {
             userRepo.updateStatusIfCurrent(userId, UserStatus.ACTIVE, UserStatus.DISABLED);
             newStatus = UserStatus.DISABLED;
+        }else{
+            throw new IllegalArgumentException(targetLabel + "的帳號狀態不可執行此操作");
         }
-
-        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
 
         AdminOperationLog adminLog = new AdminOperationLog();
         adminLog.setUser(userRepo.getReferenceById(admin.id()));
@@ -725,15 +727,17 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
 
         UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的帳號: id:"+ userId));
 
         UserStatus newStatus = target.status();
+        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
+
         if (target.status() == UserStatus.DISABLED) {
             userRepo.updateStatusIfCurrent(userId, UserStatus.DISABLED, UserStatus.ACTIVE);
             newStatus = UserStatus.ACTIVE;
+        }else{
+            throw new IllegalArgumentException(targetLabel + "的帳號狀態不可執行此操作");
         }
-
-        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
 
         AdminOperationLog adminLog = new AdminOperationLog();
         adminLog.setUser(userRepo.getReferenceById(admin.id()));
