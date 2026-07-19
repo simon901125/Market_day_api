@@ -126,6 +126,47 @@ class NotificationServiceTest {
     }
 
     @Test
+    void refundLifecycleNotificationsUseRecipientSpecificDedupKeys() {
+        notificationService.notifyRefundProcessingToVendor(10L, 40L, "夏日市集");
+        notificationService.notifyRefundSucceededToVendor(10L, 40L, "夏日市集");
+        notificationService.notifyRefundSucceededToOrganizer(20L, 40L, "夏日市集");
+        notificationService.notifyRefundFailedToVendor(10L, 41L, "夏日市集");
+        notificationService.notifyRefundFailedToOrganizer(20L, 41L, "夏日市集");
+
+        ArgumentCaptor<NotificationCreateCommand> captor = ArgumentCaptor.forClass(NotificationCreateCommand.class);
+        verify(notificationRepository, times(5)).create(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(NotificationCreateCommand::type)
+                .containsExactly(
+                        NotificationType.REFUNDING,
+                        NotificationType.REFUNDED,
+                        NotificationType.REFUNDED,
+                        NotificationType.REFUND_FAILED,
+                        NotificationType.REFUND_FAILED);
+        assertThat(captor.getAllValues()).allSatisfy(command -> assertThat(command.dedupKey()).isNotBlank());
+    }
+
+    @Test
+    void eventResubmissionFansOutToActiveAdministrators() {
+        when(userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE))
+                .thenReturn(List.of(30L, 20L));
+
+        notificationService.notifyAdminsEventSubmitted(50L, "夏日市集", true);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<NotificationCreateCommand>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(notificationRepository).createAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(NotificationCreateCommand::userId)
+                .containsExactly(20L, 30L);
+        assertThat(captor.getValue()).allSatisfy(command -> {
+            assertThat(command.type()).isEqualTo(NotificationType.EVENT_RESUBMITTED);
+            assertThat(command.targetId()).isEqualTo(50L);
+            assertThat(command.dedupKey()).isNotBlank();
+        });
+    }
+
+    @Test
     void blankEventTitleUsesSafeDisplayName() {
         notificationService.notifyPaymentStatusChanged(10L, 20L, " ", false);
 

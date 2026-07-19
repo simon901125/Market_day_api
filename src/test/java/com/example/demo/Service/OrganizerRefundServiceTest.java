@@ -167,6 +167,7 @@ class OrganizerRefundServiceTest {
         assertThat(response.isSuccessStatus()).isTrue();
         assertThat(response.getData().getRefundStatus()).isEqualTo("REFUNDED");
         verify(paymentRepository).markRefundProcessing(2L);
+        verify(notificationService).notifyRefundProcessingToVendor(11L, 2L, "Test Market");
         verify(paymentRepository).markRefundSucceeded(2L);
         verify(notificationService).notifyRefundSucceededToVendor(11L, 2L, "Test Market");
         verify(notificationService).notifyRefundSucceededToOrganizer(99L, 2L, "Test Market");
@@ -188,6 +189,8 @@ class OrganizerRefundServiceTest {
         assertThat(response.isSuccessStatus()).isFalse();
         assertThat(response.getData().getRefundStatus()).isEqualTo("REFUND_FAILED");
         verify(paymentRepository).markRefundFailed(2L, "Close failed");
+        verify(notificationService).notifyRefundProcessingToVendor(11L, 2L, "Test Market");
+        verify(notificationService).notifyRefundFailedToVendor(11L, 2L, "Test Market");
         verify(notificationService).notifyRefundFailedToOrganizer(99L, 2L, "Test Market");
     }
 

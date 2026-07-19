@@ -390,6 +390,10 @@ public class OrganizerService {
         if (organizerRepository.submitOrganizerEventReview(organizerUserId, eventId) != 1) {
             return ApiResponse.fail(409, "Event cannot be submitted in its current workflow status");
         }
+        notificationService.notifyAdminsEventSubmitted(
+                eventId,
+                normalizeText(event.get("eventTitle")),
+                workflowStatus == WorkflowStatus.REVISION_REQUIRED);
 
         return ApiResponse.success("Organizer event submitted for review successfully",
                 new OrganizerEventSubmitReviewResponse(

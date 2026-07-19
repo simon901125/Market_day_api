@@ -409,6 +409,19 @@ public class NotificationService {
                         NotificationTargetType.REFUND, refundId, null)));
     }
 
+    public void notifyRefundProcessingToVendor(Long userId, Long refundId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                userId,
+                NotificationCategory.PAYMENT,
+                NotificationType.REFUNDING,
+                NotificationTargetType.REFUND,
+                refundId,
+                "退款處理中",
+                eventName(eventTitle) + " 的退款正在處理中",
+                dedupKey(userId, NotificationType.REFUNDING,
+                        NotificationTargetType.REFUND, refundId, null)));
+    }
+
 
     public void notifyRefundSucceededToVendor(Long userId, Long refundId, String eventTitle) {
         create(new NotificationCreateCommand(
@@ -417,8 +430,10 @@ public class NotificationService {
                 NotificationType.REFUNDED,
                 NotificationTargetType.REFUND,
                 refundId,
-                "Refund completed",
-                eventName(eventTitle) + " refund has been completed."));
+                "退款完成",
+                eventName(eventTitle) + " 的退款已完成",
+                dedupKey(userId, NotificationType.REFUNDED,
+                        NotificationTargetType.REFUND, refundId, null)));
     }
 
     public void notifyRefundSucceededToOrganizer(Long organizerUserId, Long refundId, String eventTitle) {
@@ -428,8 +443,23 @@ public class NotificationService {
                 NotificationType.REFUNDED,
                 NotificationTargetType.REFUND,
                 refundId,
-                "Refund completed",
-                eventName(eventTitle) + " refund has been completed."));
+                "退款完成",
+                eventName(eventTitle) + " 的退款已完成",
+                dedupKey(organizerUserId, NotificationType.REFUNDED,
+                        NotificationTargetType.REFUND, refundId, null)));
+    }
+
+    public void notifyRefundFailedToVendor(Long userId, Long refundId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                userId,
+                NotificationCategory.PAYMENT,
+                NotificationType.REFUND_FAILED,
+                NotificationTargetType.REFUND,
+                refundId,
+                "退款失敗",
+                eventName(eventTitle) + " 的退款處理失敗，請等待主辦方重新處理",
+                dedupKey(userId, NotificationType.REFUND_FAILED,
+                        NotificationTargetType.REFUND, refundId, null)));
     }
 
     public void notifyRefundFailedToOrganizer(Long organizerUserId, Long refundId, String eventTitle) {
@@ -439,8 +469,32 @@ public class NotificationService {
                 NotificationType.REFUND_FAILED,
                 NotificationTargetType.REFUND,
                 refundId,
-                "Refund failed",
-                eventName(eventTitle) + " refund failed. Please retry or check NewebPay status."));
+                "退款失敗",
+                eventName(eventTitle) + " 的退款失敗，請重試或確認藍新金流狀態",
+                dedupKey(organizerUserId, NotificationType.REFUND_FAILED,
+                        NotificationTargetType.REFUND, refundId, null)));
+    }
+
+    public void notifyAdminsEventSubmitted(Long eventId, String eventTitle, boolean resubmitted) {
+        NotificationType type = resubmitted
+                ? NotificationType.EVENT_RESUBMITTED
+                : NotificationType.EVENT_SUBMITTED;
+        String title = resubmitted ? "活動補件重新送審" : "活動送審";
+        String content = eventName(eventTitle) + (resubmitted ? " 已完成補件並重新送審" : " 已送出審核");
+        List<Long> adminUserIds = userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE);
+        createAll(adminUserIds.stream()
+                .distinct()
+                .sorted()
+                .map(userId -> new NotificationCreateCommand(
+                        userId,
+                        NotificationCategory.EVENT_MANAGEMENT,
+                        type,
+                        NotificationTargetType.MARKET_EVENT,
+                        eventId,
+                        title,
+                        content,
+                        dedupKey(userId, type, NotificationTargetType.MARKET_EVENT, eventId, null)))
+                .toList());
     }
     private void validate(NotificationCreateCommand command) {
         if (command == null) {
