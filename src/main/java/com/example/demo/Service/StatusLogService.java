@@ -24,6 +24,7 @@ import com.example.demo.dto.request.admin.EventRevisionRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.dto.response.LoginUserResponse;
+import com.example.demo.dto.response.OrganizerEventUnpublishRequestResponse;
 import com.example.demo.dto.response.OrganizerRefundResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorRefundResponse;
@@ -67,6 +68,14 @@ public class StatusLogService {
                             requestLogId, request, "/reject", "REJECTED")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/submit-review",
                     this::buildOrganizerEventSubmitReviewLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/withdraw",
+                    this::buildOrganizerEventWithdrawLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/publish",
+                    this::buildOrganizerEventPublishLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/unpublish-request",
+                    this::buildOrganizerEventUnpublishRequestLogs),
+            new StatusLogApi(HttpMethod.DELETE.name(), "/api/organizer/events/{id}",
+                    this::buildOrganizerEventDeleteLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/CancelApplication/{id}",
                     this::buildVendorApplicationCancellationLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/deposits/refund",
@@ -185,6 +194,39 @@ public class StatusLogService {
         Long eventId = pathId(request.getRequestURI(), "/api/organizer/events/", "/submit-review");
         return validEntries(List.of(entry(
                 requestLogId, "EVENT", eventId, "workflow_status", "PENDING_REVIEW")));
+    }
+
+    private List<StatusLogEntry> buildOrganizerEventWithdrawLogs(
+            Long requestLogId, HttpServletRequest request) {
+        Long eventId = pathId(request.getRequestURI(), "/api/organizer/events/", "/withdraw");
+        return validEntries(List.of(entry(
+                requestLogId, "EVENT", eventId, "workflow_status", "DRAFT")));
+    }
+
+    private List<StatusLogEntry> buildOrganizerEventPublishLogs(
+            Long requestLogId, HttpServletRequest request) {
+        Long eventId = pathId(request.getRequestURI(), "/api/organizer/events/", "/publish");
+        return validEntries(List.of(entry(
+                requestLogId, "EVENT", eventId, "workflow_status", "PUBLISHED")));
+    }
+
+    private List<StatusLogEntry> buildOrganizerEventUnpublishRequestLogs(
+            Long requestLogId, HttpServletRequest request) {
+        OrganizerEventUnpublishRequestResponse response = responseData(
+                request, OrganizerEventUnpublishRequestResponse.class);
+        if (response == null) {
+            return List.of();
+        }
+        return validEntries(List.of(
+                entry(requestLogId, "EVENT", response.eventId(), "workflow_status", "UNPUBLISH_REQUESTED"),
+                entry(requestLogId, "EventUnpublishRequest", response.unpublishRequestId(), "status", "PENDING")));
+    }
+
+    private List<StatusLogEntry> buildOrganizerEventDeleteLogs(
+            Long requestLogId, HttpServletRequest request) {
+        Long eventId = pathId(request.getRequestURI(), "/api/organizer/events/", "");
+        return validEntries(List.of(entry(
+                requestLogId, "EVENT", eventId, "workflow_status", "CANCELLED")));
     }
 
     private List<StatusLogEntry> buildAdminEventRequestRevisionLogs(Long requestLogId, HttpServletRequest request) {

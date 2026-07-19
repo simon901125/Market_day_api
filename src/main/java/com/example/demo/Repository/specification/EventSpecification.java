@@ -82,7 +82,7 @@ public class EventSpecification {
     private static Specification<MarketEvent> withStatus(EventStatus status) {
         return (root, query, cb) -> {
             if (status == null) {
-                return null;
+                return cb.not(root.get("workflowStatus").in(WorkflowStatus.DRAFT, WorkflowStatus.CANCELLED));
             }
             LocalDateTime now = LocalDateTime.now();
             Expression<Long> registeredBoothCount = registeredBoothCountSubquery(root, query, cb);
@@ -92,38 +92,34 @@ public class EventSpecification {
                 case PENDING_REVIEW -> cb.equal(root.get("workflowStatus"), WorkflowStatus.PENDING_REVIEW);
                 case REVISION_REQUIRED -> cb.equal(root.get("workflowStatus"), WorkflowStatus.REVISION_REQUIRED);
                 case MAP_BUILDING -> cb.equal(root.get("workflowStatus"), WorkflowStatus.MAP_BUILDING);
-                case READY_TO_PUBLISH -> cb.or(
-                        cb.equal(root.get("workflowStatus"), WorkflowStatus.READY_TO_PUBLISH),
-                        cb.and(
-                                cb.equal(root.get("workflowStatus"), WorkflowStatus.PUBLISHED),
-                                cb.greaterThan(root.<LocalDateTime>get("registrationStartAt"), now)));
+                case READY_TO_PUBLISH -> cb.equal(root.get("workflowStatus"), WorkflowStatus.READY_TO_PUBLISH);
                 case REGISTRATION_OPEN -> cb.and(
                         cb.equal(root.get("workflowStatus"), WorkflowStatus.PUBLISHED),
-                        cb.lessThan(root.<LocalDateTime>get("registrationStartAt"), now),
-                        cb.greaterThan(root.<LocalDateTime>get("registrationEndAt"), now),
-                        cb.le(registeredBoothCount, root.<Integer>get("maxBooths")));
+                        cb.lessThanOrEqualTo(root.<LocalDateTime>get("registrationStartAt"), now),
+                        cb.greaterThanOrEqualTo(root.<LocalDateTime>get("registrationEndAt"), now),
+                        cb.lt(registeredBoothCount, root.<Integer>get("maxBooths")));
                 case FULL -> cb.or(
                         cb.and(
                                 cb.equal(root.get("workflowStatus"), WorkflowStatus.PUBLISHED),
-                                cb.lessThan(root.<LocalDateTime>get("registrationStartAt"), now),
-                                cb.not(cb.and(
-                                        cb.greaterThan(root.<LocalDateTime>get("registrationEndAt"), now),
-                                        cb.le(registeredBoothCount, root.<Integer>get("maxBooths"))))),
+                                cb.lessThanOrEqualTo(root.<LocalDateTime>get("registrationStartAt"), now),
+                                cb.greaterThanOrEqualTo(root.<LocalDateTime>get("registrationEndAt"), now),
+                                cb.ge(registeredBoothCount, root.<Integer>get("maxBooths"))),
                         cb.and(
                                 cb.equal(root.get("workflowStatus"), WorkflowStatus.FINAL_REVIEW),
                                 cb.greaterThan(root.<LocalDateTime>get("brandPublicAt"), now)));
                 case PUBLISHED -> cb.and(
-                        cb.equal(root.get("workflowStatus"), WorkflowStatus.FINAL_REVIEW),
-                        cb.lessThanOrEqualTo(root.<LocalDateTime>get("brandPublicAt"), now),
+                        cb.equal(root.get("workflowStatus"), WorkflowStatus.PUBLISHED),
+                        cb.greaterThan(root.<LocalDateTime>get("registrationStartAt"), now));
+                case FINAL_CONFIRMATION -> cb.and(
+                        cb.equal(root.get("workflowStatus"), WorkflowStatus.PUBLISHED),
+                        cb.lessThanOrEqualTo(root.<LocalDateTime>get("registrationEndAt"), now),
                         cb.greaterThan(root.<LocalDateTime>get("startAt"), now));
                 case ACTIVE -> cb.and(
-                        cb.equal(root.get("workflowStatus"), WorkflowStatus.FINAL_REVIEW),
+                        root.get("workflowStatus").in(WorkflowStatus.PUBLISHED, WorkflowStatus.FINAL_REVIEW),
                         cb.lessThanOrEqualTo(root.<LocalDateTime>get("startAt"), now),
                         cb.greaterThan(root.<LocalDateTime>get("endAt"), now));
                 case ENDED -> cb.and(
-                        cb.equal(root.get("workflowStatus"), WorkflowStatus.FINAL_REVIEW),
-                        cb.lessThanOrEqualTo(root.<LocalDateTime>get("brandPublicAt"), now),
-                        cb.lessThanOrEqualTo(root.<LocalDateTime>get("startAt"), now),
+                        root.get("workflowStatus").in(WorkflowStatus.PUBLISHED, WorkflowStatus.FINAL_REVIEW),
                         cb.lessThanOrEqualTo(root.<LocalDateTime>get("endAt"), now));
                 case UNPUBLISH_REQUESTED -> cb.equal(root.get("workflowStatus"), WorkflowStatus.UNPUBLISH_REQUESTED);
                 case UNPUBLISHED -> cb.equal(root.get("workflowStatus"), WorkflowStatus.UNPUBLISHED);

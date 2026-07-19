@@ -19,6 +19,7 @@ public interface EventApplicationRepo extends JpaRepository<EventApplication, Lo
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.VenderRegApplicationProjection(
                 a.id,
+                e.id,
                 e.title,
                 a.reviewStatus,
                 a.paymentStatus,

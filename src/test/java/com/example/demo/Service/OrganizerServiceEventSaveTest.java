@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -107,6 +108,31 @@ class OrganizerServiceEventSaveTest {
         assertThat(saved.equipment().items()).isEmpty();
     }
 
+    @Test
+    void rejectsZoneNameOutsideAToZ() {
+        OrganizerEventSaveRequest request = withZones(validRequest(null), List.of(
+                new OrganizerEventSaveRequest.Zone(null, "1 區", 20, "#F97316")));
+
+        var response = organizerService.saveOrganizerEvent(AUTH, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(400);
+        assertThat(response.getMessage()).isEqualTo("攤位分區名稱只能使用 A 區至 Z 區，且不可重複");
+    }
+
+    @Test
+    void rejectsMoreThanTwentySixZones() {
+        List<OrganizerEventSaveRequest.Zone> zones = IntStream.range(0, 27)
+                .mapToObj(index -> new OrganizerEventSaveRequest.Zone(
+                        null, String.valueOf((char) ('A' + index)) + " 區", 1, "#F97316"))
+                .toList();
+        OrganizerEventSaveRequest request = withZones(validRequest(null), zones);
+
+        var response = organizerService.saveOrganizerEvent(AUTH, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(400);
+        assertThat(response.getMessage()).isEqualTo("攤位分區最多只能有 26 個");
+    }
+
     private OrganizerEventSaveRequest validRequest(Long eventId) {
         LocalDateTime start = LocalDateTime.of(2026, 9, 10, 10, 0);
         return new OrganizerEventSaveRequest(
@@ -124,6 +150,18 @@ class OrganizerServiceEventSaveTest {
                         BigDecimal.valueOf(2500), BigDecimal.valueOf(500),
                         List.of(new OrganizerEventSaveRequest.Zone(null, "A 區", 20, "#F97316"))),
                 new OrganizerEventSaveRequest.Equipment(false, false, false, List.of()));
+    }
+
+    private OrganizerEventSaveRequest withZones(
+            OrganizerEventSaveRequest request, List<OrganizerEventSaveRequest.Zone> zones) {
+        OrganizerEventSaveRequest.Booth booth = request.booth();
+        return new OrganizerEventSaveRequest(
+                request.eventId(), request.eventTitle(), request.summary(), request.description(),
+                request.categoryIds(), request.schedule(), request.location(),
+                new OrganizerEventSaveRequest.Booth(
+                        booth.maxBooths(), booth.stallWidth(), booth.stallLength(), booth.baseFee(),
+                        booth.depositAmount(), zones),
+                request.equipment());
     }
 
     private void stubDetail(Long eventId, String workflowStatus) {

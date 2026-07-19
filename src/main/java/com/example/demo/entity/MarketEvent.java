@@ -152,15 +152,6 @@ public class MarketEvent {
     @Column(name = "traffic_info_metro", columnDefinition = "nvarchar(max)")
     private String metro;
 
-    @Column(name = "provides_equipment_rental")
-    private Boolean providesEquipmentRental;
-
-    @Column(name = "provides_basic_power")
-    private Boolean providesBasicPower;
-
-    @Column(name = "allows_extra_power")
-    private Boolean allowsExtraPower;
-    
     /** 活動封面url */
     @Column(name = "cover_image_url", length = 500)
     private String coverImageUrl;

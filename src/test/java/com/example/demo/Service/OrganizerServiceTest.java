@@ -140,6 +140,7 @@ class OrganizerServiceTest {
         application.put("applicationNo", "APP-008");
         application.put("eventId", 18L);
         application.put("eventTitle", "Integration Market");
+        application.put("workflowStatus", "UNPUBLISH_REQUESTED");
         application.put("eventCoverImageUrl", "/images/event.jpg");
         application.put("eventCity", "台北市");
         application.put("eventDistrict", "信義區");
@@ -182,7 +183,10 @@ class OrganizerServiceTest {
                 "stall", "equipmentRentals", "feedetail");
         assertThat((Map<String, Object>) response.get("event"))
                 .containsEntry("eventCoverImageUrl", "/images/event.jpg")
-                .containsEntry("locationName", "台北市信義區市民廣場");
+                .containsEntry("locationName", "台北市信義區市民廣場")
+                .containsEntry("workflowStatus", "UNPUBLISH_REQUESTED")
+                .containsEntry("unpublishRequested", true)
+                .containsEntry("unpublished", false);
         assertThat((Map<String, Object>) response.get("refund"))
                 .containsEntry("refundStatusText", "已退款")
                 .containsEntry("refundNo", "REF-008");

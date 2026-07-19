@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,6 +35,7 @@ import com.example.demo.dto.log.StatusLogEntry;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.dto.response.LoginUserResponse;
+import com.example.demo.dto.response.OrganizerEventUnpublishRequestResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -254,6 +256,21 @@ class StatusLogServiceTest {
     }
 
     @Test
+    void organizerEventWithdrawRecordsDraftStatus() {
+        MockHttpServletRequest request = post("/api/organizer/events/21/withdraw");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{}");
+
+        statusLogService.recordForRequest(8L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(21L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("DRAFT");
+    }
+
+    @Test
     void adminEventRequestRevisionRecordsRevisionRequiredStatus() {
         MockHttpServletRequest request = post("/api/admin/events/30/request-revision");
         ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "\"缺少營業執照\"");
@@ -281,6 +298,56 @@ class StatusLogServiceTest {
         assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
         assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
         assertThat(entries.get(0).getNewStatus()).isEqualTo("READY_TO_PUBLISH");
+    }
+
+    @Test
+    void organizerEventPublishRecordsPublishedStatus() {
+        MockHttpServletRequest request = post("/api/organizer/events/30/publish");
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{}");
+
+        statusLogService.recordForRequest(13L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    void organizerEventUnpublishRequestRecordsEventAndRequestStatuses() {
+        MockHttpServletRequest request = post("/api/organizer/events/30/unpublish-request");
+        setApiResponse(ApiResponse.success("ok", new OrganizerEventUnpublishRequestResponse(
+                30L, 77L, "UNPUBLISH_REQUESTED", "pendingUnpublish", "下架申請中",
+                "場地異動", LocalDateTime.now(), List.of())), request);
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{\"reason\":\"場地異動\"}");
+
+        statusLogService.recordForRequest(14L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(2);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("UNPUBLISH_REQUESTED");
+        assertThat(entries.get(1).getTargetType()).isEqualTo("EventUnpublishRequest");
+        assertThat(entries.get(1).getTargetId()).isEqualTo(77L);
+        assertThat(entries.get(1).getNewStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void organizerEventDeleteRecordsCancelledStatus() {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "DELETE", "/api/organizer/events/30");
+
+        statusLogService.recordForRequest(15L, request);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("CANCELLED");
     }
 
     @Test

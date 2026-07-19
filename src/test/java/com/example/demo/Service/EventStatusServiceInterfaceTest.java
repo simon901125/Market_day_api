@@ -37,7 +37,7 @@ class EventStatusServiceInterfaceTest {
         LocalDateTime now = LocalDateTime.now();
 
         assertThat(status(WorkflowStatus.PUBLISHED, now.plusDays(1), 0, 10))
-                .isEqualTo(EventStatus.READY_TO_PUBLISH);
+                .isEqualTo(EventStatus.PUBLISHED);
         assertThat(status(WorkflowStatus.PUBLISHED, now.minusHours(1), 5, 10))
                 .isEqualTo(EventStatus.REGISTRATION_OPEN);
         assertThat(status(WorkflowStatus.PUBLISHED, now.minusHours(1), 10, 10))
