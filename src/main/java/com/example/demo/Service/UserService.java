@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import com.example.demo.Repository.RequestLogRepository;
 import com.example.demo.Repository.StatusLogRepository;
@@ -505,6 +507,7 @@ public class UserService {
         }
 
         Long userId = ((Number) resetToken.get("user_id")).longValue();
+        setResolvedRequestUserId(userId);
         Long tokenId = ((Number) resetToken.get("id")).longValue();
         int consumedTokens = userRepository.deleteUserToken(
                 tokenId,
@@ -574,6 +577,16 @@ public class UserService {
                     digest.digest(resetToken.getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
+
+    private void setResolvedRequestUserId(Long userId) {
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        if (requestAttributes != null && userId != null) {
+            requestAttributes.setAttribute(
+                    RequestLogService.RESOLVED_USER_ID_ATTRIBUTE,
+                    userId,
+                    RequestAttributes.SCOPE_REQUEST);
         }
     }
 

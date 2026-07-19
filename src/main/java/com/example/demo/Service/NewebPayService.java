@@ -31,6 +31,7 @@ import com.example.demo.Repository.PaymentRepository;
 import com.example.demo.dto.request.VendorPaymentRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.NewebPayPaymentResponse;
+import com.example.demo.dto.response.NewebPayRefundResultResponse;
 import com.example.demo.dto.response.NewebPayQueryResponse;
 import com.example.demo.dto.response.PaymentStatusResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -288,6 +289,150 @@ public class NewebPayService {
         return Map.of();
     }
 
+
+    public NewebPayRefundResultResponse closeCreditCardRefund(
+            String merchantOrderNo,
+            String providerTradeNo,
+            BigDecimal refundAmount,
+            BigDecimal paymentAmount) {
+        if (!isNewebPayCloseConfigComplete()) {
+            throw new IllegalStateException("NewebPay config is incomplete");
+        }
+        if (merchantOrderNo == null || merchantOrderNo.isBlank()) {
+            throw new IllegalArgumentException("MerchantOrderNo is required");
+        }
+        if (providerTradeNo == null || providerTradeNo.isBlank()) {
+            throw new IllegalArgumentException("TradeNo is required");
+        }
+        if (!isValidNewebPayAmount(refundAmount)) {
+            throw new IllegalArgumentException("Refund amount is invalid");
+        }
+
+        Map<String, Object> tradeResult = queryTradeResultForClose(merchantOrderNo, paymentAmount);
+        NewebPayCloseAction closeAction = resolveCloseAction(tradeResult, refundAmount);
+        Map<String, String> postData = buildClosePostData(merchantOrderNo, providerTradeNo, closeAction);
+
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("MerchantID_", newebPayProperties.getMerchantId());
+        form.put("PostData_", encrypt(toQueryString(postData)));
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(newebPayProperties.getCloseUrl()))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(toQueryString(form)))
+                    .build();
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            Map<String, Object> rawResponse = objectMapper.readValue(
+                    response.body(),
+                    new TypeReference<Map<String, Object>>() {
+                    });
+            return toRefundResult(rawResponse, merchantOrderNo, providerTradeNo, closeAction.amount());
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("NewebPay refund failed", exception);
+        } catch (Exception exception) {
+            throw new IllegalStateException("NewebPay refund failed: " + describeException(exception), exception);
+        }
+    }
+
+    private Map<String, Object> queryTradeResultForClose(String merchantOrderNo, BigDecimal amount) {
+        if (!isNewebPayQueryConfigComplete()) {
+            throw new IllegalStateException("NewebPay query config is incomplete");
+        }
+
+        Map<String, String> checkValueSource = new LinkedHashMap<>();
+        checkValueSource.put("Amt", toNewebPayAmount(amount));
+        checkValueSource.put("MerchantID", newebPayProperties.getMerchantId());
+        checkValueSource.put("MerchantOrderNo", merchantOrderNo);
+
+        String checkValue = sha256Upper("IV=" + newebPayProperties.getHashIv()
+                + "&" + toQueryString(checkValueSource)
+                + "&Key=" + newebPayProperties.getHashKey());
+
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("MerchantID", newebPayProperties.getMerchantId());
+        form.put("Version", "1.3");
+        form.put("RespondType", "JSON");
+        form.put("CheckValue", checkValue);
+        form.put("TimeStamp", String.valueOf(System.currentTimeMillis() / 1000));
+        form.put("MerchantOrderNo", merchantOrderNo);
+        form.put("Amt", toNewebPayAmount(amount));
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(newebPayProperties.getQueryUrl()))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(toQueryString(form)))
+                    .build();
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            Map<String, Object> rawResponse = objectMapper.readValue(
+                    response.body(),
+                    new TypeReference<Map<String, Object>>() {
+                    });
+            if (!"SUCCESS".equalsIgnoreCase(stringValue(rawResponse.get("Status")))) {
+                throw new IllegalStateException(stringValue(rawResponse.get("Message")));
+            }
+            Map<String, Object> result = queryResult(rawResponse);
+            if (!merchantOrderNo.equals(stringValue(result.get("MerchantOrderNo")))) {
+                throw new IllegalArgumentException("NewebPay query order number mismatch");
+            }
+            return result;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("NewebPay query failed", exception);
+        } catch (Exception exception) {
+            throw new IllegalStateException("NewebPay query failed: " + describeException(exception), exception);
+        }
+    }
+
+    private NewebPayCloseAction resolveCloseAction(Map<String, Object> tradeResult, BigDecimal refundAmount) {
+        BigDecimal tradeAmount = toAmount(tradeResult.get("Amt"));
+        if (isAuthorizedButNotClosed(tradeResult)) {
+            // When the transaction is authorized but not closed, CloseType=1 means request close.
+            // Capture only the retained amount so the refund amount is not charged.
+            BigDecimal retainedAmount = tradeAmount.subtract(refundAmount);
+            if (!isValidNewebPayAmount(retainedAmount)) {
+                throw new IllegalArgumentException("Retained amount is invalid for unauthorized close refund flow");
+            }
+            return new NewebPayCloseAction("1", null, retainedAmount);
+        }
+        return new NewebPayCloseAction("2", null, refundAmount);
+    }
+
+    private boolean isAuthorizedButNotClosed(Map<String, Object> tradeResult) {
+        String closeStatus = stringValue(tradeResult.get("CloseStatus"));
+        String fundTime = stringValue(tradeResult.get("FundTime"));
+        return "0".equals(closeStatus) || "0000-00-00".equals(fundTime);
+    }
+
+    private Map<String, String> buildClosePostData(
+            String merchantOrderNo,
+            String providerTradeNo,
+            NewebPayCloseAction closeAction) {
+        Map<String, String> postData = new LinkedHashMap<>();
+        postData.put("MerchantID", newebPayProperties.getMerchantId());
+        postData.put("RespondType", "JSON");
+        postData.put("Version", "1.1");
+        postData.put("TimeStamp", String.valueOf(System.currentTimeMillis() / 1000));
+        postData.put("Amt", toNewebPayAmount(closeAction.amount()));
+        postData.put("MerchantOrderNo", merchantOrderNo);
+        postData.put("IndexType", "1");
+        postData.put("TradeNo", providerTradeNo);
+        postData.put("CloseType", closeAction.closeType());
+        if (closeAction.cancel() != null) {
+            postData.put("Cancel", closeAction.cancel());
+        }
+        return postData;
+    }
+
+    private record NewebPayCloseAction(String closeType, String cancel, BigDecimal amount) {
+    }
+
     @Transactional
     public String handleNotify(Map<String, String> payload) {
         Map<String, String> result = parseAndVerifyCallback(payload);
@@ -372,6 +517,40 @@ public class NewebPayService {
         }
     }
 
+
+    @SuppressWarnings("unchecked")
+    private NewebPayRefundResultResponse toRefundResult(
+            Map<String, Object> rawResponse,
+            String expectedMerchantOrderNo,
+            String expectedTradeNo,
+            BigDecimal expectedAmount) {
+        String status = stringValue(rawResponse.get("Status"));
+        String message = stringValue(rawResponse.get("Message"));
+        if (!"SUCCESS".equalsIgnoreCase(status)) {
+            throw new IllegalStateException(message.isBlank() ? "NewebPay refund was not successful" : message);
+        }
+
+        Object rawResult = rawResponse.get("Result");
+        Map<String, Object> result = rawResult instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        String merchantOrderNo = stringValue(result.get("MerchantOrderNo"));
+        String tradeNo = stringValue(result.get("TradeNo"));
+        BigDecimal amount = toAmount(result.get("Amt"));
+        if (!expectedMerchantOrderNo.equals(merchantOrderNo)) {
+            throw new IllegalArgumentException("NewebPay refund order number mismatch");
+        }
+        if (!expectedTradeNo.equals(tradeNo)) {
+            throw new IllegalArgumentException("NewebPay refund trade number mismatch");
+        }
+        if (expectedAmount.compareTo(amount) != 0) {
+            throw new IllegalArgumentException("NewebPay refund amount mismatch");
+        }
+
+        return new NewebPayRefundResultResponse(
+                stringValue(result.get("MerchantID")),
+                amount,
+                tradeNo,
+                merchantOrderNo);
+    }
     private Map<String, String> buildMpgTradeInfo(
             String paymentNo,
             BigDecimal amount,
@@ -694,6 +873,10 @@ public class NewebPayService {
         return isNewebPayConfigComplete() && !isBlank(newebPayProperties.getQueryUrl());
     }
 
+    private boolean isNewebPayCloseConfigComplete() {
+        return isNewebPayConfigComplete() && !isBlank(newebPayProperties.getCloseUrl());
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
@@ -737,3 +920,6 @@ public class NewebPayService {
         return URLDecoder.decode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 }
+
+
+

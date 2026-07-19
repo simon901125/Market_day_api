@@ -24,6 +24,7 @@ import com.example.demo.dto.request.admin.EventRevisionRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.dto.response.LoginUserResponse;
+import com.example.demo.dto.response.OrganizerRefundResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.example.demo.dto.response.VendorRefundResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,6 +67,10 @@ public class StatusLogService {
                             requestLogId, request, "/reject", "REJECTED")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/events/{id}/submit-review",
                     this::buildOrganizerEventSubmitReviewLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/CancelApplication/{id}",
+                    this::buildVendorApplicationCancellationLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/deposits/refund",
+                    this::buildOrganizerDepositRefundLogs),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/users/{id}/disable",
                     (requestLogId, request) -> buildAdminUserAccountStatusLogs(
                             requestLogId, request, "/disable", "DISABLED")),
@@ -82,7 +87,9 @@ public class StatusLogService {
                             requestLogId, request, "/map-complete", "READY_TO_PUBLISH")),
             new StatusLogApi(HttpMethod.POST.name(), "/api/admin/events/{id}/unpublish-confirm",
                     this::buildAdminEventUnpublishConfirmLogs),
-            new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/refunds", this::buildVendorRefundLogs));
+            new StatusLogApi(HttpMethod.POST.name(), "/api/vendor/refunds", this::buildVendorRefundLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/refunds/review", this::buildOrganizerRefundLogs),
+            new StatusLogApi(HttpMethod.POST.name(), "/api/organizer/refunds/payment", this::buildOrganizerRefundLogs));
 
     public void recordForRequest(Long requestLogId, HttpServletRequest request) {
         if (requestLogId == null || request == null) {
@@ -256,6 +263,54 @@ public class StatusLogService {
                 response.getRefundId(),
                 "refunds.refund_status",
                 response.getRefundStatus())));
+    }
+
+    private List<StatusLogEntry> buildVendorApplicationCancellationLogs(
+            Long requestLogId,
+            HttpServletRequest request) {
+        Long applicationId = pathId(request.getRequestURI(), "/api/vendor/CancelApplication/", "");
+        return validEntries(List.of(entry(
+                requestLogId,
+                "EVENT_APPLICATION",
+                applicationId,
+                "event_applications.is_cancelled",
+                true)));
+    }
+
+    private List<StatusLogEntry> buildOrganizerDepositRefundLogs(
+            Long requestLogId,
+            HttpServletRequest request) {
+        Long applicationId = toLong(request.getParameter("applicationId"));
+        return validEntries(List.of(entry(
+                requestLogId,
+                "EVENT_APPLICATION",
+                applicationId,
+                "event_applications.deposit_status",
+                "RETURNED")));
+    }
+
+    private List<StatusLogEntry> buildOrganizerRefundLogs(Long requestLogId, HttpServletRequest request) {
+        OrganizerRefundResponse response = responseData(request, OrganizerRefundResponse.class);
+        if (response == null) {
+            return List.of();
+        }
+
+        List<StatusLogEntry> entries = new ArrayList<>();
+        entries.add(entry(
+                requestLogId,
+                "REFUND",
+                response.getRefundId(),
+                "refunds.refund_status",
+                "REFUNDING"));
+        if (!"REFUNDING".equals(response.getRefundStatus())) {
+            entries.add(entry(
+                    requestLogId,
+                    "REFUND",
+                    response.getRefundId(),
+                    "refunds.refund_status",
+                    response.getRefundStatus()));
+        }
+        return validEntries(entries);
     }
 
     private StatusLogEntry entry(Long requestLogId, String targetType, Long targetId, String statusField, Object newStatus) {

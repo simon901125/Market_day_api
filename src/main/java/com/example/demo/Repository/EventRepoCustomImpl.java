@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 import com.example.demo.Repository.specification.EventSpecification;
 import com.example.demo.Repository.support.AbstractTupleQuerySupport;
 import com.example.demo.entity.MarketEvent;
+import com.example.demo.entity.OrganizerProfile;
 import com.example.demo.entity.RequestLog;
 import com.example.demo.entity.User;
 import com.example.demo.entity.UserProfile;
@@ -20,6 +21,9 @@ import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
+
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
+import org.hibernate.query.criteria.JpaExpression;
 
 public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements EventRepoCustom {
 
@@ -36,6 +40,7 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
         Root<MarketEvent> root = ctx.root();
         Join<MarketEvent, User> user = root.join("user");
         Join<User, UserProfile> userProfile = user.join("userProfile");
+        Join<UserProfile, OrganizerProfile> organizerProfile = userProfile.join("organizerProfile");
 
         // 設定搜尋條件
         applyPredicate(root, cq, cb, spec);
@@ -45,7 +50,7 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
                 root.get("id").alias("id"),
                 root.get("coverImageUrl").alias("coverImageUrl"),
                 root.get("title").alias("title"),
-                userProfile.get("name").alias("organizerName"),
+                organizerProfile.get("organizerName").alias("organizerName"),
                 root.get("startAt").alias("startAt"),
                 root.get("endAt").alias("endAt"),
                 root.get("workflowStatus").alias("workflowStatus"),
@@ -70,8 +75,13 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
         Root<RequestLog> requestLog = subquery.from(RequestLog.class);
         Root<MarketEvent> correlatedEvent = subquery.correlate(root);
 
+        // Expression.as() 只是型別轉換，不會真的產生 SQL CAST，直接 concat 會讓 SQL Server
+        // 誤判成 bigint 運算 (nvarchar 轉 bigint 失敗)，所以要用 HibernateCriteriaBuilder.cast() 產生真正的 CAST
+        HibernateCriteriaBuilder hibernateCb = (HibernateCriteriaBuilder) cb;
+        JpaExpression<String> eventIdAsString = hibernateCb.cast(
+                (JpaExpression<Long>) correlatedEvent.<Long>get("id"), String.class);
         Expression<String> submittedPath = cb.concat(
-                cb.concat("/api/organizer/events/", correlatedEvent.get("id").as(String.class)),
+                cb.concat("/api/organizer/events/", eventIdAsString),
                 "/submit-review");
         subquery.select(cb.greatest(requestLog.<LocalDateTime>get("createdAt")));
         subquery.where(

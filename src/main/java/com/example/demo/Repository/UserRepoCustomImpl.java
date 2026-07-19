@@ -69,8 +69,8 @@ public class UserRepoCustomImpl extends AbstractTupleQuerySupport implements Use
                 "/api/admin/local-login",
                 "/api/organizer/google-login",
                 "/api/organizer/local-login",
-                "/api/vender/google-login",
-                "/api/vender/local-login");
+                "/api/vendor/google-login",
+                "/api/vendor/local-login");
 
         Subquery<LocalDateTime> loginTimeSubquery = cq.subquery(LocalDateTime.class);
         Root<RequestLog> requestLog = loginTimeSubquery.from(RequestLog.class);

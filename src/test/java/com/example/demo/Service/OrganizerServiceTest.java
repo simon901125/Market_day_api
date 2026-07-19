@@ -51,6 +51,7 @@ class OrganizerServiceTest {
         assertThat(service.getOrganizerApplicationDetail(null, 1L).isSuccessStatus()).isFalse();
         assertThat(service.approveOrganizerApplication(null, 1L).isSuccessStatus()).isFalse();
         assertThat(service.rejectOrganizerApplication(null, 1L, null).isSuccessStatus()).isFalse();
+        assertThat(service.refundOrganizerDeposit(null, 1L).isSuccessStatus()).isFalse();
     }
 
     @Test void exportsReturnFailureForMissingAuthorization() {

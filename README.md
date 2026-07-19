@@ -5,6 +5,32 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 ## 更新紀錄
 
+### 2026-07-19
+
+#### yushuan branch
+
+- 新增主辦方退款確認 API：`POST /api/organizer/refunds/review`，主辦方可針對攤主已送出的退款申請進行第一次同意退款確認。
+- `POST /api/organizer/refunds/review` 會驗證 Bearer Token、主辦方身分、退款單歸屬、原付款狀態、付款金流來源與藍新交易編號。
+- 主辦方退款確認只允許處理 `refunds.refund_status = REFUND_REQUESTED` 的退款申請；通過後會先更新為 `REFUNDING`，再呼叫藍新信用卡請退款 API。
+- 新增主辦方退款金流重試 API：`POST /api/organizer/refunds/payment`，僅允許 `REFUNDING` 或 `REFUND_FAILED` 狀態的退款單重試藍新退款金流。
+- 藍新退款金流使用 `payments.payment_no` 作為 `MerchantOrderNo`，使用 `payments.provider_trade_no` 作為藍新 `TradeNo`，並以 `refunds.amount` 作為退款規則金額。
+- 退款前會先查詢藍新交易狀態；若交易尚未請款完成，改以保留請款金額處理，確保保證金不退還，只退還扣除保證金後的金額。
+- 藍新退款成功後更新 `refunds.refund_status = REFUNDED`、寫入 `refunded_at`，並清空 `failed_reason`。
+- 藍新退款失敗後更新 `refunds.refund_status = REFUND_FAILED`，並將藍新錯誤訊息或例外原因寫入 `failed_reason`。
+- 成功或失敗皆會寫入 `status_logs`，紀錄 `refunds.refund_status` 的退款處理狀態變化。
+- 退款成功時通知攤主與主辦方；退款失敗時通知主辦方，以利後續人工確認或重試。
+- 目前資料庫現有可保存退款狀態、退款成功時間、退款失敗原因、本地付款編號MerchantOrderNo、藍新交易序號
+
+#### simon branch
+
+- 新增主辦方現金退還保證金 API：`POST /api/organizer/deposits/refund?applicationId={applicationId}`，只需提供報名 ID，後端會反查攤主、活動及主辦方所有權。
+- 保證金退還屬現場行政現金流程，不建立 `refunds`、不呼叫藍新金流；成功時只將 `event_applications.deposit_status` 更新為 `RETURNED`，並寫入 `request_logs` 與 `status_logs`。
+- 保證金退還會優先驗證目前時間是否介於活動 `start_at` 與 `end_at`；不在活動進行期間時直接拒絕，不再繼續判斷取消、退款、付款、選位或保證金狀態。
+- 活動進行期間內，僅允許已審核通過、已付款、未取消、沒有退款流程、所有報名日期皆已選位、保證金大於 0 且尚未退還的報名執行退還；重複退還及條件不符回傳 HTTP `409`。
+- 修正未攜帶 JWT 的異動 API 無法寫入 `request_logs.user_id`：本地註冊、Email 驗證、重寄註冊驗證碼、申請／完成密碼重設及 Google 註冊，會依 request body、成功回應或 reset token 反查使用者 ID。
+- 登入 API 成功後改由登入回應中的使用者 Email 反查並寫入 `request_logs.user_id`；JWT API 仍優先使用 Authorization Token 識別使用者。
+- 修正攤主登入 request log 查詢路徑拼字，由 `/api/vender/local-login`、`/api/vender/google-login` 改為實際路徑 `/api/vendor/local-login`、`/api/vendor/google-login`，讓後台最後登入時間與登入紀錄可正確統計。
+
 ### 2026-07-18
 
 #### yingtung branch
@@ -19,20 +45,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 新增活動送審狀態紀錄，並修正 `submittedAt` 查詢只採用該活動最新一筆成功送審紀錄，避免不同活動或舊送審紀錄互相影響。
 - 補上主辦方活動列表、詳情、儲存、初次送審、重新送審、資料缺漏與狀態紀錄等單元測試及 SQL Server Repository 整合測試。
 
-### 2026-07-17
-
-#### yushuan branch
-
-- 新增攤主退款申請 API：`POST /api/vendor/refunds`，攤主可針對已付款報名單送出退款申請。
-- 後端會驗證 Bearer Token、攤主身分、報名單歸屬、審核狀態、付款狀態與是否已有退款紀錄。
-- 退款金額依規則計算為 `payments.amount - event_applications.deposit_amount`，保證金不退還。
-- 新增退款資料至 `refunds`，狀態為 `REFUND_REQUESTED`。
-- 成功後寫入 `status_logs`，紀錄 `refunds.refund_status = REFUND_REQUESTED`。
-- 成功後新增通知給主辦方，通知主辦方有新的退款申請待審核。
-- 本 API 只處理「攤主提出退款申請」，不執行主辦方審核與藍新退款金流。
-
-
-### 2026-07-17
+### 2026-07-18
 
 #### simon branch
 
@@ -50,6 +63,12 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 公開活動詳情不回傳 `brandsPublicAt`、分區清單、攤位 ID 或攤位狀態；品牌未公開時隱藏地圖及攤位品牌資訊。
 - 公開活動詳情補上明確操作錯誤訊息，包含活動不存在或未公開、日期超出活動範圍，以及指定日期找不到攤位編號。
 - 新增及調整分類、品牌、市集、通知相關 Repository／Service 測試與整合測試資料庫結構。
+- 新增攤主取消報名 API：`POST /api/vendor/CancelApplication/{id}`；僅待審核或待付款（含付款失敗待重試）的本人報名可取消，取消只更新 `event_applications.is_cancelled`，不刪除報名及關聯資料。
+- 取消成功回傳 HTTP `200` 並寫入 `request_logs` 與 `status_logs`；報名不存在回傳 `404`，狀態不可取消或重複取消回傳 `409`，失敗操作只寫入 `request_logs`。
+- 新增主辦方現金退還保證金 API：`POST /api/organizer/deposits/refund`；以 `applicationId` 查找報名，只允許活動進行中、已付款且所有活動日期皆已選位的有效報名退還。
+- 保證金退還屬行政現金流程，不建立金流退款；成功時只將 `event_applications.deposit_status` 更新為 `RETURNED`，並寫入 request/status log。
+
+### 2026-07-17
 
 #### yushuan branch
 
@@ -60,6 +79,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 成功後寫入 `status_logs`，紀錄 `refunds.refund_status = REFUND_REQUESTED`。
 - 成功後新增通知給主辦方，通知主辦方有新的退款申請待審核。
 - 本 API 只處理「攤主提出退款申請」，不執行主辦方審核與藍新退款金流。
+
 ### 2026-07-16
 
 #### yushuan branch
@@ -435,8 +455,28 @@ POST /api/newebpay/return
 | GET    | `/api/vendor/notices`                   | 攤主通知中心篩選與分頁查詢 |
 | GET    | `/api/vendor/stall/load`                | 讀取攤主品牌與商品資料 |
 | POST   | `/api/vendor/stall/save`                | 儲存攤主品牌基本資料   |
+| POST   | `/api/vendor/CancelApplication/{id}`    | 取消待審核或待付款報名 |
 | GET    | `/api/vendor/stall-map/{applicationNo}` | 攤主選位地圖           |
 | POST   | `/api/stalls/select`                    | 攤主送出選位           |
+
+### 攤主取消報名
+
+`POST /api/vendor/CancelApplication/{id}` 需要 Vendor Bearer Token，`id` 為報名單 ID，且報名單必須屬於目前登入攤主。
+
+允許取消的狀態：
+
+- `review_status = PENDING`：報名仍在待審核。
+- `review_status = APPROVED` 且 `payment_status = PENDING`：已通過審核但仍待付款。
+- `review_status = APPROVED` 且 `payment_status = FAILED`：付款失敗，仍可取消。
+
+取消只會將 `event_applications.is_cancelled` 更新為 `true`，不會刪除報名單、報名日期、付款或其他關聯資料。已付款、已退件或已取消的報名不可取消。
+
+| 情境 | HTTP 狀態 | 紀錄行為 |
+| ---- | --------- | -------- |
+| 首次成功取消 | `200` | 寫入 `request_logs`，並在 `status_logs` 紀錄 `event_applications.is_cancelled = true` |
+| 報名單不存在或不屬於目前攤主 | `404` | 只寫入 `request_logs` |
+| 報名狀態不可取消 | `409` | 只寫入 `request_logs` |
+| 重複取消 | `409` | 只寫入 `request_logs` |
 
 ### 攤主通知中心
 
@@ -497,6 +537,7 @@ POST /api/newebpay/return
 | GET    | `/api/organizer/applications/{id}`          | 報名詳情         |
 | POST   | `/api/organizer/applications/{id}/approve`  | 審核通過         |
 | POST   | `/api/organizer/applications/{id}/reject`   | 退回或拒絕       |
+| POST   | `/api/organizer/deposits/refund`            | 現金退還保證金   |
 | GET    | `/api/organizer/stalls/search`              | 攤位管理活動列表 |
 | GET    | `/api/organizer/stall/{eventId}`            | 主辦攤位地圖     |
 | GET    | `/api/organizer/stall/{eventId}/{stallNo}`  | 主辦攤位詳情     |
@@ -506,6 +547,26 @@ POST /api/newebpay/return
 | GET    | `/api/organizer/accounts/search`            | 帳務管理活動列表 |
 | GET    | `/api/organizer/accounts/{eventId}`         | 帳務管理詳情     |
 | GET    | `/api/organizer/accounts/{eventId}/export`  | 帳務資料匯出     |
+
+### 主辦方退還保證金
+
+`POST /api/organizer/deposits/refund` 需要 Organizer Bearer Token，並使用 Query Parameter 傳入：
+
+| 參數 | 必填 | 說明 |
+| ---- | ---- | ---- |
+| `applicationId` | 是 | 報名單 ID；後端會反查活動與攤主，並驗證活動屬於目前登入主辦方 |
+
+退還條件：
+
+- 報名狀態為 `APPROVED`，付款狀態為 `PAID`，且報名未取消。
+- 報名不得存在退款申請、退款處理中、退款失敗或已退款紀錄。
+- 每一個 `application_dates` 日期皆已綁定 `selected_stall_id`。
+- 伺服器目前時間位於活動 `start_at` 至 `end_at` 之間。
+- `deposit_amount` 大於 0，且 `deposit_status = NOT_RETURNED`。
+
+驗證時會優先判斷活動期間；只要目前不在 `start_at` 至 `end_at` 之間，就直接回傳活動尚未進行或已結束的錯誤，不再繼續判斷取消、退款、付款、選位及保證金狀態。
+
+此功能代表主辦方已在現場以現金退還保證金，只會將 `event_applications.deposit_status` 更新為 `RETURNED`，不建立 `refunds`、不呼叫藍新金流，也不異動原付款紀錄。成功回傳 HTTP `200` 並寫入 `status_logs`；資料不存在回傳 `404`，條件不符或重複退還回傳 `409`。
 
 ### 主辦 profile 欄位
 

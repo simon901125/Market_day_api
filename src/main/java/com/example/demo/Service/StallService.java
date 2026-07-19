@@ -1712,6 +1712,44 @@ public class StallService {
         }
     }
 
+    @Transactional
+    public ApiResponse<Void> cancelVendorApplication(String authorizationHeader, Long applicationId) {
+        Map<String, Object> vendor = authenticatedVendor(authorizationHeader);
+        if (vendor.containsKey("message")) {
+            return ApiResponse.fail(vendor.get("message").toString());
+        }
+        if (applicationId == null) {
+            return ApiResponse.fail("請提供報名 ID");
+        }
+
+        Long vendorUserId = ((Number) vendor.get("userId")).longValue();
+        Map<String, Object> application = stallRepository
+                .findVendorApplicationForCancellation(applicationId, vendorUserId)
+                .orElse(null);
+        if (application == null) {
+            return ApiResponse.fail(404, "找不到報名 ID " + applicationId + "，或該報名不屬於目前攤主");
+        }
+        if (isTrue(application.get("isCancelled"))) {
+            return ApiResponse.fail(409, "報名 ID " + applicationId + " 已經取消，請勿重複取消");
+        }
+
+        String reviewStatus = stringValue(application.get("reviewStatus"));
+        String paymentStatus = stringValue(application.get("paymentStatus"));
+        boolean pendingReview = "PENDING".equals(reviewStatus);
+        boolean pendingPayment = "APPROVED".equals(reviewStatus)
+                && ("PENDING".equals(paymentStatus) || "FAILED".equals(paymentStatus));
+        if (!pendingReview && !pendingPayment) {
+            return ApiResponse.fail(409,
+                    "報名 ID " + applicationId + " 目前狀態不可取消（審核狀態：" + reviewStatus
+                            + "，付款狀態：" + paymentStatus + "）");
+        }
+
+        if (stallRepository.cancelVendorApplication(applicationId, vendorUserId) != 1) {
+            return ApiResponse.fail(409, "報名 ID " + applicationId + " 狀態已變更，請重新整理後再試");
+        }
+        return ApiResponse.success("報名取消成功");
+    }
+
     /**
      * 將使用者輸入的報名日期清理並標準化：
      * <ul>

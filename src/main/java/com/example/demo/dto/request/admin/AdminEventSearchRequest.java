@@ -14,8 +14,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param status 活動狀態{@link EventStatus}
  * @param startDate 活動開始時間 :LocalDateTime
  * @param endDate 活動結束時間 :LocalDateTime
- * @param pageNumber 頁碼，從1開始計算 :int
- * @param pageSize 每頁筆數 :int
+ * @param pageNumber 頁碼，從1開始計算，為 null 時預設1 :Integer
+ * @param pageSize 每頁筆數，為 null 時使用預設頁面大小 :Integer
  */
 @Schema(description = "管理員: 活動搜尋頁面 API 請求")
 public record AdminEventSearchRequest(
@@ -24,6 +24,6 @@ public record AdminEventSearchRequest(
     EventStatus status,
     LocalDateTime startDate,
     LocalDateTime endDate,
-    int pageNumber,
-    int pageSize
+    Integer pageNumber,
+    Integer pageSize
 ) {}

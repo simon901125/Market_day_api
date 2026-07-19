@@ -23,6 +23,7 @@ import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
 import com.example.demo.dto.request.OrganizerEventSaveRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
+import com.example.demo.dto.response.ApiResponse;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizerControllerTest {
@@ -85,6 +86,16 @@ class OrganizerControllerTest {
         verify(organizerService).getOrganizerApplicationDetail(AUTH, 8L);
         verify(organizerService).approveOrganizerApplication(AUTH, 8L);
         verify(organizerService).rejectOrganizerApplication(AUTH, 8L, request);
+    }
+
+    @Test void depositRefundDelegatesIdsAndUsesApiHttpStatus() {
+        when(organizerService.refundOrganizerDeposit(AUTH, 8L))
+                .thenReturn(ApiResponse.fail(409, "目前不符合保證金退還條件"));
+
+        var response = controller.refundOrganizerDeposit(AUTH, 8L);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        verify(organizerService).refundOrganizerDeposit(AUTH, 8L);
     }
 
     @Test void stallAndEquipmentEndpointsDelegateAllFiltersAndPages() {

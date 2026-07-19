@@ -134,8 +134,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             "/api/organizer/local-login");
     /** 攤主登入API路徑 */
     private static final List<String> VENDOR_LOGIN_PATHS = List.of(
-            "/api/vender/google-login",
-            "/api/vender/local-login");
+            "/api/vendor/google-login",
+            "/api/vendor/local-login");
 
     /** 首頁通知列表預覽筆數 */
     private static final int DASHBOARD_NOTICE_COUNT = 6;
@@ -197,6 +197,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     // 設定管理員後台: 活動搜尋
     @Override
     public PageResponse<AdminEventListDto> getEventsList(AdminEventSearchDto request, int pageNumber, int pageSize) {
+        // pageNumber/pageSize 若為 0 或負數（例如前端未帶值），需與 PageResponse 的正規化邏輯一致，避免查詢時 LIMIT 0 撈成空結果
+        pageNumber = PageResponse.normalizePage(pageNumber);
+        pageSize = PageResponse.normalizePageSize(pageSize);
+
         // ----------只撈頁面需要用到的欄位，避免撈出整張表----------
         Specification<MarketEvent> spec = EventSpecification.build(request);
         List<Tuple> rows = eventRepo.findEventListTuples(spec, pageNumber, pageSize);
@@ -292,9 +296,9 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 event.contactAddr() == null ? "" : event.contactAddr());
 
         String boothSpec = String.format(
-                "%d * %d",
-                event.stallLength() == null ? 0 : event.stallLength(),
-                event.stallWidth() == null ? 0 : event.stallWidth());
+                "%s * %s",
+                event.stallLength() == null ? "0" : event.stallLength().stripTrailingZeros().toPlainString(),
+                event.stallWidth() == null ? "0" : event.stallWidth().stripTrailingZeros().toPlainString());
         EventStatus eventStatus = checkEventStatus(
                 event.workflowStatus(),
                 event.regStartAt(),
@@ -339,6 +343,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 event.mapImg(),
                 unpublishReason == null ? null : unpublishReason.id(),
                 unpublishReason == null ? null : unpublishReason.reason(),
+                unpublishReason == null ? null : unpublishReason.requestedAt().format(DATE_TIME_FORMATTER),
                 getEventStatusLogs(eventId, 1, pageSize));
     }
 
@@ -636,9 +641,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         List<AdminOperationLogDto> dtoList = new ArrayList<>();
         for (Tuple row : rows) {
             AdminOperationLogDto dtoItem = new AdminOperationLogDto(
+                    row.get("id", Long.class),
                     row.get("adminName", String.class),
                     row.get("operationType", AdminOperationType.class),
-                    row.get("targetType", AdminTargetTypeForFront.class),
+                    toTargetTypeForFront(row.get("targetType", AdminTargetType.class), row.get("targetUserRole", Role.class)),
                     row.get("targetName", String.class),
                     row.get("email", String.class),
                     row.get("createdAt", LocalDateTime.class).format(DATE_TIME_FORMATTER),
@@ -649,6 +655,24 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
         PageResponse<AdminOperationLogDto> response = new PageResponse<>(dtoList, pageNumber, pageSize, total);
         return response;
+    }
+
+    /**
+     * 依原始targetType、操作對象角色(僅targetType=USER時有值)換算成前端顯示用的AdminTargetTypeForFront。<br>
+     * AdminTargetTypeForFront沒有對應任何資料庫欄位，Hibernate無法在CriteriaBuilder裡處理這個型別，
+     * 因此改成在tuple查詢只撈原始的targetType/role，這裡用一般Java程式碼換算。
+     */
+    private AdminTargetTypeForFront toTargetTypeForFront(AdminTargetType targetType, Role targetUserRole) {
+        return switch (targetType) {
+            case SYSTEM_SETTING -> AdminTargetTypeForFront.SYSTEM_SETTING;
+            case MARKET_EVENT, EVENT_UNPUBLISH_REQUEST -> AdminTargetTypeForFront.MARKET_EVENT;
+            case USER -> switch (targetUserRole) {
+                case ORGANIZER -> AdminTargetTypeForFront.ORGANIZER;
+                case VENDOR -> AdminTargetTypeForFront.VENDOR;
+                case ADMIN -> null;
+                case null -> null;
+            };
+        };
     }
 
     @Override
@@ -665,15 +689,17 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
 
         UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的帳號: id:"+ userId));
 
         UserStatus newStatus = target.status();
+        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
+
         if (target.status() == UserStatus.ACTIVE) {
             userRepo.updateStatusIfCurrent(userId, UserStatus.ACTIVE, UserStatus.DISABLED);
             newStatus = UserStatus.DISABLED;
+        }else{
+            throw new IllegalArgumentException(targetLabel + "的帳號狀態不可執行此操作");
         }
-
-        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
 
         AdminOperationLog adminLog = new AdminOperationLog();
         adminLog.setUser(userRepo.getReferenceById(admin.id()));
@@ -701,15 +727,17 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
 
         UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("找不到指定的使用者"));
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的帳號: id:"+ userId));
 
         UserStatus newStatus = target.status();
+        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
+
         if (target.status() == UserStatus.DISABLED) {
             userRepo.updateStatusIfCurrent(userId, UserStatus.DISABLED, UserStatus.ACTIVE);
             newStatus = UserStatus.ACTIVE;
+        }else{
+            throw new IllegalArgumentException(targetLabel + "的帳號狀態不可執行此操作");
         }
-
-        String targetLabel = target.contactName() != null ? target.contactName() : target.email();
 
         AdminOperationLog adminLog = new AdminOperationLog();
         adminLog.setUser(userRepo.getReferenceById(admin.id()));
@@ -1035,7 +1063,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 : messageSource.getMessage("workflow-status." + log.newStatus(), null, Locale.TAIWAN);
         String operator = log.role() == Role.ADMIN ? log.adminName() : log.orgName();
 
-        return new StatusLog(dateTime, status, description, operator);
+        return new StatusLog(dateTime, status, description, log.role(), operator);
     }
 
     /** 依審核狀態、付款狀態、是否取消，轉換為前端顯示的報名狀態文字 */
