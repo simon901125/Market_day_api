@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +37,7 @@ import com.example.demo.dto.response.OrganizerNotificationSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEventSearchResponse;
 import com.example.demo.dto.response.OrganizerEventDetailResponse;
+import com.example.demo.dto.response.OrganizerEventDeleteResponse;
 import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
 import com.example.demo.dto.response.OrganizerEventWithdrawResponse;
 import com.example.demo.dto.response.OrganizerEventPublishResponse;
@@ -88,6 +90,14 @@ public class OrganizerController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable Long eventId) {
         return organizerService.getOrganizerEventDetail(authorizationHeader, eventId);
+    }
+
+    @Operation(summary = "刪除活動", description = "僅允許主辦方刪除自己的草稿活動；資料保留並將流程狀態改為 CANCELLED")
+    @DeleteMapping("/api/organizer/events/{eventId}")
+    public ApiResponse<OrganizerEventDeleteResponse> deleteOrganizerEvent(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId) {
+        return organizerService.deleteOrganizerEvent(authorizationHeader, eventId);
     }
 
     @Operation(summary = "儲存活動", description = "建立活動草稿，或修改草稿及待補件活動的完整資料")

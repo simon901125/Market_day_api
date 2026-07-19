@@ -176,6 +176,7 @@ public class ApiResponse<T> {
             case "Organizer event review withdrawn successfully" -> "\u6d3b\u52d5\u5be9\u6838\u7533\u8acb\u5df2\u64a4\u56de";
             case "Organizer event published successfully" -> "活動已成功發布";
             case "Organizer event unpublish requested successfully" -> "活動下架申請已送出";
+            case "Organizer event deleted successfully" -> "活動已刪除";
             case "Notification marked as read" -> "\u901a\u77e5\u5df2\u6a19\u8a18\u70ba\u5df2\u8b80";
             default -> isLikelyEnglish(message) ? "\u64cd\u4f5c\u6210\u529f" : message;
         };

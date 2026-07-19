@@ -97,6 +97,28 @@ public class OrganizerRepository {
                 """, Map.of("organizerUserId", organizerUserId, "eventId", eventId));
     }
 
+    public Optional<Map<String, Object>> findOrganizerEventForDeletion(
+            Long organizerUserId, Long eventId) {
+        String sql = """
+                SELECT id AS eventId, title AS eventTitle, workflow_status AS workflowStatus
+                FROM dbo.market_events WITH (UPDLOCK, HOLDLOCK)
+                WHERE id = :eventId
+                  AND user_id = :organizerUserId
+                """;
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(
+                sql, Map.of("organizerUserId", organizerUserId, "eventId", eventId)).stream().findFirst());
+    }
+
+    public int cancelDraftOrganizerEvent(Long organizerUserId, Long eventId) {
+        return namedParameterJdbcTemplate.update("""
+                UPDATE dbo.market_events
+                SET workflow_status = N'CANCELLED'
+                WHERE id = :eventId
+                  AND user_id = :organizerUserId
+                  AND workflow_status = N'DRAFT'
+                """, Map.of("organizerUserId", organizerUserId, "eventId", eventId));
+    }
+
     public int publishOrganizerEvent(
             Long organizerUserId, Long eventId, LocalDateTime firstPublishedAt) {
         return namedParameterJdbcTemplate.update("""
@@ -393,7 +415,9 @@ public class OrganizerRepository {
                         WHERE a.event_id = e.id AND a.is_cancelled = 0
                           AND a.review_status <> N'REJECTED') AS registeredCount
                 FROM dbo.market_events e
-                WHERE e.id = :eventId AND e.user_id = :organizerUserId
+                WHERE e.id = :eventId
+                  AND e.user_id = :organizerUserId
+                  AND e.workflow_status <> N'CANCELLED'
                 """;
         return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(
                 sql, Map.of("organizerUserId", organizerUserId, "eventId", eventId)).stream().findFirst());

@@ -75,6 +75,11 @@ class OrganizerControllerTest {
         verify(organizerService).saveOrganizerEvent(AUTH, request);
     }
 
+    @Test void eventDeleteEndpointDelegatesEventId() {
+        controller.deleteOrganizerEvent(AUTH, 21L);
+        verify(organizerService).deleteOrganizerEvent(AUTH, 21L);
+    }
+
     @Test void eventWithdrawEndpointDelegatesEventId() {
         controller.withdrawOrganizerEventReview(AUTH, 21L);
         verify(organizerService).withdrawOrganizerEventReview(AUTH, 21L);

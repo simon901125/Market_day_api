@@ -184,6 +184,35 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
         assertThat(organizer.requestOrganizerEventUnpublish(organizerUserId, eventId)).isZero();
     }
 
+    @Test void organizerEventDeleteChangesOnlyDraftStatusToCancelled() {
+        jdbc.update("""
+                INSERT INTO dbo.users (role, email, provider, status, isLogin, email_verified_at)
+                VALUES ('ORGANIZER', 'event-delete-it@example.test', 'LOCAL', 'ACTIVE', 0, SYSDATETIME())
+                """, Map.of());
+        Long organizerUserId = jdbc.queryForObject(
+                "SELECT id FROM dbo.users WHERE email = 'event-delete-it@example.test'", Map.of(), Long.class);
+        jdbc.update("""
+                INSERT INTO dbo.market_events (user_id, title, workflow_status)
+                VALUES (:organizerUserId, N'可刪除草稿', N'DRAFT')
+                """, Map.of("organizerUserId", organizerUserId));
+        Long eventId = jdbc.queryForObject("""
+                SELECT id FROM dbo.market_events
+                WHERE user_id = :organizerUserId AND title = N'可刪除草稿'
+                """, Map.of("organizerUserId", organizerUserId), Long.class);
+
+        Map<String, Object> locked = organizer
+                .findOrganizerEventForDeletion(organizerUserId, eventId).orElseThrow();
+        assertThat(locked.get("workflowStatus")).isEqualTo("DRAFT");
+        assertThat(organizer.cancelDraftOrganizerEvent(organizerUserId, eventId)).isOne();
+        assertThat(organizer.cancelDraftOrganizerEvent(organizerUserId, eventId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM dbo.market_events WHERE id = :eventId",
+                Map.of("eventId", eventId), Integer.class)).isOne();
+        assertThat(organizer.findOrganizerEventDetail(organizerUserId, eventId)).isEmpty();
+        assertThat(organizer.findOrganizerEvents(organizerUserId, null, null, null))
+                .noneMatch(event -> eventId.equals(((Number) event.get("eventId")).longValue()));
+    }
+
     @Test void paymentReadQueriesCompileAgainstCurrentSchema() {
         assertThat(payment.findPayableApplication("NONE")).isEmpty();
         assertThat(payment.findRefundableApplication("NONE")).isEmpty();

@@ -51,6 +51,7 @@ import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSummaryResponse;
 import com.example.demo.dto.response.OrganizerEventSearchResponse;
 import com.example.demo.dto.response.OrganizerEventDetailResponse;
+import com.example.demo.dto.response.OrganizerEventDeleteResponse;
 import com.example.demo.dto.response.OrganizerEventSummaryResponse;
 import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
 import com.example.demo.dto.response.OrganizerEventWithdrawResponse;
@@ -198,10 +199,11 @@ public class OrganizerService {
         }
 
         WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(event.get("workflowStatus")));
+        if (workflowStatus == WorkflowStatus.CANCELLED) {
+            return ApiResponse.fail(404, "Organizer event not found");
+        }
         EventStatus eventStatus = resolveOrganizerEventStatus(
                 event, workflowStatus, intValue(event.get("maxBooths")), intValue(event.get("registeredCount")));
-        String detailStatus = workflowStatus == WorkflowStatus.CANCELLED ? "cancelled" : eventStatus.getStatus();
-        String detailStatusText = workflowStatus == WorkflowStatus.CANCELLED ? "\u5df2\u53d6\u6d88" : eventStatus.getDescription();
         List<OrganizerEventDetailResponse.Category> categories = organizerRepository
                 .findOrganizerEventCategories(eventId).stream()
                 .map(row -> new OrganizerEventDetailResponse.Category(
@@ -245,10 +247,47 @@ public class OrganizerService {
                         nullableBoolean(event.get("providesBasicPower")),
                         nullableBoolean(event.get("allowsExtraPower")),
                         items),
-                workflowStatus.name(), detailStatus, detailStatusText,
+                workflowStatus.name(), eventStatus.getStatus(), eventStatus.getDescription(),
                 normalizeText(event.get("reviewNote")), availableOrganizerEventActions(workflowStatus, eventStatus),
                 toLocalDateTime(event.get("createdAt")));
         return ApiResponse.success("Organizer event detail retrieved successfully", detail);
+    }
+
+    @Transactional
+    public ApiResponse<OrganizerEventDeleteResponse> deleteOrganizerEvent(
+            String authorizationHeader, Long eventId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (eventId == null || eventId <= 0) {
+            return ApiResponse.fail("Invalid event id");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> event = organizerRepository
+                .findOrganizerEventForDeletion(organizerUserId, eventId).orElse(null);
+        if (event == null || WorkflowStatus.CANCELLED.name().equals(statusText(event.get("workflowStatus")))) {
+            return ApiResponse.fail(404, "Organizer event not found");
+        }
+        if (!WorkflowStatus.DRAFT.name().equals(statusText(event.get("workflowStatus")))) {
+            return new ApiResponse<>(
+                    409,
+                    "目前狀態無法刪除活動",
+                    "只有草稿活動可以刪除",
+                    null);
+        }
+        if (organizerRepository.cancelDraftOrganizerEvent(organizerUserId, eventId) != 1) {
+            return new ApiResponse<>(
+                    409,
+                    "活動狀態已變更",
+                    "請重新載入活動資料後再試",
+                    null);
+        }
+
+        return ApiResponse.success(
+                "Organizer event deleted successfully",
+                new OrganizerEventDeleteResponse(eventId, statusText(event.get("eventTitle"))));
     }
 
     @Transactional

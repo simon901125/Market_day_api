@@ -68,6 +68,17 @@ class OrganizerServiceEventDetailTest {
         assertThat(response.getData()).isNull();
     }
 
+    @Test
+    void treatsCancelledEventAsNotFound() {
+        when(organizerRepository.findOrganizerEventDetail(7L, 15L))
+                .thenReturn(Optional.of(baseEvent("CANCELLED")));
+
+        var response = organizerService.getOrganizerEventDetail(AUTH, 15L);
+
+        assertThat(response.getStatusCode()).isEqualTo(404);
+        assertThat(response.getData()).isNull();
+    }
+
     private Map<String, Object> baseEvent(String workflowStatus) {
         LocalDateTime now = LocalDateTime.now();
         Map<String, Object> event = new LinkedHashMap<>();

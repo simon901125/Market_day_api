@@ -336,6 +336,21 @@ class StatusLogServiceTest {
     }
 
     @Test
+    void organizerEventDeleteRecordsCancelledStatus() {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "DELETE", "/api/organizer/events/30");
+
+        statusLogService.recordForRequest(15L, request);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("CANCELLED");
+    }
+
+    @Test
     void adminEventUnpublishConfirmRecordsUnpublishedAndApprovedRequestStatus() {
         MockHttpServletRequest request = post("/api/admin/events/30/unpublish-confirm");
         ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "\"庫存已清空\"");
