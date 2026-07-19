@@ -258,6 +258,39 @@ public class NotificationService {
                 eventName(eventTitle) + " 已收到攤主退款申請，請進行審核。"));
     }
 
+
+    public void notifyRefundSucceededToVendor(Long userId, Long refundId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                userId,
+                NotificationCategory.PAYMENT,
+                NotificationType.REFUNDED,
+                NotificationTargetType.REFUND,
+                refundId,
+                "Refund completed",
+                eventName(eventTitle) + " refund has been completed."));
+    }
+
+    public void notifyRefundSucceededToOrganizer(Long organizerUserId, Long refundId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                organizerUserId,
+                NotificationCategory.PAYMENT,
+                NotificationType.REFUNDED,
+                NotificationTargetType.REFUND,
+                refundId,
+                "Refund completed",
+                eventName(eventTitle) + " refund has been completed."));
+    }
+
+    public void notifyRefundFailedToOrganizer(Long organizerUserId, Long refundId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                organizerUserId,
+                NotificationCategory.PAYMENT,
+                NotificationType.REFUND_FAILED,
+                NotificationTargetType.REFUND,
+                refundId,
+                "Refund failed",
+                eventName(eventTitle) + " refund failed. Please retry or check NewebPay status."));
+    }
     private void validate(NotificationCreateCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("Notification command is required");

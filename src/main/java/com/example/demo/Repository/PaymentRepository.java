@@ -318,4 +318,100 @@ public class PaymentRepository {
         map.put("paymentStatus", paymentStatus);
         return namedParameterJdbcTemplate.update(sql, map);
     }
+    public Optional<Map<String, Object>> findOrganizerPaymentUserByEmail(String email) {
+        String sql = """
+                SELECT
+                    id AS userId,
+                    email,
+                    role,
+                    status,
+                    isLogin,
+                    expired_time AS expiredTime
+                FROM dbo.users
+                WHERE email = :email
+                  AND role = 'ORGANIZER'
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("email", email);
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    public Optional<Map<String, Object>> findRefundForOrganizerProcessing(String refundNo) {
+        String sql = """
+                SELECT TOP 1
+                    r.id AS refundId,
+                    r.refund_no AS refundNo,
+                    r.application_id AS applicationId,
+                    r.payment_id AS paymentId,
+                    r.amount AS refundAmount,
+                    r.reason,
+                    r.failed_reason AS failedReason,
+                    r.refund_status AS refundStatus,
+                    r.refunded_at AS refundedAt,
+                    a.application_no AS applicationNo,
+                    a.user_id AS vendorUserId,
+                    me.user_id AS organizerUserId,
+                    me.title AS eventName,
+                    p.payment_no AS paymentNo,
+                    p.amount AS paymentAmount,
+                    p.provider,
+                    p.provider_trade_no AS providerTradeNo,
+                    p.status AS paymentStatus,
+                    p.paid_at AS paidAt
+                FROM dbo.refunds r
+                INNER JOIN dbo.event_applications a ON a.id = r.application_id
+                INNER JOIN dbo.market_events me ON me.id = a.event_id
+                INNER JOIN dbo.payments p ON p.id = r.payment_id
+                WHERE r.refund_no = :refundNo
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("refundNo", refundNo);
+        return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
+    }
+
+    public int markRefundProcessing(Long refundId) {
+        String sql = """
+                UPDATE dbo.refunds
+                SET
+                    refund_status = N'REFUNDING',
+                    failed_reason = NULL
+                WHERE id = :refundId
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("refundId", refundId);
+        return namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public int markRefundSucceeded(Long refundId) {
+        String sql = """
+                UPDATE dbo.refunds
+                SET
+                    refund_status = N'REFUNDED',
+                    refunded_at = SYSDATETIME(),
+                    failed_reason = NULL
+                WHERE id = :refundId
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("refundId", refundId);
+        return namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public int markRefundFailed(Long refundId, String failedReason) {
+        String sql = """
+                UPDATE dbo.refunds
+                SET
+                    refund_status = N'REFUND_FAILED',
+                    failed_reason = :failedReason
+                WHERE id = :refundId
+                """;
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("refundId", refundId);
+        map.put("failedReason", failedReason);
+        return namedParameterJdbcTemplate.update(sql, map);
+    }
 }
