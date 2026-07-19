@@ -43,4 +43,11 @@ class VendorControllerTest {
 
         verify(vendorDashboardService).initDashboard("Bearer token");
     }
+
+    @Test
+    void cancelApplicationEndpointDelegatesAuthorizationHeaderAndApplicationId() {
+        controller.cancelVendorApplication("Bearer token", 12L);
+
+        verify(stallService).cancelVendorApplication("Bearer token", 12L);
+    }
 }

@@ -3,6 +3,7 @@ package com.example.demo.Controller;
 import java.time.LocalDate;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -141,6 +142,17 @@ public class VendorController {
           }
           """))) @Valid @RequestBody VendorApplicationSubmitRequest body) {
     return stallService.submitVendorApplication(authorizationHeader, body);
+  }
+
+  @Operation(
+      summary = "攤主取消活動報名",
+      description = "僅待審核或待付款的報名可以取消；取消只更新報名取消狀態，不會刪除報名資料。")
+  @PostMapping("/api/vendor/CancelApplication/{id}")
+  public ResponseEntity<ApiResponse<Void>> cancelVendorApplication(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @PathVariable Long id) {
+    ApiResponse<Void> response = stallService.cancelVendorApplication(authorizationHeader, id);
+    return ResponseEntity.status(response.getStatusCode()).body(response);
   }
 
 }

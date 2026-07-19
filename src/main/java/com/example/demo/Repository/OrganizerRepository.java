@@ -16,6 +16,88 @@ public class OrganizerRepository {
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
+    public Optional<Map<String, Object>> findDepositRefundCandidate(
+            Long organizerUserId,
+            Long applicationId) {
+        String sql = """
+                SELECT
+                    a.id AS applicationId,
+                    a.application_no AS applicationNo,
+                    a.user_id AS vendorUserId,
+                    a.event_id AS eventId,
+                    a.review_status AS reviewStatus,
+                    a.payment_status AS paymentStatus,
+                    a.is_cancelled AS isCancelled,
+                    a.deposit_amount AS depositAmount,
+                    a.deposit_status AS depositStatus,
+                    latest_refund.refundStatus,
+                    e.title AS eventTitle,
+                    e.start_at AS eventStartAt,
+                    e.end_at AS eventEndAt,
+                    CASE WHEN SYSDATETIME() BETWEEN e.start_at AND e.end_at THEN 1 ELSE 0 END AS eventOngoing,
+                    date_stats.applicationDateCount,
+                    date_stats.selectedStallCount
+                FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
+                OUTER APPLY (
+                    SELECT
+                        COUNT(*) AS applicationDateCount,
+                        SUM(CASE WHEN ad.selected_stall_id IS NULL THEN 0 ELSE 1 END) AS selectedStallCount
+                    FROM dbo.application_dates ad
+                    WHERE ad.application_id = a.id
+                ) date_stats
+                OUTER APPLY (
+                    SELECT TOP (1) r.refund_status AS refundStatus
+                    FROM dbo.refunds r
+                    WHERE r.application_id = a.id
+                    ORDER BY r.id DESC
+                ) latest_refund
+                WHERE a.id = :applicationId
+                  AND e.user_id = :organizerUserId
+                """;
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("organizerUserId", organizerUserId);
+        parameters.put("applicationId", applicationId);
+        return RepositoryResultMapper.normalizeOptional(
+                namedParameterJdbcTemplate.queryForList(sql, parameters).stream().findFirst());
+    }
+
+    public int markDepositReturned(
+            Long organizerUserId,
+            Long applicationId) {
+        String sql = """
+                UPDATE a
+                SET deposit_status = N'RETURNED'
+                FROM dbo.event_applications a
+                INNER JOIN dbo.market_events e ON e.id = a.event_id
+                WHERE a.id = :applicationId
+                  AND e.user_id = :organizerUserId
+                  AND a.review_status = N'APPROVED'
+                  AND a.payment_status = N'PAID'
+                  AND a.is_cancelled = 0
+                  AND a.deposit_amount > 0
+                  AND a.deposit_status = N'NOT_RETURNED'
+                  AND SYSDATETIME() BETWEEN e.start_at AND e.end_at
+                  AND EXISTS (
+                      SELECT 1
+                      FROM dbo.application_dates ad
+                      WHERE ad.application_id = a.id
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM dbo.application_dates ad
+                      WHERE ad.application_id = a.id
+                        AND ad.selected_stall_id IS NULL
+                  )
+                """;
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("organizerUserId", organizerUserId);
+        parameters.put("applicationId", applicationId);
+        return namedParameterJdbcTemplate.update(sql, parameters);
+    }
+
     public List<Map<String, Object>> findVendorCategoriesByProfileIds(List<Long> vendorProfileIds) {
         if (vendorProfileIds == null || vendorProfileIds.isEmpty()) {
             return List.of();
