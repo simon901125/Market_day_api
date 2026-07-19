@@ -12,8 +12,8 @@ import com.example.demo.enums.type.AdminTargetTypeForFront;
  * @param targetType 目標類型，參照{@link com.example.demo.enums.type.AdminTargetTypeForFront}
  * @param startAt 開始日期 :LocalDateTime
  * @param endAt 結束日期 :LocalDateTime
- * @param pageNumber 頁碼，從1開始計算 :int
- * @param pageSize 每頁筆數 :int
+ * @param pageNumber 頁碼，從1開始計算，為 null 時預設1 :Integer
+ * @param pageSize 每頁筆數，為 null 時使用預設頁面大小 :Integer
  */
 public record AdminLogsSearchRequest(
     String keyWord,
@@ -21,6 +21,6 @@ public record AdminLogsSearchRequest(
     AdminTargetTypeForFront targetType,
     LocalDateTime startAt,
     LocalDateTime endAt,
-    int pageNumber,
-    int pageSize
+    Integer pageNumber,
+    Integer pageSize
 ) {}

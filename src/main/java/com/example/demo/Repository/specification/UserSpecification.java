@@ -19,7 +19,7 @@ public class UserSpecification {
     /**
      * 使用者名稱/Email模糊搜尋
      * @param keyword 關鍵字
-     * @return WHERE `user.userProfile.name` LIKE "%keyword%" OR `user.email` LIKE "%keyword%"
+     * @return WHERE `user.userProfile.contactName` LIKE "%keyword%" OR `user.email` LIKE "%keyword%"
      */
     private static Specification<User> withKeyword(String keyword) {
 
@@ -28,7 +28,7 @@ public class UserSpecification {
                 return null;
             }
             return cb.or(
-                cb.like(cb.lower(root.get("userProfile").get("name")), "%" + keyword.toLowerCase() + "%"),
+                cb.like(cb.lower(root.get("userProfile").get("contactName")), "%" + keyword.toLowerCase() + "%"),
                 cb.like(cb.lower(root.get("email")), "%" + keyword.toLowerCase() + "%")
             );
         };
@@ -42,7 +42,9 @@ public class UserSpecification {
 
         return (root, cq, cb) -> {
             if (role == null) {
-                return null;
+                return cb.or(
+                    cb.equal(root.get("role"), Role.ORGANIZER),
+                    cb.equal(root.get("role"), Role.VENDOR));
             }
             return cb.equal(root.get("role"), role);
         };
@@ -58,7 +60,10 @@ public class UserSpecification {
         return(root, cq, cb) -> {
 
             if (status == null) {
-                return null;
+                return cb.or(
+                    cb.equal(root.get("status"), UserStatus.ACTIVE),
+                    cb.equal(root.get("status"), UserStatus.DISABLED)
+                );
             }
             return cb.equal(root.get("status"), status);
         };

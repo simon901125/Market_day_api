@@ -36,7 +36,8 @@ public interface EventUnpublishRequestRepo extends JpaRepository<EventUnpublishR
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.EventUnpublishReasonProjection(
                 r.id,
-                r.reason
+                r.reason,
+                r.requestedAt
             )
             FROM EventUnpublishRequest r
             WHERE r.event.id = :eventId

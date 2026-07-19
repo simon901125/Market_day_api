@@ -128,11 +128,14 @@ public class AdminController {
                     request.status(),
                     request.startDate(),
                     request.endDate());
+            int pageNumber = request.pageNumber() == null ? 1 : request.pageNumber();
+            int pageSize = request.pageSize() == null ? STANDARD_PAGE_SIZE : request.pageSize();
 
-            return ApiResponse.success("ok", service.getEventsList(data, request.pageNumber(), request.pageSize()));
+            return ApiResponse.success("ok", service.getEventsList(data, pageNumber, pageSize));
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         } catch (Exception e) {
+            System.out.println(e);
             return ApiResponse.fail("取得活動列表失敗");
         }
     }
@@ -333,8 +336,10 @@ public class AdminController {
                     request.keyWord(),
                     request.role(),
                     request.status());
+            int pageNumber = request.pageNumber() == null ? 1 : request.pageNumber();
+            int pageSize = request.pageSize() == null ? STANDARD_PAGE_SIZE : request.pageSize();
 
-            return ApiResponse.success("ok", service.getUserList(data, request.pageNumber(), request.pageSize()));
+            return ApiResponse.success("ok", service.getUserList(data, pageNumber, pageSize));
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         } catch (Exception e) {
@@ -422,7 +427,7 @@ public class AdminController {
 
     /**
      * 用來獲取管理員後台: 主辦方詳細頁面所需資料: 活動管理紀錄<br>
-     * <b>API路徑</b>: /api/admin/users/{id}/OrgEvent<br>
+     * <b>API路徑</b>: /api/admin/users/{id}/orgEvent<br>
      *
      * @param id   使用者id
      * @param size 每頁筆數，未傳時預設6
@@ -430,7 +435,7 @@ public class AdminController {
      * @return ApiResponse<T>
      */
     @Operation(summary = "取得主辦方活動管理紀錄", description = "依使用者 id 分頁查詢主辦方的活動管理紀錄。")
-    @GetMapping("/users/{id}/OrgEvent")
+    @GetMapping("/users/{id}/orgEvent")
     public ApiResponse<?> getOrgEventLogs(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable Long id,
@@ -555,7 +560,9 @@ public class AdminController {
                     request.targetType(),
                     request.startAt(),
                     request.endAt());
-            return ApiResponse.success("ok", service.getLogs(data, request.pageNumber(), request.pageSize()));
+            int pageNumber = request.pageNumber() == null ? 1 : request.pageNumber();
+            int pageSize = request.pageSize() == null ? STANDARD_PAGE_SIZE : request.pageSize();
+            return ApiResponse.success("ok", service.getLogs(data, pageNumber, pageSize));
         } catch (IllegalArgumentException e) {
             return ApiResponse.fail(e.getMessage());
         } catch (Exception e) {
