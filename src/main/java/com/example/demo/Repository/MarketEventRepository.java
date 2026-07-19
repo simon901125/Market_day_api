@@ -49,7 +49,7 @@ public class MarketEventRepository {
                     CAST(e.end_at AS DATE) AS end_date,
                     e.cover_image_url
                 FROM dbo.market_events e
-                WHERE e.workflow_status = N'PUBLISHED'
+                WHERE e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
                 """);
 
         Map<String, Object> params = new HashMap<>();
@@ -105,7 +105,7 @@ public class MarketEventRepository {
                     ON up.user_id = e.user_id AND up.profile_type = N'ORGANIZER'
                 LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
                 WHERE e.id = :id
-                  AND e.workflow_status = N'PUBLISHED'
+                  AND e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
                 """;
 
         Map<String, Object> params = Map.of("id", id);

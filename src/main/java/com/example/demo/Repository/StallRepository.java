@@ -1061,11 +1061,7 @@ public class StallRepository {
 
                     e.cover_image_url AS imageUrl,
 
-                    CASE
-                        WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
-                        WHEN GETDATE() <= e.registration_end_at THEN N'OPEN'
-                        ELSE N'CLOSED'
-                    END AS registrationStatus
+                    N'OPEN' AS registrationStatus
 
                 FROM dbo.market_events AS e
 
@@ -1076,8 +1072,8 @@ public class StallRepository {
                 LEFT JOIN dbo.organizer_profiles AS op
                     ON op.user_profile_id = up.id
 
-                WHERE e.workflow_status = N'PUBLISHED'
-                        AND e.registration_end_at >= GETDATE()
+                WHERE e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
+                        AND GETDATE() BETWEEN e.registration_start_at AND e.registration_end_at
                         """);
 
         Map<String, Object> params = new HashMap<>();
@@ -1108,9 +1104,9 @@ public class StallRepository {
         if (normalizedStatus != null && !"ALL".equalsIgnoreCase(normalizedStatus)
                 && !"全部狀態".equals(normalizedStatus)) {
             switch (normalizedStatus.toUpperCase()) {
-                case "OPEN" -> sql.append(" AND GETDATE() BETWEEN e.registration_start_at AND e.registration_end_at");
-                case "UPCOMING" -> sql.append(" AND GETDATE() < e.registration_start_at");
-                case "CLOSED" -> sql.append(" AND GETDATE() > e.registration_end_at");
+                case "OPEN", "FULL" -> {
+                    // 滿額狀態需依每日剩餘攤位計算，由 Service 組合資料後篩選。
+                }
                 default -> sql.append(" AND 1 = 0"); // 未知狀態不應意外回傳全部資料。
             }
         }
@@ -1161,17 +1157,14 @@ public class StallRepository {
                     e.stall_width AS stallWidth,
                     e.stall_length AS stallLength,
                     NULL AS stallHeight,
-                    CASE
-                        WHEN GETDATE() < e.registration_start_at THEN N'UPCOMING'
-                        WHEN GETDATE() <= e.registration_end_at THEN N'OPEN'
-                        ELSE N'CLOSED'
-                    END AS registrationStatus
+                    N'OPEN' AS registrationStatus
                 FROM dbo.market_events e
                 LEFT JOIN dbo.user_profiles up
                     ON up.user_id = e.user_id AND up.profile_type = N'ORGANIZER'
                 LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
                 WHERE e.id = :eventId
-                  AND e.workflow_status = N'PUBLISHED'
+                  AND e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
+                  AND GETDATE() BETWEEN e.registration_start_at AND e.registration_end_at
                 """;
         return RepositoryResultMapper.normalizeOptional(
                 namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)).stream().findFirst());

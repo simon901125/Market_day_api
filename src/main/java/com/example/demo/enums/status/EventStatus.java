@@ -29,9 +29,11 @@ public enum EventStatus {
     /**活動公開後狀態:攤位已額滿 */
     FULL("full", "已額滿"),
     /**活動公開後狀態:活動參與品牌已公開 */
-    PUBLISHED("published", "品牌已公開"),
+    PUBLISHED("published", "已發布"),
     /**活動公開後狀態:活動進行中 */
     ACTIVE("active", "進行中"),
+    /**報名截止後、活動開始前的最終確認階段*/
+    FINAL_CONFIRMATION("finalConfirmation", "最終確認"),
     /**活動公開後狀態:活動已結束 */
     ENDED("ended", "已結束"),
     /**活動公開後狀態:主辦方提出活動下架申請 */

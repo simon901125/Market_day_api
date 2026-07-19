@@ -7,6 +7,27 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 ### 2026-07-19
 
+#### yingtung branch
+
+- 新增主辦方活動撤回審核 API：`POST /api/organizer/events/{eventId}/withdraw`，僅允許活動所屬主辦方將 `PENDING_REVIEW` 活動撤回為 `DRAFT`，撤回後可重新編輯及送審。
+- 撤回審核會保留 `review_note` 與最後一次成功送審時間，並寫入 `request_logs`、`status_logs`，完整保存送審與撤回歷程。
+- 活動設備租借、基本用電及額外用電狀態改由 `event_equipments` 明細即時計算，不再依賴 `market_events` 中不存在的設備布林欄位。
+- 修正活動儲存時未填完整草稿欄位造成的 500 錯誤，並強化主辦方活動審核流程的條件更新與更新筆數檢查，避免狀態競態覆寫。
+- 新增主辦方活動發布 API：`POST /api/organizer/events/{eventId}/publish`，僅允許活動所屬主辦方發布 `READY_TO_PUBLISH` 活動。
+- 發布前會完整驗證活動資料、圖片、分區、日期與實際攤位地圖；`event_stalls` 數量必須等於 `max_booths`，報名截止、活動開始或活動結束後禁止首次發布。
+- 發布成功後將狀態更新為 `PUBLISHED`，並以 `COALESCE` 記錄第一次 `public_info_at`，下架後重新發布不會覆蓋首次公開時間。
+- 調整活動顯示狀態規則：報名開始前顯示「已發布」、報名期間依容量顯示「報名中／已額滿」、報名截止後至活動開始前顯示「最終確認」，活動期間及結束後分別顯示「進行中／已結束」。
+- 修正管理員地圖建置完成流程的條件更新與更新筆數檢查，避免活動狀態已變更時仍被覆寫為 `READY_TO_PUBLISH`。
+- 新增主辦方活動下架申請 API：`POST /api/organizer/events/{eventId}/unpublish-request`，下架原因必填且最多 500 字；成功後建立 `PENDING` 申請並將活動更新為 `UNPUBLISH_REQUESTED`。
+- 下架申請審核期間活動仍維持公開；管理員核准後改為 `UNPUBLISHED`，拒絕後一律回到 `PUBLISHED`，舊申請保留並允許日後建立新的下架申請。
+- 攤主報名詳情新增下架申請中與已下架提示；已下架活動會說明後續退款流程，既有報名、付款、選位及退款資料不受下架申請影響。
+- 管理員完成地圖建置時，後端會依各分區 `stall_count` 自動建立 `event_stalls`，使用實際 `zone_id` 並產生 `A01`、`A02`、`B01` 等攤位編號；建立攤位與更新活動狀態在同一交易內完成。
+- 活動分區名稱限制為 `A 區` 至 `Z 區`，最多 26 區且不可重複；分區攤位總數必須等於 `max_booths`，避免發布時發生地圖攤位數量不一致。
+- 攤主市集列表與詳情只顯示目前報名期間內可報名或已額滿的活動，不再顯示尚未開放報名的活動，並統一使用「報名中／已額滿」狀態。
+- 新增主辦方刪除草稿活動 API：`DELETE /api/organizer/events/{eventId}`，僅允許活動所屬主辦方刪除 `DRAFT` 活動；待審核撤回為草稿後也可刪除。
+- 刪除活動採狀態保留方式，將 `workflow_status` 由 `DRAFT` 更新為 `CANCELLED`，不實體刪除活動、分類、設備、分區、圖片 URL 或圖片檔案，並保留所有送審、撤回及稽核紀錄。
+- 已刪除的 `CANCELLED` 活動不再出現在主辦方活動列表與詳情；刪除使用資料列鎖與條件更新防止和送審同時執行，成功回傳 `eventId`、`eventTitle` 並寫入活動狀態紀錄。
+- 補齊撤回、發布、下架申請、地圖攤位建立、分區驗證、活動刪除、狀態判斷與競態處理的 Service、Controller、狀態紀錄及 SQL Server 整合測試。
 #### yushuan branch
 
 - 新增主辦方退款確認 API：`POST /api/organizer/refunds/review`，主辦方可針對攤主已送出的退款申請進行第一次同意退款確認。
@@ -130,7 +151,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - `JwtAuthenticationFilter` 由逐支維護 `protectedApis` 改為「受保護路徑前綴＋明確公開端點白名單」；`/api/vendor/**`、`/api/organizer/**`、`/api/admin/**`、`/api/auth/**`、`/api/account/**`、`/api/images**` 與 `/api/stalls/**` 預設需要 JWT。
 - 登入、註冊、信箱驗證、密碼重設、公開市集查詢與藍新回呼維持公開；所有 CORS `OPTIONS` 預檢請求亦直接放行。新增前綴保護、公開白名單、管理員角色及 CORS 測試。
 
-最後更新：2026-07-18
+最後更新：2026-07-19
 
 ## 更新紀錄
 

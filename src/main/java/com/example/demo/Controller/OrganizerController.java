@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +24,7 @@ import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
 import com.example.demo.dto.request.OrganizerEventSaveRequest;
+import com.example.demo.dto.request.OrganizerEventUnpublishRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
@@ -35,7 +37,11 @@ import com.example.demo.dto.response.OrganizerNotificationSearchResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEventSearchResponse;
 import com.example.demo.dto.response.OrganizerEventDetailResponse;
+import com.example.demo.dto.response.OrganizerEventDeleteResponse;
 import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
+import com.example.demo.dto.response.OrganizerEventWithdrawResponse;
+import com.example.demo.dto.response.OrganizerEventPublishResponse;
+import com.example.demo.dto.response.OrganizerEventUnpublishRequestResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -86,6 +92,14 @@ public class OrganizerController {
         return organizerService.getOrganizerEventDetail(authorizationHeader, eventId);
     }
 
+    @Operation(summary = "刪除活動", description = "僅允許主辦方刪除自己的草稿活動；資料保留並將流程狀態改為 CANCELLED")
+    @DeleteMapping("/api/organizer/events/{eventId}")
+    public ApiResponse<OrganizerEventDeleteResponse> deleteOrganizerEvent(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId) {
+        return organizerService.deleteOrganizerEvent(authorizationHeader, eventId);
+    }
+
     @Operation(summary = "儲存活動", description = "建立活動草稿，或修改草稿及待補件活動的完整資料")
     @PostMapping("/api/organizer/events")
     public ApiResponse<OrganizerEventDetailResponse> saveOrganizerEvent(
@@ -100,6 +114,31 @@ public class OrganizerController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable Long eventId) {
         return organizerService.submitOrganizerEventReview(authorizationHeader, eventId);
+    }
+
+    @Operation(summary = "撤回活動審核申請", description = "將待審核活動撤回為草稿，保留補件備註及最近送審時間")
+    @PostMapping("/api/organizer/events/{eventId}/withdraw")
+    public ApiResponse<OrganizerEventWithdrawResponse> withdrawOrganizerEventReview(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId) {
+        return organizerService.withdrawOrganizerEventReview(authorizationHeader, eventId);
+    }
+
+    @Operation(summary = "發布活動", description = "將已完成地圖建置的活動正式發布")
+    @PostMapping("/api/organizer/events/{eventId}/publish")
+    public ApiResponse<OrganizerEventPublishResponse> publishOrganizerEvent(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId) {
+        return organizerService.publishOrganizerEvent(authorizationHeader, eventId);
+    }
+
+    @Operation(summary = "申請下架活動", description = "已發布活動送出下架原因，等待管理員審核")
+    @PostMapping("/api/organizer/events/{eventId}/unpublish-request")
+    public ApiResponse<OrganizerEventUnpublishRequestResponse> requestOrganizerEventUnpublish(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId,
+            @RequestBody(required = false) OrganizerEventUnpublishRequest request) {
+        return organizerService.requestOrganizerEventUnpublish(authorizationHeader, eventId, request);
     }
 
     @Operation(summary = "取得主辦方通知中心", description = "查詢目前登入主辦方通知；支援全部、未讀、報名相關、付款相關、活動異動及系統公告分類，未讀通知優先。")

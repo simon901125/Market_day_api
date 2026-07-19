@@ -93,6 +93,26 @@ class OrganizerServiceEventSubmitReviewTest {
         verify(organizerRepository, never()).submitOrganizerEventReview(7L, EVENT_ID);
     }
 
+    @Test
+    void rejectsLegacyNumericZoneNameDuringSubmitReview() {
+        when(organizerRepository.findOrganizerEventDetail(7L, EVENT_ID))
+                .thenReturn(Optional.of(completeEvent("DRAFT")));
+        when(organizerRepository.findOrganizerEventCategories(EVENT_ID))
+                .thenReturn(List.of(Map.of("categoryId", 1L)));
+        when(organizerRepository.countActiveCategories(Set.of(1L))).thenReturn(1);
+        when(organizerRepository.findOrganizerEventZones(EVENT_ID)).thenReturn(List.of(Map.of(
+                "zoneName", "1 區",
+                "stallCount", 20,
+                "colorCode", "#F97316")));
+        when(organizerRepository.findEventEquipments(EVENT_ID)).thenReturn(List.of());
+
+        var response = organizerService.submitOrganizerEventReview(AUTH, EVENT_ID);
+
+        assertThat(response.getStatusCode()).isEqualTo(400);
+        assertThat(response.getData().missingFields()).contains("booth.zones");
+        verify(organizerRepository, never()).submitOrganizerEventReview(7L, EVENT_ID);
+    }
+
     private void stubCompleteEvent(String workflowStatus) {
         stubEventData(completeEvent(workflowStatus));
     }
