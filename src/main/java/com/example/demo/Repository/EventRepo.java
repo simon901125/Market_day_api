@@ -49,7 +49,7 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
                 e.maxBooths
             )
             FROM MarketEvent e
-            WHERE e.user.id = :userId
+            WHERE e.user.id = :userId and e.workflowStatus not in ('DRAFT', 'CANCELLED')
             ORDER BY e.startAt DESC
             """)
     List<AdminOrgEventLogProjection> findOrgEventLogs(@Param("userId") Long userId, Pageable pageable);
@@ -131,7 +131,7 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             JOIN market.user user
             LEFT JOIN user.userProfile userProfile
             LEFT JOIN userProfile.organizerProfile organizerProfile
-            WHERE market.id = :id
+            WHERE market.id = :id and market.workflowStatus not in ('DRAFT', 'CANCELLED')
             """)
     Optional<AdminEventDetailProjection> findEventDetailById(@Param("id") Long id);
 
