@@ -439,6 +439,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     // 設定管理員後台: 攤主詳細: 活動報名紀錄
     @Override
     public PageResponse<AdminVenderRegDto> getVenderRegLogs(@Nonnull Long userId, int pageNumber, int pageSize) {
+        //----------驗證userId.role----------
+        if(userRepo.countByIdAndRole(userId, Role.VENDOR) != 1){
+            throw new IllegalArgumentException("該使用者非攤主");
+        };
         // ----------撈資料----------
         PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
         List<VenderRegApplicationProjection> applications = eventApplicationRepo.findVenderRegApplications(userId,
@@ -549,6 +553,11 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     @Override
     public PageResponse<AdminOrgEventManagementDto> getOrgEventLogs(@Nonnull Long userId, int pageNumber,
             int pageSize) {
+        //----------驗證userId.role----------
+        if(userRepo.countByIdAndRole(userId, Role.ORGANIZER) != 1){
+            throw new IllegalArgumentException("該使用者非主辦方");
+        };
+
         // ----------撈資料----------
         PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize);
         List<AdminOrgEventLogProjection> events = eventRepo.findOrgEventLogs(userId, pageRequest);

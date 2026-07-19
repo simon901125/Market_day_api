@@ -21,6 +21,7 @@ import com.example.demo.enums.type.Role;
 public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExecutor<User>, UserRepoCustom {
     int countByRoleAndStatus(Role role, UserStatus status);
     Optional<User> findByEmail(String email);
+    long countByIdAndRole(Long id, Role role);
 
     /** 管理員後台: 攤主詳細:帳號與品牌基本資料 (不含最後登入時間、活動數統計，需另外查詢) */
     @Query("""
@@ -43,7 +44,7 @@ public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExe
             LEFT JOIN user.userProfile userProfile
             LEFT JOIN userProfile.vendorProfile vendorProfile
             LEFT JOIN vendorProfile.category category
-            WHERE user.id = :userId
+            WHERE user.id = :userId and user.role = 'VENDOR'
             """)
     Optional<AdminVenderDetailProjection> findVenderDetailById(@Param("userId") Long userId);
 
@@ -71,7 +72,7 @@ public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExe
             FROM User user
             LEFT JOIN user.userProfile userProfile
             LEFT JOIN userProfile.organizerProfile organizerProfile
-            WHERE user.id = :userId
+            WHERE user.id = :userId and user.role = 'ORGANIZER'
             """)
     Optional<AdminOrganizerDetailProjection> findOrganizerDetailById(@Param("userId") Long userId);
 
