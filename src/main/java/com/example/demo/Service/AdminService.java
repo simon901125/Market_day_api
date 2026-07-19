@@ -134,8 +134,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             "/api/organizer/local-login");
     /** 攤主登入API路徑 */
     private static final List<String> VENDOR_LOGIN_PATHS = List.of(
-            "/api/vender/google-login",
-            "/api/vender/local-login");
+            "/api/vendor/google-login",
+            "/api/vendor/local-login");
 
     /** 首頁通知列表預覽筆數 */
     private static final int DASHBOARD_NOTICE_COUNT = 6;

@@ -165,6 +165,47 @@ public class StallRepository {
                 .normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
+    public Optional<Map<String, Object>> findVendorApplicationForCancellation(Long applicationId, Long vendorUserId) {
+        String sql = """
+                SELECT
+                    id AS applicationId,
+                    review_status AS reviewStatus,
+                    payment_status AS paymentStatus,
+                    is_cancelled AS isCancelled
+                FROM dbo.event_applications
+                WHERE id = :applicationId
+                  AND user_id = :vendorUserId
+                """;
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("applicationId", applicationId);
+        parameters.put("vendorUserId", vendorUserId);
+        return RepositoryResultMapper.normalizeOptional(
+                namedParameterJdbcTemplate.queryForList(sql, parameters).stream().findFirst());
+    }
+
+    public int cancelVendorApplication(Long applicationId, Long vendorUserId) {
+        String sql = """
+                UPDATE dbo.event_applications
+                SET is_cancelled = 1
+                WHERE id = :applicationId
+                  AND user_id = :vendorUserId
+                  AND is_cancelled = 0
+                  AND (
+                      review_status = N'PENDING'
+                      OR (
+                          review_status = N'APPROVED'
+                          AND payment_status IN (N'PENDING', N'FAILED')
+                      )
+                  )
+                """;
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("applicationId", applicationId);
+        parameters.put("vendorUserId", vendorUserId);
+        return namedParameterJdbcTemplate.update(sql, parameters);
+    }
+
     public Optional<Map<String, Object>> findSelectableApplication(String applicationNo) {
         String sql = """
                 SELECT
