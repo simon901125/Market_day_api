@@ -70,6 +70,8 @@ class UserServiceTest {
     private UpdateActiveTimeService updateActiveTimeService;
     @Mock
     private EmailService emailService;
+    @Mock
+    private NotificationService notificationService;
 
     private UserService userService;
 
@@ -83,6 +85,7 @@ class UserServiceTest {
         ReflectionTestUtils.setField(userService, "jwtService", jwtService);
         ReflectionTestUtils.setField(userService, "updateActiveTimeService", updateActiveTimeService);
         ReflectionTestUtils.setField(userService, "emailService", emailService);
+        ReflectionTestUtils.setField(userService, "notificationService", notificationService);
         ReflectionTestUtils.setField(userService, "googleClientId", GOOGLE_CLIENT_ID);
     }
 
@@ -352,6 +355,8 @@ class UserServiceTest {
         when(userRepository.deleteUserToken(71L, UserRepository.TOKEN_TYPE_PASSWORD_RESET)).thenReturn(1);
         when(authService.hashPassword("newPassword1")).thenReturn("new-hash");
         when(userRepository.updateLocalPasswordByUserId(10L, "new-hash")).thenReturn(1);
+        when(userRepository.findUserAccountById(10L)).thenReturn(Optional.of(Map.of(
+                "id", 10L, "email", EMAIL, "role", "VENDOR", "status", "ACTIVE")));
 
         ApiResponse<Void> response;
         try {
@@ -363,6 +368,7 @@ class UserServiceTest {
         assertThat(response.isSuccessStatus()).isTrue();
         assertThat(servletRequest.getAttribute(RequestLogService.RESOLVED_USER_ID_ATTRIBUTE)).isEqualTo(10L);
         verify(userRepository).updateLocalPasswordByUserId(10L, "new-hash");
+        verify(notificationService).notifyPasswordResetCompleted(eq(10L), eq(EMAIL), anyString());
     }
 
     @Test
@@ -372,7 +378,7 @@ class UserServiceTest {
         mockValidAuthorization();
         when(updateActiveTimeService.isCurrentLoginSession(TOKEN)).thenReturn(true);
         when(userRepository.findLocalUserByEmail(EMAIL))
-                .thenReturn(Optional.of(Map.of("password_hash", "current-hash")));
+                .thenReturn(Optional.of(Map.of("id", 10L, "password_hash", "current-hash")));
         when(authService.matchesPassword("currentPassword1", "current-hash")).thenReturn(true);
         when(authService.hashPassword("newPassword1")).thenReturn("new-hash");
         when(userRepository.updateLocalPasswordByEmail(EMAIL, "new-hash")).thenReturn(1);
@@ -381,6 +387,7 @@ class UserServiceTest {
 
         assertThat(response.isSuccessStatus()).isTrue();
         verify(userRepository).updateLocalPasswordByEmail(EMAIL, "new-hash");
+        verify(notificationService).notifyPasswordResetCompleted(eq(10L), eq(EMAIL), anyString());
     }
 
     @Test

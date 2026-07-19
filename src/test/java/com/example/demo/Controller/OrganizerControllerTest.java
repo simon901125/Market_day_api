@@ -67,6 +67,20 @@ class OrganizerControllerTest {
                 AUTH, "market", "FULL", start, end, "UPCOMING_FIRST", 1, 3, true);
     }
 
+    @Test void paymentSearchEndpointDelegatesAllFiltersAndPages() {
+        LocalDate start = LocalDate.of(2026, 7, 1);
+        LocalDate end = LocalDate.of(2026, 7, 31);
+
+        controller.searchOrganizerPayments(AUTH, "品牌", "已付款", start, end, 2, 5);
+
+        verify(organizerService).searchOrganizerPayments(AUTH, "品牌", "已付款", start, end, 2, 5);
+    }
+
+    @Test void paymentDetailEndpointDelegatesApplicationId() {
+        controller.getOrganizerPaymentDetail(AUTH, 12L);
+        verify(organizerService).getOrganizerPaymentDetail(AUTH, 12L);
+    }
+
     @Test void eventSaveEndpointDelegatesRequest() {
         OrganizerEventSaveRequest request = new OrganizerEventSaveRequest(
                 null, null, null, null, null, null, null, null, null);

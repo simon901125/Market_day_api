@@ -6,7 +6,8 @@ public enum VendorNotificationFilter {
     APPLICATION_REVIEW(NotificationCategory.APPLICATION_REVIEW, false),
     PAYMENT(NotificationCategory.PAYMENT, false),
     STALL_ASSIGNMENT(NotificationCategory.STALL_ASSIGNMENT, false),
-    EVENT_CHANGE(NotificationCategory.EVENT_CHANGE, false);
+    EVENT_CHANGE(NotificationCategory.EVENT_CHANGE, false),
+    SYSTEM(NotificationCategory.SYSTEM, false);
 
     private final NotificationCategory category;
     private final boolean unreadOnly;
@@ -35,6 +36,7 @@ public enum VendorNotificationFilter {
             case "付款相關" -> PAYMENT;
             case "攤位分配" -> STALL_ASSIGNMENT;
             case "活動異動" -> EVENT_CHANGE;
+            case "系統通知" -> SYSTEM;
             default -> throw new IllegalArgumentException("Vendor notification filter is invalid");
         };
     }

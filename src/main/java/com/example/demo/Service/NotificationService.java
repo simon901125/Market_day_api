@@ -1,9 +1,15 @@
 package com.example.demo.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.HexFormat;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,13 +18,17 @@ import com.example.demo.Repository.NotificationRepo;
 import com.example.demo.Repository.NotificationRepository;
 import com.example.demo.Repository.UserRepo;
 import com.example.demo.dto.notification.NotificationCreateCommand;
+import com.example.demo.dto.request.SystemAnnouncementRequest;
 import com.example.demo.dto.response.ApiResponse;
+import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.NotificationToggleDto;
 import com.example.demo.entity.Notification;
 import com.example.demo.entity.User;
 import com.example.demo.enums.notification.NotificationCategory;
 import com.example.demo.enums.notification.NotificationTargetType;
 import com.example.demo.enums.notification.NotificationType;
+import com.example.demo.enums.status.UserStatus;
+import com.example.demo.enums.type.Role;
 
 @Service
 public class NotificationService {
@@ -79,7 +89,12 @@ public class NotificationService {
         if (user == null) {
             return Map.of("message", "User not found");
         }
-        return Map.of("userId", user.getId());
+        Map<String, Object> auth = new HashMap<>();
+        auth.put("userId", user.getId());
+        if (user.getRole() != null) {
+            auth.put("role", user.getRole());
+        }
+        return auth;
     }
 
     /**
@@ -115,6 +130,122 @@ public class NotificationService {
                 content));
     }
 
+    @Transactional
+    public ApiResponse<MapBackedResponse> broadcastSystemAnnouncement(
+            String authorizationHeader,
+            SystemAnnouncementRequest request) {
+        Map<String, Object> auth = authenticatedUser(authorizationHeader);
+        if (auth.containsKey("message")) {
+            return ApiResponse.fail(401, auth.get("message").toString());
+        }
+        if (auth.get("role") != Role.ADMIN) {
+            return ApiResponse.fail(403, "Only administrators can broadcast system announcements");
+        }
+        if (request == null || isBlank(request.title()) || isBlank(request.content())) {
+            return ApiResponse.fail(400, "公告標題與內容不可為空");
+        }
+        if (request.title().trim().length() > MAX_TITLE_LENGTH) {
+            return ApiResponse.fail(400, "公告標題不可超過 150 字");
+        }
+
+        List<Long> recipientIds = userRepo.findIdsByStatus(UserStatus.ACTIVE);
+        if (recipientIds.isEmpty()) {
+            return ApiResponse.fail(409, "目前沒有可接收公告的啟用帳號");
+        }
+        String title = request.title().trim();
+        String content = request.content().trim();
+        notifySystemAnnouncement(recipientIds, title, content);
+
+        return ApiResponse.success(
+                "系統公告已發送",
+                new MapBackedResponse(Map.of(
+                        "recipientCount", recipientIds.size(),
+                        "announcementKey", fingerprint(title, content))));
+    }
+
+    public void notifyApplicationCancelled(
+            Long vendorUserId,
+            Long organizerUserId,
+            Long applicationId,
+            String eventTitle,
+            String brandName) {
+        String eventName = eventName(eventTitle);
+        create(new NotificationCreateCommand(
+                vendorUserId,
+                NotificationCategory.APPLICATION_REVIEW,
+                NotificationType.APPLICATION_CANCELLED,
+                NotificationTargetType.EVENT_APPLICATION,
+                applicationId,
+                "報名已取消",
+                eventName + " 的活動報名已取消",
+                dedupKey(vendorUserId, NotificationType.APPLICATION_CANCELLED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
+        create(new NotificationCreateCommand(
+                organizerUserId,
+                NotificationCategory.REGISTRATION,
+                NotificationType.APPLICATION_CANCELLED,
+                NotificationTargetType.EVENT_APPLICATION,
+                applicationId,
+                "攤主取消報名",
+                brandName(brandName) + "已取消活動報名：" + eventName,
+                dedupKey(organizerUserId, NotificationType.APPLICATION_CANCELLED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
+    }
+
+    public void notifyVendorRefundRequested(Long vendorUserId, Long refundId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                vendorUserId,
+                NotificationCategory.PAYMENT,
+                NotificationType.REFUND_REQUESTED,
+                NotificationTargetType.REFUND,
+                refundId,
+                "退款申請已送出",
+                eventName(eventTitle) + " 的退款申請已送出，等待後續處理",
+                dedupKey(vendorUserId, NotificationType.REFUND_REQUESTED,
+                        NotificationTargetType.REFUND, refundId, null)));
+    }
+
+    public void notifyDepositReturned(
+            Long vendorUserId,
+            Long applicationId,
+            String eventTitle) {
+        create(new NotificationCreateCommand(
+                vendorUserId,
+                NotificationCategory.PAYMENT,
+                NotificationType.DEPOSIT_RETURNED,
+                NotificationTargetType.EVENT_APPLICATION,
+                applicationId,
+                "保證金已退還",
+                eventName(eventTitle) + " 的保證金已由主辦方登記為現金退還",
+                dedupKey(vendorUserId, NotificationType.DEPOSIT_RETURNED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
+    }
+
+    public void notifyPasswordResetCompleted(
+            Long resetUserId,
+            String accountEmail,
+            String resetEventKey) {
+        List<Long> recipientIds = new ArrayList<>(
+                userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE));
+        recipientIds.add(resetUserId);
+        String content = "帳號 " + accountEmail + " 已完成密碼重設";
+        List<NotificationCreateCommand> commands = recipientIds.stream()
+                .distinct()
+                .sorted()
+                .map(recipientId -> new NotificationCreateCommand(
+                        recipientId,
+                        NotificationCategory.SYSTEM,
+                        NotificationType.PASSWORD_RESET_COMPLETED,
+                        NotificationTargetType.USER,
+                        resetUserId,
+                        "密碼重設完成",
+                        content,
+                        dedupKey(recipientId, NotificationType.PASSWORD_RESET_COMPLETED,
+                                NotificationTargetType.USER, resetUserId, resetEventKey)))
+                .toList();
+        createAll(commands);
+    }
+
     public void notifyEventChanged(
             Collection<Long> userIds,
             Long eventId,
@@ -139,7 +270,9 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "待審核",
-                eventName + " 已收到您的報名申請"));
+                eventName + " 已收到您的報名申請",
+                dedupKey(userId, NotificationType.APPLICATION_SUBMITTED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
 
     public void notifyOrganizerApplicationSubmitted(
@@ -154,7 +287,9 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "新報名",
-                brandName(brandName) + "送出報名申請：" + eventName(eventTitle)));
+                brandName(brandName) + "送出報名申請：" + eventName(eventTitle),
+                dedupKey(organizerUserId, NotificationType.APPLICATION_SUBMITTED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
 
     public void notifyApplicationReviewed(
@@ -172,7 +307,10 @@ public class NotificationService {
                 approved ? "待付款" : "審核未通過",
                 approved
                         ? eventName + " 審核通過，請完成付款"
-                        : eventName + " 報名審核未通過"));
+                        : eventName + " 報名審核未通過",
+                dedupKey(userId,
+                        approved ? NotificationType.APPLICATION_APPROVED : NotificationType.APPLICATION_REJECTED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
 
     public void notifyPaymentStatusChanged(
@@ -190,7 +328,9 @@ public class NotificationService {
                 paid ? "付款成功" : "付款失敗",
                 paid
                         ? eventName + " 付款成功，可於開放選位後選擇攤位"
-                        : eventName + " 付款失敗，請重新確認付款狀態"));
+                        : eventName + " 付款失敗，請重新確認付款狀態",
+                dedupKey(userId, paid ? NotificationType.PAYMENT_PAID : NotificationType.PAYMENT_FAILED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
         if (paid) {
             create(new NotificationCreateCommand(
                     userId,
@@ -199,7 +339,9 @@ public class NotificationService {
                     NotificationTargetType.EVENT_APPLICATION,
                     applicationId,
                     "待選位",
-                    eventName + " 付款成功，可選擇攤位"));
+                    eventName + " 付款成功，可選擇攤位",
+                    dedupKey(userId, NotificationType.STALL_SELECTION_AVAILABLE,
+                            NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
         }
     }
 
@@ -218,7 +360,10 @@ public class NotificationService {
                 paid ? "付款完成" : "付款失敗",
                 brandName(brandName)
                         + (paid ? "已完成付款：" : "付款失敗：")
-                        + eventName(eventTitle)));
+                        + eventName(eventTitle),
+                dedupKey(organizerUserId,
+                        paid ? NotificationType.PAYMENT_PAID : NotificationType.PAYMENT_FAILED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
 
     public void notifyStallSelectionCompleted(Long userId, Long applicationId, String eventTitle) {
@@ -229,7 +374,9 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "報名完成",
-                eventName(eventTitle) + " 已完成選位"));
+                eventName(eventTitle) + " 已完成選位",
+                dedupKey(userId, NotificationType.APPLICATION_COMPLETED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
 
     public void notifyOrganizerStallSelectionCompleted(
@@ -244,7 +391,9 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "完成選位",
-                brandName(brandName) + "已完成攤位選擇：" + eventName(eventTitle)));
+                brandName(brandName) + "已完成攤位選擇：" + eventName(eventTitle),
+                dedupKey(organizerUserId, NotificationType.STALL_SELECTION_COMPLETED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
 
     public void notifyRefundRequested(Long userId, Long refundId, String eventTitle) {
@@ -255,7 +404,9 @@ public class NotificationService {
                 NotificationTargetType.REFUND,
                 refundId,
                 "退款申請待審核",
-                eventName(eventTitle) + " 已收到攤主退款申請，請進行審核。"));
+                eventName(eventTitle) + " 已收到攤主退款申請，請進行審核。",
+                dedupKey(userId, NotificationType.REFUND_REQUESTED,
+                        NotificationTargetType.REFUND, refundId, null)));
     }
 
 
@@ -314,6 +465,10 @@ public class NotificationService {
         if (isBlank(command.content())) {
             throw new IllegalArgumentException("Notification content is required");
         }
+        if (command.dedupKey() != null
+                && (command.dedupKey().isBlank() || command.dedupKey().length() > 255)) {
+            throw new IllegalArgumentException("Notification dedup key is invalid");
+        }
     }
 
     private String eventName(String eventTitle) {
@@ -337,6 +492,7 @@ public class NotificationService {
         }
         return userIds.stream()
                 .distinct()
+                .sorted()
                 .map(userId -> new NotificationCreateCommand(
                         userId,
                         category,
@@ -344,8 +500,31 @@ public class NotificationService {
                         targetType,
                         targetId,
                         title,
-                        content))
+                        content,
+                        dedupKey(userId, type, targetType, targetId, fingerprint(title, content))))
                 .toList();
+    }
+
+    private String dedupKey(
+            Long userId,
+            NotificationType type,
+            NotificationTargetType targetType,
+            Long targetId,
+            String version) {
+        String target = targetId == null ? "none" : targetId.toString();
+        String suffix = isBlank(version) ? "v1" : version;
+        return userId + ":" + type.name() + ":" + targetType.name() + ":" + target + ":" + suffix;
+    }
+
+    private String fingerprint(String title, String content) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest((String.valueOf(title) + "\n" + String.valueOf(content))
+                    .getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private boolean isBlank(String value) {

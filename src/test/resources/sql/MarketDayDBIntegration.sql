@@ -565,7 +565,7 @@ CREATE TABLE dbo.refunds
 );
 GO
 
-CREATE INDEX IX_refunds_application ON dbo.refunds(application_id);
+CREATE UNIQUE INDEX UX_refunds_application ON dbo.refunds(application_id);
 CREATE INDEX IX_refunds_payment ON dbo.refunds(payment_id);
 CREATE INDEX IX_refunds_refund_status ON dbo.refunds(refund_status);
 GO
@@ -578,6 +578,7 @@ CREATE TABLE dbo.notifications
     type NVARCHAR(50) NOT NULL,
     target_type NVARCHAR(30) NOT NULL,
     target_id BIGINT NULL,
+    dedup_key NVARCHAR(255) NULL,
     title NVARCHAR(150) NOT NULL,
     content NVARCHAR(MAX) NOT NULL,
     is_read BIT NOT NULL CONSTRAINT DF_notifications_is_read DEFAULT 0,
@@ -603,6 +604,7 @@ CREATE TABLE dbo.notifications
         N'ORGANIZER_PROFILE',
         N'PAYMENT',
         N'REFUND',
+        N'EVENT_UNPUBLISH_REQUEST',
         N'SYSTEM'
     )),
     CONSTRAINT CK_notifications_target_reference CHECK (
@@ -624,6 +626,10 @@ ON dbo.notifications(user_id, is_read, created_at DESC, id DESC);
 
 CREATE INDEX IX_notifications_user_category_is_read_created
 ON dbo.notifications(user_id, category, is_read, created_at DESC, id DESC);
+
+CREATE UNIQUE INDEX UX_notifications_dedup_key
+ON dbo.notifications(dedup_key)
+WHERE dedup_key IS NOT NULL;
 GO
 
 CREATE TABLE dbo.admin_operation_logs

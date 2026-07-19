@@ -96,6 +96,9 @@ public enum NotificationType {
     /**退款已完成 */
     REFUNDED("refunded", "退款完成"),
 
+    /**保證金已由主辦方登記為現金退還 */
+    DEPOSIT_RETURNED("depositReturned", "保證金已退還"),
+
     /**系統公告 */
     SYSTEM_ANNOUNCEMENT("systemAnnouncement", "系統公告"),
 

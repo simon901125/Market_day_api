@@ -11,5 +11,17 @@ public record NotificationCreateCommand(
         NotificationTargetType targetType,
         Long targetId,
         String title,
-        String content) {
+        String content,
+        String dedupKey) {
+
+    public NotificationCreateCommand(
+            Long userId,
+            NotificationCategory category,
+            NotificationType type,
+            NotificationTargetType targetType,
+            Long targetId,
+            String title,
+            String content) {
+        this(userId, category, type, targetType, targetId, title, content, null);
+    }
 }

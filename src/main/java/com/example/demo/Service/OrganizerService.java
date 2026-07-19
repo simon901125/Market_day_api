@@ -52,6 +52,9 @@ import com.example.demo.dto.response.OrganizerEventSearchResponse;
 import com.example.demo.dto.response.OrganizerEventDetailResponse;
 import com.example.demo.dto.response.OrganizerEventSummaryResponse;
 import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
+import com.example.demo.dto.response.OrganizerPaymentSearchResponse;
+import com.example.demo.dto.response.OrganizerPaymentSummaryResponse;
+import com.example.demo.dto.response.OrganizerPaymentDetailResponse;
 import com.example.demo.dto.response.OrganizerTaskSummaryResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 import com.example.demo.dto.response.PageResponse;
@@ -925,6 +928,92 @@ public class OrganizerService {
                 new OrganizerAccountingSearchResponse(PageResponse.from(accounts, page, pageSize)));
     }
 
+    public ApiResponse<OrganizerPaymentSearchResponse> searchOrganizerPayments(
+            String authorizationHeader,
+            String keyword,
+            String paymentStatus,
+            LocalDate startDate,
+            LocalDate endDate,
+            Integer page,
+            Integer pageSize) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ApiResponse.fail(400, "開始日不可晚於結束日");
+        }
+
+        String normalizedStatus = normalizePaymentStatusFilter(paymentStatus);
+        if (paymentStatus != null && !paymentStatus.isBlank() && normalizedStatus == null) {
+            return ApiResponse.fail(400, "付款狀態僅接受：待付款、付款成功、退款申請中、退款處理中、付款失敗、付款逾期、退款失敗、已退款");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        LocalDateTime paidStartAt = startDate == null ? null : startDate.atStartOfDay();
+        LocalDateTime paidEndExclusive = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        List<OrganizerPaymentSummaryResponse> payments = organizerRepository
+                .findOrganizerPayments(
+                        organizerUserId,
+                        normalizeText(keyword),
+                        normalizedStatus,
+                        paidStartAt,
+                        paidEndExclusive)
+                .stream()
+                .map(this::toOrganizerPaymentSummaryResponse)
+                .toList();
+
+        return ApiResponse.success(
+                "Organizer payments retrieved successfully",
+                new OrganizerPaymentSearchResponse(PageResponse.from(payments, page, pageSize)));
+    }
+
+    private OrganizerPaymentSummaryResponse toOrganizerPaymentSummaryResponse(Map<String, Object> payment) {
+        LocalDateTime paymentTime = toLocalDateTime(payment.get("paymentTime"));
+        return new OrganizerPaymentSummaryResponse(orderedMap(
+                "applicationId", payment.get("applicationId"),
+                "eventCoverImageUrl", payment.get("eventCoverImageUrl"),
+                "eventTitle", payment.get("eventTitle"),
+                "brandName", payment.get("brandName"),
+                "vendorName", payment.get("vendorName"),
+                "applicationStatus", applicationStatusService.resolveApplicationStatus(payment),
+                "paymentAmount", payment.get("paymentAmount"),
+                "depositAmount", payment.get("depositAmount"),
+                "paymentTime", paymentTime == null ? null : paymentTime.format(SPACE_DATE_TIME_FORMATTER),
+                "paymentStatus", paymentStatusDescription(payment.get("paymentStage"))));
+    }
+
+    private String normalizePaymentStatusFilter(String paymentStatus) {
+        if (paymentStatus == null || paymentStatus.isBlank()) {
+            return null;
+        }
+        return switch (paymentStatus.trim().toUpperCase()) {
+            case "PENDING", "待付款" -> "PENDING";
+            case "PAID", "付款成功", "已付款" -> "PAID";
+            case "FAILED", "付款失敗" -> "FAILED";
+            case "EXPIRED", "付款逾期", "已逾期" -> "EXPIRED";
+            case "REFUND_REQUESTED", "退款申請中" -> "REFUND_REQUESTED";
+            case "REFUNDING", "退款處理中" -> "REFUNDING";
+            case "REFUND_FAILED", "退款失敗" -> "REFUND_FAILED";
+            case "REFUNDED", "已退款" -> "REFUNDED";
+            default -> null;
+        };
+    }
+
+    private String paymentStatusDescription(Object status) {
+        return switch (statusText(status) == null ? "" : statusText(status)) {
+            case "PENDING" -> "待付款";
+            case "PAID" -> "付款成功";
+            case "FAILED" -> "付款失敗";
+            case "EXPIRED" -> "付款逾期";
+            case "REFUND_REQUESTED" -> "退款申請中";
+            case "REFUNDING" -> "退款處理中";
+            case "REFUND_FAILED" -> "退款失敗";
+            case "REFUNDED" -> "已退款";
+            default -> statusText(status);
+        };
+    }
+
     public ApiResponse<MapBackedResponse> getOrganizerAccountDetail(
             String authorizationHeader,
             Long eventId,
@@ -1215,6 +1304,110 @@ public class OrganizerService {
                 new OrganizerApplicationDetailResponse(response));
     }
 
+    public ApiResponse<OrganizerPaymentDetailResponse> getOrganizerPaymentDetail(
+            String authorizationHeader,
+            Long applicationId) {
+        Map<String, Object> organizer = getAuthenticatedOrganizer(authorizationHeader);
+        if (organizer.containsKey("message")) {
+            return ApiResponse.fail(organizer.get("message").toString());
+        }
+        if (applicationId == null) {
+            return ApiResponse.fail("報名 ID 不可為空");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> application = organizerRepository
+                .findOrganizerApplicationDetail(organizerUserId, applicationId)
+                .orElse(null);
+        if (application == null) {
+            return ApiResponse.fail("找不到此付款報名，或該報名不屬於目前登入的主辦方");
+        }
+        if (!"APPROVED".equals(statusText(application.get("reviewStatus")))
+                || application.get("paymentNo") == null) {
+            return ApiResponse.fail("此報名尚未進入付款階段，無付款詳情可顯示");
+        }
+
+        return ApiResponse.success(
+                "付款詳情取得成功",
+                new OrganizerPaymentDetailResponse(buildPaymentDetailResponse(applicationId, application)));
+    }
+
+    public Map<String, Object> buildPaymentDetailResponse(
+            Long applicationId,
+            Map<String, Object> rawApplication) {
+        Map<String, Object> application = withDisplayApplicationStatus(rawApplication);
+        List<Map<String, Object>> applicationDates = organizerRepository.findApplicationDates(applicationId);
+        List<Map<String, Object>> rentalRows = toEquipmentRentalResponses(
+                organizerRepository.findApplicationEquipmentRentals(applicationId));
+        List<Map<String, Object>> eventEquipments = organizerRepository.findEventEquipments(
+                toLong(application.get("eventId")));
+        Integer rentalDays = applicationDates.isEmpty()
+                ? applicationDays(application.get("applyDates"))
+                : applicationDates.size();
+        BigDecimal applicationFee = multiply(application.get("baseFee"), rentalDays);
+        BigDecimal equipmentFee = sumEquipmentRentalFee(rentalRows, "EQUIPMENT");
+        BigDecimal powerFee = sumEquipmentRentalFee(rentalRows, "POWER");
+        boolean hasRefund = normalizeText(application.get("refundStatus")) != null;
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("event", orderedMap(
+                "eventId", application.get("eventId"),
+                "eventCoverImageUrl", application.get("eventCoverImageUrl"),
+                "eventTitle", application.get("eventTitle"),
+                "eventStatus", displayEventStatus(application),
+                "eventDate", formatEventDateWithWeekday(application),
+                "eventTime", formatEventTime(application),
+                "locationName", application.get("locationName"),
+                "address", joinAddress(application.get("eventCity"), application.get("eventDistrict"), application.get("eventAddress"))));
+        response.put("application", orderedMap(
+                "applicationId", application.get("applicationId"),
+                "applicationStatus", application.get("applicationStatus"),
+                "paymentStatus", displayPaymentStatus(application),
+                "applicationNo", application.get("applicationNo"),
+                "paymentNo", application.get("paymentNo")));
+        response.put("statusRecords", toApplicationStatusFlow(application));
+        response.put("vendor", orderedMap(
+                "vendorName", application.get("vendorOwnerName"),
+                "phone", application.get("vendorPhone"),
+                "email", firstPresent(application.get("vendorContactEmail"), application.get("vendorEmail")),
+                "address", joinAddress(application.get("vendorCity"), application.get("vendorDistrict"), application.get("vendorAddress"))));
+        response.put("brand", orderedMap(
+                "brandName", application.get("vendorName"),
+                "avatarImageUrl", application.get("vendorAvatarUrl"),
+                "category", vendorCategory(toLong(application.get("vendorProfileId"))),
+                "introduction", firstPresent(application.get("brandSummary"), application.get("brandDescription"))));
+        response.put("payment", orderedMap(
+                "paymentMethod", paymentMethod(application.get("paymentProvider")),
+                "paymentPlatform", application.get("paymentProvider"),
+                "paymentTradeNo", application.get("paymentProviderTradeNo"),
+                "paidAt", formatDateTime(application.get("paidAt"))));
+        response.put("feeDetails", toFeeDetail(
+                application.get("baseFee"), rentalDays, applicationDates, rentalRows,
+                applicationFee, equipmentFee, powerFee,
+                application.get("depositAmount"), application.get("totalAmount")));
+        response.put("refund", hasRefund ? orderedMap(
+                "refundStatus", displayRefundStatus(application.get("refundStatus")),
+                "refundMethod", "原付款方式退回",
+                "paymentPlatform", application.get("paymentProvider"),
+                "refundTradeNo", application.get("refundNo"),
+                "refundedAt", formatDateTime(application.get("refundedAt"))) : null);
+        response.put("refundDetails", hasRefund
+                ? toRefundFeeDetail(applicationFee, equipmentFee, powerFee,
+                        application.get("depositAmount"), application.get("refundAmount"))
+                : null);
+        response.put("basicEquipments", basicEquipmentResponses(eventEquipments));
+        response.put("basicPower", basicPowerResponses(eventEquipments));
+        response.put("rentalEquipments", rentalRows.stream()
+                .filter(row -> "PAID".equals(statusText(row.get("chargeType"))))
+                .filter(row -> "EQUIPMENT".equals(statusText(row.get("itemType"))))
+                .map(row -> paidEquipmentDetail(row, rentalDays)).toList());
+        response.put("extraPower", rentalRows.stream()
+                .filter(row -> "PAID".equals(statusText(row.get("chargeType"))))
+                .filter(row -> "POWER".equals(statusText(row.get("itemType"))))
+                .map(row -> paidPowerDetail(row, rentalDays)).toList());
+        return response;
+    }
+
     public Map<String, Object> buildApplicationDetailResponse(
             Long applicationId,
             Map<String, Object> application) {
@@ -1377,6 +1570,10 @@ public class OrganizerService {
                 applicationId) != 1) {
             return ApiResponse.fail(409, "保證金狀態已變更，請重新整理後再試");
         }
+        notificationService.notifyDepositReturned(
+                toLong(application.get("vendorUserId")),
+                applicationId,
+                statusText(application.get("eventTitle")));
 
         return ApiResponse.success(
                 "保證金現金退還登記成功",
@@ -2478,7 +2675,7 @@ public class OrganizerService {
                 && !"PENDING".equals(paymentStatus)
                 && !"EXPIRED".equals(paymentStatus)
                 && reviewReached
-                && !cancelled;
+                && (!cancelled || refundStatus != null);
         boolean refundRequestedReached = refundStatus != null;
         boolean refundReviewReached = "REFUNDING".equals(refundStatus)
                 || "REFUND_FAILED".equals(refundStatus)
@@ -2853,6 +3050,111 @@ public class OrganizerService {
         String startDate = startAt.format(DISPLAY_DATE_FORMATTER);
         String endDate = endAt.format(DISPLAY_DATE_FORMATTER);
         return startDate.equals(endDate) ? startDate : startDate + " - " + endDate;
+    }
+
+    private String formatEventDateWithWeekday(Map<String, Object> application) {
+        LocalDateTime startAt = toLocalDateTime(application.get("eventStartAt"));
+        LocalDateTime endAt = toLocalDateTime(application.get("eventEndAt"));
+        if (startAt == null || endAt == null) {
+            return null;
+        }
+        String start = startAt.format(DISPLAY_DATE_FORMATTER) + " (" + chineseWeekday(startAt.toLocalDate()) + ")";
+        String end = endAt.format(DISPLAY_DATE_FORMATTER) + " (" + chineseWeekday(endAt.toLocalDate()) + ")";
+        return startAt.toLocalDate().equals(endAt.toLocalDate()) ? start : start + " - " + end;
+    }
+
+    private String formatEventTime(Map<String, Object> application) {
+        LocalDateTime startAt = toLocalDateTime(application.get("eventStartAt"));
+        LocalDateTime endAt = toLocalDateTime(application.get("eventEndAt"));
+        if (startAt == null || endAt == null) {
+            return null;
+        }
+        return startAt.toLocalTime().format(SERVICE_TIME_FORMATTER)
+                + " - " + endAt.toLocalTime().format(SERVICE_TIME_FORMATTER);
+    }
+
+    private String chineseWeekday(LocalDate date) {
+        return switch (date.getDayOfWeek()) {
+            case MONDAY -> "一";
+            case TUESDAY -> "二";
+            case WEDNESDAY -> "三";
+            case THURSDAY -> "四";
+            case FRIDAY -> "五";
+            case SATURDAY -> "六";
+            case SUNDAY -> "日";
+        };
+    }
+
+    private String paymentMethod(Object providerValue) {
+        String provider = statusText(providerValue);
+        if (provider == null) {
+            return null;
+        }
+        return switch (provider) {
+            case "ECPAY" -> "線上付款";
+            case "CASH" -> "現金";
+            case "TEST" -> "測試付款";
+            default -> "線上付款";
+        };
+    }
+
+    private List<Map<String, Object>> toRefundFeeDetail(
+            BigDecimal applicationFee,
+            BigDecimal equipmentFee,
+            BigDecimal powerFee,
+            Object depositAmount,
+            Object refundAmount) {
+        List<Map<String, Object>> details = new ArrayList<>();
+        details.add(orderedMap("item", "報名費", "content", "原報名費退回", "amount", applicationFee));
+        details.add(orderedMap("item", "租借費用", "content", "原租借費用退回", "amount", equipmentFee));
+        details.add(orderedMap("item", "額外電費", "content", "原額外電費退回", "amount", powerFee));
+        details.add(orderedMap("item", "保證金", "content", "保證金不退款（原金額 " + Objects.toString(depositAmount, "0") + "）", "amount", BigDecimal.ZERO));
+        details.add(orderedMap("item", "總計", "content", null, "amount", refundAmount));
+        return details;
+    }
+
+    private List<Map<String, Object>> basicEquipmentResponses(List<Map<String, Object>> equipments) {
+        return equipments.stream()
+                .filter(row -> "ACTIVE".equals(statusText(row.get("rentalStatus"))))
+                .filter(row -> "FREE".equals(statusText(row.get("chargeType"))))
+                .filter(row -> "EQUIPMENT".equals(statusText(row.get("itemType"))))
+                .map(row -> orderedMap(
+                        "equipmentName", row.get("equipmentName"),
+                        "specification", row.get("equipmentDescription"),
+                        "quantity", row.get("perStallRentalLimit"),
+                        "unit", row.get("unit")))
+                .toList();
+    }
+
+    private List<Map<String, Object>> basicPowerResponses(List<Map<String, Object>> equipments) {
+        return equipments.stream()
+                .filter(row -> "ACTIVE".equals(statusText(row.get("rentalStatus"))))
+                .filter(row -> "FREE".equals(statusText(row.get("chargeType"))))
+                .filter(row -> "POWER".equals(statusText(row.get("itemType"))))
+                .map(row -> orderedMap(
+                        "powerSpecification", powerSpecification(row),
+                        "wattage", row.get("wattageLimit")))
+                .toList();
+    }
+
+    private Map<String, Object> paidEquipmentDetail(Map<String, Object> row, Integer applicationDays) {
+        return orderedMap(
+                "equipmentName", row.get("equipmentName"),
+                "specification", row.get("equipmentDescription"),
+                "quantity", row.get("quantity"),
+                "unit", quantityUnit(row),
+                "unitPrice", row.get("rentalFee"),
+                "rentalDays", firstPresent(row.get("rentalUnits"), applicationDays),
+                "subtotal", row.get("subtotal"));
+    }
+
+    private Map<String, Object> paidPowerDetail(Map<String, Object> row, Integer applicationDays) {
+        return orderedMap(
+                "powerSpecification", powerSpecification(row),
+                "wattage", firstPresent(row.get("totalWattage"), row.get("wattageLimit")),
+                "unitPrice", row.get("rentalFee"),
+                "rentalDays", firstPresent(row.get("rentalUnits"), applicationDays),
+                "subtotal", row.get("subtotal"));
     }
 
     private String formatEventDateTimeRange(Object startValue, Object endValue) {

@@ -22,6 +22,7 @@ class StallServiceCancelApplicationTest {
 
     @Mock StallRepository stallRepository;
     @Mock JwtService jwtService;
+    @Mock NotificationService notificationService;
 
     private StallService service;
 
@@ -30,6 +31,7 @@ class StallServiceCancelApplicationTest {
         service = new StallService();
         ReflectionTestUtils.setField(service, "stallRepository", stallRepository);
         ReflectionTestUtils.setField(service, "jwtService", jwtService);
+        ReflectionTestUtils.setField(service, "notificationService", notificationService);
 
         when(jwtService.extractTokenFromAuthorizationHeader("Bearer token")).thenReturn("token");
         when(jwtService.isTokenValid("token")).thenReturn(true);
@@ -42,7 +44,8 @@ class StallServiceCancelApplicationTest {
     @Test
     void pendingReviewApplicationCanBeCancelled() {
         when(stallRepository.findVendorApplicationForCancellation(10L, 7L)).thenReturn(Optional.of(Map.of(
-                "reviewStatus", "PENDING", "paymentStatus", "PENDING", "isCancelled", false)));
+                "reviewStatus", "PENDING", "paymentStatus", "PENDING", "isCancelled", false,
+                "organizerUserId", 20L, "eventTitle", "測試市集", "brandName", "測試品牌")));
         when(stallRepository.cancelVendorApplication(10L, 7L)).thenReturn(1);
 
         var response = service.cancelVendorApplication("Bearer token", 10L);
@@ -50,12 +53,15 @@ class StallServiceCancelApplicationTest {
         assertThat(response.isSuccessStatus()).isTrue();
         assertThat(response.getMessage()).isEqualTo("報名取消成功");
         verify(stallRepository).cancelVendorApplication(10L, 7L);
+        verify(notificationService).notifyApplicationCancelled(
+                7L, 20L, 10L, "測試市集", "測試品牌");
     }
 
     @Test
     void pendingOrFailedPaymentApplicationCanBeCancelled() {
         when(stallRepository.findVendorApplicationForCancellation(11L, 7L)).thenReturn(Optional.of(Map.of(
-                "reviewStatus", "APPROVED", "paymentStatus", "FAILED", "isCancelled", false)));
+                "reviewStatus", "APPROVED", "paymentStatus", "FAILED", "isCancelled", false,
+                "organizerUserId", 20L, "eventTitle", "測試市集", "brandName", "測試品牌")));
         when(stallRepository.cancelVendorApplication(11L, 7L)).thenReturn(1);
 
         assertThat(service.cancelVendorApplication("Bearer token", 11L).isSuccessStatus()).isTrue();

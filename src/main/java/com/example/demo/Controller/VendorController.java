@@ -49,7 +49,7 @@ public class VendorController {
     return vendorDashboardService.initDashboard(authorizationHeader);
   }
 
-  @Operation(summary = "取得攤主通知中心", description = "查詢目前登入攤主最近一年內的通知；支援全部、未讀、報名審核、付款、攤位分配及活動異動分類，未讀通知優先。")
+  @Operation(summary = "取得攤主通知中心", description = "查詢目前登入攤主最近一年內的通知；支援全部、未讀、報名審核、付款、攤位分配、活動異動及系統通知分類，未讀通知優先。")
   @GetMapping("/api/vendor/notices")
   public ApiResponse<VendorNotificationSearchResponse> getVendorNotifications(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,

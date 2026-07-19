@@ -52,6 +52,7 @@ class SqlServerSchemaIT extends SqlServerIntegrationTestSupport {
                 "type",
                 "target_type",
                 "target_id",
+                "dedup_key",
                 "title",
                 "content",
                 "is_read",
@@ -69,6 +70,36 @@ class SqlServerSchemaIT extends SqlServerIntegrationTestSupport {
                 "CK_notifications_target_type",
                 "CK_notifications_target_reference",
                 "CK_notifications_read_state");
+
+        Integer dedupIndexCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM sys.indexes
+                WHERE object_id = OBJECT_ID(N'dbo.notifications')
+                  AND name = N'UX_notifications_dedup_key'
+                  AND is_unique = 1
+                  AND has_filter = 1
+                """, Integer.class);
+        assertThat(dedupIndexCount).isEqualTo(1);
+    }
+
+    @Test
+    void notificationTargetTypeAcceptsEventUnpublishRequest() {
+        jdbcTemplate.update("""
+                INSERT INTO dbo.users (role, email, password_hash, provider)
+                VALUES (N'ADMIN', N'notification-target-it@example.test', N'test', N'LOCAL')
+                """);
+        Long userId = jdbcTemplate.queryForObject(
+                "SELECT id FROM dbo.users WHERE email = N'notification-target-it@example.test'",
+                Long.class);
+
+        int inserted = jdbcTemplate.update("""
+                INSERT INTO dbo.notifications (
+                    user_id, category, type, target_type, target_id, title, content
+                ) VALUES (?, N'EVENT_CHANGE', N'EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED',
+                          N'EVENT_UNPUBLISH_REQUEST', 99, N'下架申請需補件', N'測試通知')
+                """, userId);
+
+        assertThat(inserted).isEqualTo(1);
     }
 
 }

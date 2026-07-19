@@ -5,6 +5,12 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 ## 更新紀錄
 
+### 更新日誌編寫規則
+
+- 更新日誌只記錄正式功能、API、資料庫結構、商業規則、錯誤修正及測試結果。
+- `sql/test*.sql` 屬於開發及驗證用測試資料，不在更新日誌中記錄檔名、建立筆數、測試帳號或測試資料內容。
+- 測試資料的使用方式與預期結果應直接寫在對應的 `test*.sql` 註解內，不重複放入 README 更新日誌。
+
 ### 2026-07-19
 
 #### yushuan branch
@@ -23,6 +29,12 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 
 #### simon branch
 
+- 新增主辦方付款列表 API：`POST /api/organizer/payments/search`，只列出已進入付款階段的報名，支援活動／品牌關鍵字、八種付款及退款狀態、付款日期區間與分頁查詢，並回傳攤主名稱及目前報名狀態。
+- 新增主辦方付款詳情 API：`GET /api/organizer/payments/{id}`，以報名 ID 查詢活動、報名狀態時間軸、攤主、品牌、付款、報名費用、基本設備／用電、租借設備及額外用電資訊。
+- 付款詳情僅在報名存在退款流程時回傳退款資訊及退款明細；退款金額不包含保證金，尚未進入退款流程時 `refund` 與 `refundDetails` 回傳 `null`。
+- 付款詳情活動日期補上中文星期與 24 小時制活動時間；租借設備及額外用電回傳單價、租借天數與小計。
+- 明確區分退款流程與報名取消狀態：退款申請中、退款處理中及退款失敗維持有效報名，只有退款完成後才將報名視同取消。
+- 更新付款列表與付款詳情的 Controller、Service 及 SQL Server Repository 測試；本次驗證通過 294 項單元／Controller／Filter／Spring Boot 冒煙測試，以及重建 `MarketDayDB_Test` 後的 25 項 SQL Server 整合測試。
 - 新增主辦方現金退還保證金 API：`POST /api/organizer/deposits/refund?applicationId={applicationId}`，只需提供報名 ID，後端會反查攤主、活動及主辦方所有權。
 - 保證金退還屬現場行政現金流程，不建立 `refunds`、不呼叫藍新金流；成功時只將 `event_applications.deposit_status` 更新為 `RETURNED`，並寫入 `request_logs` 與 `status_logs`。
 - 保證金退還會優先驗證目前時間是否介於活動 `start_at` 與 `end_at`；不在活動進行期間時直接拒絕，不再繼續判斷取消、退款、付款、選位或保證金狀態。
@@ -130,7 +142,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - `JwtAuthenticationFilter` 由逐支維護 `protectedApis` 改為「受保護路徑前綴＋明確公開端點白名單」；`/api/vendor/**`、`/api/organizer/**`、`/api/admin/**`、`/api/auth/**`、`/api/account/**`、`/api/images**` 與 `/api/stalls/**` 預設需要 JWT。
 - 登入、註冊、信箱驗證、密碼重設、公開市集查詢與藍新回呼維持公開；所有 CORS `OPTIONS` 預檢請求亦直接放行。新增前綴保護、公開白名單、管理員角色及 CORS 測試。
 
-最後更新：2026-07-18
+最後更新：2026-07-19
 
 ## 更新紀錄
 

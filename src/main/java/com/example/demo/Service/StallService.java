@@ -1746,6 +1746,12 @@ public class StallService {
         if (stallRepository.cancelVendorApplication(applicationId, vendorUserId) != 1) {
             return ApiResponse.fail(409, "報名 ID " + applicationId + " 狀態已變更，請重新整理後再試");
         }
+        notificationService.notifyApplicationCancelled(
+                vendorUserId,
+                ((Number) application.get("organizerUserId")).longValue(),
+                applicationId,
+                stringValue(application.get("eventTitle")),
+                stringValue(application.get("brandName")));
         return ApiResponse.success("報名取消成功");
     }
 

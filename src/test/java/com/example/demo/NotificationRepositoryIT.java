@@ -65,6 +65,37 @@ class NotificationRepositoryIT extends SqlServerIntegrationTestSupport {
     }
 
     @Test
+    void duplicateDedupKeyIsAnIdempotentNoOp() {
+        jdbcTemplate.update("""
+                INSERT INTO dbo.users (role, email, password_hash, provider)
+                VALUES (N'VENDOR', N'notification-dedup-it@example.test', N'test', N'LOCAL')
+                """);
+        Long userId = jdbcTemplate.queryForObject(
+                "SELECT id FROM dbo.users WHERE email = N'notification-dedup-it@example.test'",
+                Long.class);
+        NotificationCreateCommand command = new NotificationCreateCommand(
+                userId,
+                NotificationCategory.PAYMENT,
+                NotificationType.PAYMENT_PAID,
+                NotificationTargetType.EVENT_APPLICATION,
+                77L,
+                "付款成功",
+                "測試付款通知",
+                userId + ":PAYMENT_PAID:EVENT_APPLICATION:77:v1");
+
+        int firstInsert = notificationRepository.create(command);
+        int duplicateInsert = notificationRepository.create(command);
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM dbo.notifications WHERE dedup_key = ?",
+                Integer.class,
+                command.dedupKey());
+        assertThat(firstInsert).isEqualTo(1);
+        assertThat(duplicateInsert).isZero();
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
     void batchCreatesTargetlessSystemNotificationsForEachRecipient() {
         jdbcTemplate.update("""
                 INSERT INTO dbo.users (role, email, password_hash, provider)

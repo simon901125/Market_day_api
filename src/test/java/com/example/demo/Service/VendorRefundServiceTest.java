@@ -147,6 +147,7 @@ class VendorRefundServiceTest {
         assertThat(response.getData().getDepositAmount()).isEqualByComparingTo("1000");
         assertThat(response.getData().getRefundStatus()).isEqualTo("REFUND_REQUESTED");
         verify(notificationService).notifyRefundRequested(99L, 11L, "金流測試市集");
+        verify(notificationService).notifyVendorRefundRequested(1L, 11L, "金流測試市集");
     }
 
     private void mockVendorToken() {

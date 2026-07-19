@@ -145,6 +145,16 @@ public class UserRepository {
         return RepositoryResultMapper.normalizeOptional(list.stream().findFirst());
     }
 
+    public Optional<Map<String, Object>> findUserAccountById(Long userId) {
+        String sql = """
+                SELECT id, role, email, status
+                FROM dbo.users
+                WHERE id = :userId
+                """;
+        return RepositoryResultMapper.normalizeOptional(
+                namedParameterJdbcTemplate.queryForList(sql, Map.of("userId", userId)).stream().findFirst());
+    }
+
     public Optional<Map<String, Object>> findProfileByEmail(String email) {
         String sql = """
                 SELECT u.id, u.role, u.email, u.provider,
