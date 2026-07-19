@@ -91,6 +91,8 @@ class OrganizerServiceEventPublishTest {
 
         assertThat(response.getStatusCode()).isEqualTo(400);
         assertThat(response.getData().missingFields()).containsExactly("booth.stalls");
+        assertThat(response.getData().expectedStallCount()).isEqualTo(10);
+        assertThat(response.getData().actualStallCount()).isEqualTo(9);
         verify(organizerRepository, never()).publishOrganizerEvent(any(), any(), any());
     }
 

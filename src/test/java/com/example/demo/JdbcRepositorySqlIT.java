@@ -17,6 +17,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.ImageStorageRepository;
+import com.example.demo.Repository.EventStallRepo;
 import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.Repository.PaymentRepository;
 import com.example.demo.Repository.RequestLogRepository;
@@ -28,6 +29,7 @@ import com.example.demo.dto.request.OrganizerEventSaveRequest;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
     @Autowired StallRepository stall;
+    @Autowired EventStallRepo eventStalls;
     @Autowired OrganizerRepository organizer;
     @Autowired PaymentRepository payment;
     @Autowired ImageStorageRepository images;
@@ -35,6 +37,10 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
     @Autowired NamedParameterJdbcTemplate jdbc;
 
     @Test void stallReadQueriesCompileAgainstCurrentSchema() {
+        assertThat(eventStalls.countByMarketEvent_Id(-1L)).isZero();
+        assertThat(stall.findMarkets(null, null, null, "OPEN", null, null)).isNotNull();
+        assertThat(stall.findMarkets(null, null, null, "FULL", null, null)).isNotNull();
+        assertThat(stall.findPublishedMarketDetail(-1L)).isEmpty();
         assertThat(stall.findVendorApplications(-1L, null, null, null)).isEmpty();
         assertThat(stall.findStallId(-1L, "NONE")).isEmpty();
         assertThat(stall.findStallForSelection(-1L, "NONE")).isEmpty();
@@ -153,6 +159,29 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
         assertThat(published.get("workflowStatus")).isEqualTo("PUBLISHED");
         assertThat(published.get("publicInfoAt")).isEqualTo(firstPublishedAt);
         assertThat(organizer.publishOrganizerEvent(organizerUserId, eventId, firstPublishedAt.plusDays(1))).isZero();
+
+        LocalDateTime requestedAt = firstPublishedAt.plusHours(1);
+        assertThat(organizer.requestOrganizerEventUnpublish(organizerUserId, eventId)).isOne();
+        long unpublishRequestId = organizer.createEventUnpublishRequest(
+                organizerUserId, eventId, "場地臨時無法使用", requestedAt);
+        assertThat(unpublishRequestId).isPositive();
+        Map<String, Object> unpublishRequested =
+                organizer.findOrganizerEventDetail(organizerUserId, eventId).orElseThrow();
+        assertThat(unpublishRequested.get("workflowStatus")).isEqualTo("UNPUBLISH_REQUESTED");
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM dbo.event_unpublish_requests
+                WHERE id = :requestId
+                  AND event_id = :eventId
+                  AND requested_by = :organizerUserId
+                  AND reason = :reason
+                  AND status = N'PENDING'
+                """, Map.of(
+                        "requestId", unpublishRequestId,
+                        "eventId", eventId,
+                        "organizerUserId", organizerUserId,
+                        "reason", "場地臨時無法使用"), Integer.class)).isOne();
+        assertThat(organizer.requestOrganizerEventUnpublish(organizerUserId, eventId)).isZero();
     }
 
     @Test void paymentReadQueriesCompileAgainstCurrentSchema() {

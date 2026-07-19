@@ -3,10 +3,13 @@ package com.example.demo.Service;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import java.util.Locale;
 
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.demo.Repository.AdminLogRepo;
 import com.example.demo.Repository.EventApplicationRepo;
 import com.example.demo.Repository.EventRepo;
+import com.example.demo.Repository.EventStallRepo;
 import com.example.demo.Repository.EventStallZoneRepo;
 import com.example.demo.Repository.EventUnpublishRequestRepo;
 import com.example.demo.Repository.NotificationRepo;
@@ -67,6 +71,7 @@ import com.example.demo.dto.response.admin.RegBooth;
 import com.example.demo.dto.response.admin.StatusLog;
 import com.example.demo.dto.response.admin.UserStatusChangeDto;
 import com.example.demo.entity.AdminOperationLog;
+import com.example.demo.entity.EventStall;
 import com.example.demo.entity.EventStallZone;
 import com.example.demo.entity.MarketEvent;
 import com.example.demo.entity.Notification;
@@ -96,6 +101,9 @@ public class AdminService extends AdminServiceBase implements EventStatusService
 
     @Autowired
     EventStallZoneRepo eventStallZoneRepo;
+
+    @Autowired
+    EventStallRepo eventStallRepo;
 
     @Autowired
     UserRepo userRepo;
@@ -874,10 +882,60 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
         }
 
+        MarketEvent marketEvent = eventRepo.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
+        Integer maxBooths = marketEvent.getMaxBooths();
+        if (maxBooths == null || maxBooths <= 0) {
+            throw new IllegalArgumentException(event.title() + "尚未設定有效的攤位總數");
+        }
+
+        List<EventStallZone> zones = eventStallZoneRepo.findByMarketEventId(eventId).stream()
+                .sorted(Comparator.comparing(EventStallZone::getZoneName))
+                .toList();
+        if (zones.isEmpty()) {
+            throw new IllegalArgumentException(event.title() + "尚未建立攤位分區");
+        }
+
+        Set<String> zoneNames = new HashSet<>();
+        long plannedStallCount = 0;
+        for (EventStallZone zone : zones) {
+            String zoneName = zone.getZoneName() == null ? "" : zone.getZoneName().trim();
+            if (!zoneName.matches("^[A-Z] 區$") || !zoneNames.add(zoneName)) {
+                throw new IllegalArgumentException(event.title() + "的分區名稱必須為 A 區至 Z 區且不可重複");
+            }
+            if (zone.getStallCount() <= 0) {
+                throw new IllegalArgumentException(event.title() + "的分區攤位數必須大於 0");
+            }
+            plannedStallCount += zone.getStallCount();
+        }
+        if (plannedStallCount != maxBooths) {
+            throw new IllegalArgumentException(
+                    event.title() + "的分區攤位數合計為 " + plannedStallCount
+                            + "，必須等於活動攤位總數 " + maxBooths);
+        }
+
+        long existingStallCount = eventStallRepo.countByMarketEvent_Id(eventId);
+        if (existingStallCount != 0 && existingStallCount != maxBooths) {
+            throw new IllegalArgumentException(
+                    event.title() + "的互動式攤位資料不完整，目前已建立 "
+                            + existingStallCount + " / " + maxBooths + " 個攤位");
+        }
+
         int updatedRows = eventRepo.updateWorkflowStatusIfCurrent(
                 eventId, WorkflowStatus.MAP_BUILDING, WorkflowStatus.READY_TO_PUBLISH);
         if (updatedRows != 1) {
             throw new IllegalArgumentException(event.title() + "狀態已變更，請重新載入後再操作");
+        }
+
+        if (existingStallCount == 0) {
+            List<EventStall> stalls = buildEventStalls(marketEvent, zones);
+            eventStallRepo.saveAllAndFlush(stalls);
+            long createdStallCount = eventStallRepo.countByMarketEvent_Id(eventId);
+            if (createdStallCount != maxBooths) {
+                throw new IllegalStateException(
+                        event.title() + "攤位建立失敗，目前已建立 "
+                                + createdStallCount + " / " + maxBooths + " 個攤位");
+            }
         }
 
         Notification notification = new Notification();
@@ -903,6 +961,23 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         logRepo.save(adminLog);
 
         return new EventStatusChangeDto(event.title(), EventStatus.READY_TO_PUBLISH);
+    }
+
+    private List<EventStall> buildEventStalls(MarketEvent marketEvent, List<EventStallZone> zones) {
+        List<EventStall> stalls = new ArrayList<>();
+        for (EventStallZone zone : zones) {
+            String prefix = zone.getZoneName().substring(0, 1);
+            int numberWidth = Math.max(2, String.valueOf(zone.getStallCount()).length());
+            for (int number = 1; number <= zone.getStallCount(); number++) {
+                EventStall stall = new EventStall();
+                stall.setMarketEvent(marketEvent);
+                stall.setZone(zone);
+                stall.setStallNo(prefix + String.format("%0" + numberWidth + "d", number));
+                stall.setStatus(com.example.demo.enums.status.StallStatus.AVAILABLE);
+                stalls.add(stall);
+            }
+        }
+        return stalls;
     }
 
     @Override
@@ -945,11 +1020,17 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException("找不到該活動的下架申請");
         }
 
-        eventRepo.updateWorkflowStatusIfCurrent(eventId, WorkflowStatus.UNPUBLISH_REQUESTED,
-                WorkflowStatus.UNPUBLISHED);
+        int eventUpdatedRows = eventRepo.updateWorkflowStatusIfCurrent(
+                eventId, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.UNPUBLISHED);
+        if (eventUpdatedRows != 1) {
+            throw new IllegalArgumentException(event.title() + "狀態已變更，請重新載入後再操作");
+        }
 
-        eventUnpublishRequestRepo.reviewIfCurrent(
+        int requestUpdatedRows = eventUnpublishRequestRepo.reviewIfCurrent(
                 unpublishRequestId, adminRef, UnpublishRequestStatus.PENDING, UnpublishRequestStatus.APPROVED, note);
+        if (requestUpdatedRows != 1) {
+            throw new IllegalArgumentException(event.title() + "下架申請狀態已變更，請重新載入後再操作");
+        }
 
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(event.organizerId()));
@@ -1015,15 +1096,19 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         }
 
         User adminRef = userRepo.getReferenceById(admin.id());
-        WorkflowStatus newWorkflowStatus = review.brandPublicAt() == null
-                ? WorkflowStatus.PUBLISHED
-                : WorkflowStatus.FINAL_REVIEW;
+        WorkflowStatus newWorkflowStatus = WorkflowStatus.PUBLISHED;
 
-        eventRepo.updateWorkflowStatusIfCurrent(
+        int eventUpdatedRows = eventRepo.updateWorkflowStatusIfCurrent(
                 review.eventId(), WorkflowStatus.UNPUBLISH_REQUESTED, newWorkflowStatus);
+        if (eventUpdatedRows != 1) {
+            throw new IllegalArgumentException(review.eventName() + "狀態已變更，請重新載入後再操作");
+        }
 
-        eventUnpublishRequestRepo.reviewIfCurrent(
+        int requestUpdatedRows = eventUnpublishRequestRepo.reviewIfCurrent(
                 unpublishRequestId, adminRef, UnpublishRequestStatus.PENDING, UnpublishRequestStatus.REJECTED, note);
+        if (requestUpdatedRows != 1) {
+            throw new IllegalArgumentException(review.eventName() + "下架申請狀態已變更，請重新載入後再操作");
+        }
 
         Notification notification = new Notification();
         notification.setUser(userRepo.getReferenceById(review.userId()));

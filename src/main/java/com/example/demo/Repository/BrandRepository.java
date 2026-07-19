@@ -41,7 +41,7 @@ public class BrandRepository {
                 WHERE u.status = 'ACTIVE'
                   AND ea.review_status = N'APPROVED'
                   AND ea.is_cancelled = 0
-                  AND me.workflow_status = N'PUBLISHED'
+                  AND me.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
                   AND c.is_active = 1
                   AND (:categoryName IS NULL OR c.name = :categoryName)
                 ORDER BY me.title ASC

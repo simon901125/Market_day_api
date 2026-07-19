@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,6 +35,7 @@ import com.example.demo.dto.log.StatusLogEntry;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.dto.response.LoginUserResponse;
+import com.example.demo.dto.response.OrganizerEventUnpublishRequestResponse;
 import com.example.demo.dto.response.StallSelectionResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -311,6 +313,26 @@ class StatusLogServiceTest {
         assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
         assertThat(entries.get(0).getStatusField()).isEqualTo("workflow_status");
         assertThat(entries.get(0).getNewStatus()).isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    void organizerEventUnpublishRequestRecordsEventAndRequestStatuses() {
+        MockHttpServletRequest request = post("/api/organizer/events/30/unpublish-request");
+        setApiResponse(ApiResponse.success("ok", new OrganizerEventUnpublishRequestResponse(
+                30L, 77L, "UNPUBLISH_REQUESTED", "pendingUnpublish", "下架申請中",
+                "場地異動", LocalDateTime.now(), List.of())), request);
+        ContentCachingRequestWrapper wrapper = cachedJsonRequest(request, "{\"reason\":\"場地異動\"}");
+
+        statusLogService.recordForRequest(14L, wrapper);
+
+        List<StatusLogEntry> entries = capturedEntries();
+        assertThat(entries).hasSize(2);
+        assertThat(entries.get(0).getTargetType()).isEqualTo("EVENT");
+        assertThat(entries.get(0).getTargetId()).isEqualTo(30L);
+        assertThat(entries.get(0).getNewStatus()).isEqualTo("UNPUBLISH_REQUESTED");
+        assertThat(entries.get(1).getTargetType()).isEqualTo("EventUnpublishRequest");
+        assertThat(entries.get(1).getTargetId()).isEqualTo(77L);
+        assertThat(entries.get(1).getNewStatus()).isEqualTo("PENDING");
     }
 
     @Test

@@ -23,6 +23,7 @@ import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
 import com.example.demo.dto.request.OrganizerEventSaveRequest;
+import com.example.demo.dto.request.OrganizerEventUnpublishRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
@@ -38,6 +39,7 @@ import com.example.demo.dto.response.OrganizerEventDetailResponse;
 import com.example.demo.dto.response.OrganizerEventSubmitReviewResponse;
 import com.example.demo.dto.response.OrganizerEventWithdrawResponse;
 import com.example.demo.dto.response.OrganizerEventPublishResponse;
+import com.example.demo.dto.response.OrganizerEventUnpublishRequestResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -118,6 +120,15 @@ public class OrganizerController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable Long eventId) {
         return organizerService.publishOrganizerEvent(authorizationHeader, eventId);
+    }
+
+    @Operation(summary = "申請下架活動", description = "已發布活動送出下架原因，等待管理員審核")
+    @PostMapping("/api/organizer/events/{eventId}/unpublish-request")
+    public ApiResponse<OrganizerEventUnpublishRequestResponse> requestOrganizerEventUnpublish(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable Long eventId,
+            @RequestBody(required = false) OrganizerEventUnpublishRequest request) {
+        return organizerService.requestOrganizerEventUnpublish(authorizationHeader, eventId, request);
     }
 
     @Operation(summary = "取得主辦方通知中心", description = "查詢目前登入主辦方通知；支援全部、未讀、報名相關、付款相關、活動異動及系統公告分類，未讀通知優先。")

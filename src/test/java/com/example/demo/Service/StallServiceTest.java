@@ -77,6 +77,45 @@ class StallServiceTest {
         assertThat(response.getData()).hasSize(1);
     }
 
+    @Test void marketSearchMapsCapacityToOpenAndFullAndFiltersAfterAvailabilityIsLoaded() {
+        when(repository.findMarkets(null, null, null, "FULL", null, null)).thenReturn(List.of(
+                Map.of("eventId", 1L, "registrationStatus", "OPEN"),
+                Map.of("eventId", 2L, "registrationStatus", "OPEN")));
+        when(repository.findEventCategoriesByEventIds(List.of(1L, 2L))).thenReturn(List.of());
+        when(repository.findMarketDailyAvailabilities(List.of(1L, 2L))).thenReturn(List.of(
+                Map.of("eventId", 1L, "applyDate", LocalDate.of(2026, 8, 1),
+                        "totalStalls", 10L, "remainingStalls", 2L),
+                Map.of("eventId", 2L, "applyDate", LocalDate.of(2026, 8, 1),
+                        "totalStalls", 10L, "remainingStalls", 0L)));
+
+        var response = service.searchMarkets(null, null, null, "FULL", null, null, 1, 6);
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        assertThat(response.getData().getMarkets().getTotalItems()).isOne();
+        assertThat(response.getData().getMarkets().getItems().getFirst().getValues())
+                .containsEntry("eventId", 2L)
+                .containsEntry("registrationStatus", "FULL");
+    }
+
+    @Test void marketSearchOpenFilterExcludesFullyBookedMarkets() {
+        when(repository.findMarkets(null, null, null, "OPEN", null, null)).thenReturn(List.of(
+                Map.of("eventId", 1L, "registrationStatus", "OPEN"),
+                Map.of("eventId", 2L, "registrationStatus", "OPEN")));
+        when(repository.findEventCategoriesByEventIds(List.of(1L, 2L))).thenReturn(List.of());
+        when(repository.findMarketDailyAvailabilities(List.of(1L, 2L))).thenReturn(List.of(
+                Map.of("eventId", 1L, "applyDate", LocalDate.of(2026, 8, 1),
+                        "totalStalls", 10L, "remainingStalls", 2L),
+                Map.of("eventId", 2L, "applyDate", LocalDate.of(2026, 8, 1),
+                        "totalStalls", 10L, "remainingStalls", 0L)));
+
+        var response = service.searchMarkets(null, null, null, "OPEN", null, null, 1, 6);
+
+        assertThat(response.getData().getMarkets().getTotalItems()).isOne();
+        assertThat(response.getData().getMarkets().getItems().getFirst().getValues())
+                .containsEntry("eventId", 1L)
+                .containsEntry("registrationStatus", "OPEN");
+    }
+
     @Test void organizerMapOperationsRejectMissingAuthorization() {
         assertThat(service.getOrganizerStallMap(null, 1L, null, null, null).isSuccessStatus()).isFalse();
         assertThat(service.getOrganizerStallMapDetail(null, 1L, "A01", null).isSuccessStatus()).isFalse();

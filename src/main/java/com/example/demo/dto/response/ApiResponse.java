@@ -175,6 +175,7 @@ public class ApiResponse<T> {
             case "Organizer event submitted for review successfully" -> "\u6d3b\u52d5\u5df2\u9001\u51fa\u5be9\u6838";
             case "Organizer event review withdrawn successfully" -> "\u6d3b\u52d5\u5be9\u6838\u7533\u8acb\u5df2\u64a4\u56de";
             case "Organizer event published successfully" -> "活動已成功發布";
+            case "Organizer event unpublish requested successfully" -> "活動下架申請已送出";
             case "Notification marked as read" -> "\u901a\u77e5\u5df2\u6a19\u8a18\u70ba\u5df2\u8b80";
             default -> isLikelyEnglish(message) ? "\u64cd\u4f5c\u6210\u529f" : message;
         };
@@ -318,8 +319,18 @@ public class ApiResponse<T> {
                 "活動目前狀態無法發布";
             case "Event workflow status changed before publication" ->
                 "活動狀態已變更，請重新載入後再確認";
+            case "Unpublish reason is required" -> "請填寫下架原因";
+            case "Unpublish reason must not exceed 500 characters" -> "下架原因不得超過 500 字";
+            case "Event cannot request unpublishing in its current workflow status" ->
+                "活動目前狀態無法申請下架";
+            case "Event workflow status changed before unpublish request" ->
+                "活動狀態已變更，請重新載入後再確認";
             case "Booth numbers and fees are invalid" ->
                 "\u6524\u4f4d\u6578\u91cf\u3001\u5c3a\u5bf8\u6216\u8cbb\u7528\u8a2d\u5b9a\u4e0d\u6b63\u78ba";
+            case "Booth zones must not exceed 26 items" ->
+                "\u6524\u4f4d\u5206\u5340\u6700\u591a\u53ea\u80fd\u6709 26 \u500b";
+            case "Booth zone names must use A to Z and be unique" ->
+                "\u6524\u4f4d\u5206\u5340\u540d\u7a31\u53ea\u80fd\u4f7f\u7528 A \u5340\u81f3 Z \u5340\uff0c\u4e14\u4e0d\u53ef\u91cd\u8907";
             case "Brand id is required" -> "\u8acb\u63d0\u4f9b\u54c1\u724c ID";
             case "Brand not found" -> "\u627e\u4e0d\u5230\u54c1\u724c\u8cc7\u6599";
             case "Stall not found" -> "\u627e\u4e0d\u5230\u6524\u4f4d\u8cc7\u6599";

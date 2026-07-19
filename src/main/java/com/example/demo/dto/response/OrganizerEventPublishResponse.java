@@ -10,5 +10,7 @@ public record OrganizerEventPublishResponse(
         String statusText,
         LocalDateTime publicInfoAt,
         List<String> availableActions,
+        Integer expectedStallCount,
+        Integer actualStallCount,
         List<String> missingFields) {
 }

@@ -22,6 +22,7 @@ import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
 import com.example.demo.dto.request.OrganizerEventSaveRequest;
+import com.example.demo.dto.request.OrganizerEventUnpublishRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
 import com.example.demo.dto.response.ApiResponse;
 
@@ -82,6 +83,12 @@ class OrganizerControllerTest {
     @Test void eventPublishEndpointDelegatesEventId() {
         controller.publishOrganizerEvent(AUTH, 21L);
         verify(organizerService).publishOrganizerEvent(AUTH, 21L);
+    }
+
+    @Test void eventUnpublishRequestEndpointDelegatesEventIdAndReason() {
+        OrganizerEventUnpublishRequest request = new OrganizerEventUnpublishRequest("場地異動");
+        controller.requestOrganizerEventUnpublish(AUTH, 21L, request);
+        verify(organizerService).requestOrganizerEventUnpublish(AUTH, 21L, request);
     }
 
     @Test void applicationSearchDetailApproveAndRejectDelegate() {

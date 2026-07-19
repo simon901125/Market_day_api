@@ -1397,6 +1397,7 @@ public class StallService {
         List<MarketSummaryResponse> markets = marketRows.stream()
                 .map(row -> withCategories(row, "eventId", categoriesByEventId))
                 .map(row -> withDailyAvailability(row, availabilityByEventId))
+                .filter(row -> matchesMarketRegistrationStatus(row, status))
                 .map(MarketSummaryResponse::new)
                 .toList();
 
@@ -1494,6 +1495,15 @@ public class StallService {
         return values;
     }
 
+    private boolean matchesMarketRegistrationStatus(Map<String, Object> market, String status) {
+        String normalizedStatus = blankToNull(status);
+        if (normalizedStatus == null || "ALL".equalsIgnoreCase(normalizedStatus)
+                || "全部狀態".equals(normalizedStatus)) {
+            return true;
+        }
+        return normalizedStatus.equalsIgnoreCase(stringValue(market.get("registrationStatus")));
+    }
+
     private Map<String, Object> withCategories(
             Map<String, Object> source,
             String idKey,
@@ -1530,7 +1540,7 @@ public class StallService {
             return ApiResponse.fail("Event not found");
         }
         String workflowStatus = stringValue(event.get("workflowStatus"));
-        if (!"PUBLISHED".equals(workflowStatus)) {
+        if (!Set.of("PUBLISHED", "UNPUBLISH_REQUESTED").contains(workflowStatus)) {
             return ApiResponse.fail("活動尚未開放報名");
         }
 

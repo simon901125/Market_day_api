@@ -121,6 +121,37 @@ public class OrganizerRepository {
         return count == null ? 0 : count;
     }
 
+    public int requestOrganizerEventUnpublish(Long organizerUserId, Long eventId) {
+        return namedParameterJdbcTemplate.update("""
+                UPDATE dbo.market_events
+                SET workflow_status = N'UNPUBLISH_REQUESTED'
+                WHERE id = :eventId
+                  AND user_id = :organizerUserId
+                  AND workflow_status = N'PUBLISHED'
+                """, Map.of("organizerUserId", organizerUserId, "eventId", eventId));
+    }
+
+    public long createEventUnpublishRequest(
+            Long organizerUserId, Long eventId, String reason, LocalDateTime requestedAt) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        namedParameterJdbcTemplate.update("""
+                INSERT INTO dbo.event_unpublish_requests (
+                    event_id, requested_by, reason, status, requested_at
+                ) VALUES (
+                    :eventId, :organizerUserId, :reason, N'PENDING', :requestedAt
+                )
+                """, new MapSqlParameterSource()
+                .addValue("eventId", eventId)
+                .addValue("organizerUserId", organizerUserId)
+                .addValue("reason", reason)
+                .addValue("requestedAt", requestedAt), keyHolder, new String[] {"id"});
+        Number key = keyHolder.getKey();
+        if (key == null) {
+            throw new IllegalStateException("Unpublish request id was not generated");
+        }
+        return key.longValue();
+    }
+
     public int countActiveCategories(Set<Long> categoryIds) {
         return namedParameterJdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
@@ -1199,6 +1230,7 @@ public class OrganizerRepository {
                     e.end_at AS eventEndAt,
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
+                    e.workflow_status AS workflowStatus,
                     e.base_fee AS baseFee,
                     e.cover_image_url AS eventCoverImageUrl,
                     vendor_user.id AS vendorUserId,
