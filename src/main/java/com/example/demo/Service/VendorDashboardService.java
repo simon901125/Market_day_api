@@ -76,6 +76,7 @@ public class VendorDashboardService {
                             0,
                             0,
                             0,
+                            0,
                             List.of()));
         }
 
@@ -98,6 +99,7 @@ public class VendorDashboardService {
                         toLong(counts.get("pendingReviewCount")),
                         toLong(counts.get("pendingPaymentCount")),
                         toLong(counts.get("pendingStallSelectionCount")),
+                        toLong(counts.get("pendingRefundCount")),
                         notifications));
     }
 
