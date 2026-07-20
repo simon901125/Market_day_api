@@ -60,6 +60,31 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
         assertThat(repository.findMarketEventDetailById(eventId)).isEmpty();
     }
 
+    @Test void finalReviewEventRemainsVisibleInPublicSearchAndDetail() {
+        Long eventId = createPublishedEvent();
+        jdbc.update("""
+                UPDATE market_events
+                SET brands_public_at = DATEADD(MINUTE, -1, SYSDATETIME()),
+                    map_image_url = N'/images/final-map.jpg'
+                WHERE id = :id
+                """, Map.of("id", eventId));
+
+        var publishedDetail = repository.findMarketEventDetailById(eventId).orElseThrow();
+        assertThat(publishedDetail.brandsPublic()).isTrue();
+        assertThat(publishedDetail.mapImageUrl()).isEqualTo("/images/final-map.jpg");
+
+        jdbc.update("UPDATE market_events SET workflow_status = 'FINAL_REVIEW' WHERE id = :id",
+                Map.of("id", eventId));
+
+        var cards = repository.searchMarketEvents(new MarketSearchRequest(
+                "Integration Market", null, List.of(), null, null, List.of(), null));
+
+        assertThat(cards).extracting(card -> card.id()).contains(eventId);
+        var finalDetail = repository.findMarketEventDetailById(eventId).orElseThrow();
+        assertThat(finalDetail.brandsPublic()).isTrue();
+        assertThat(finalDetail.mapImageUrl()).isEqualTo("/images/final-map.jpg");
+    }
+
     private Long createPublishedEvent() {
         List<Long> categoryIds = jdbc.queryForList("SELECT TOP 3 id FROM categories ORDER BY id", Map.of(), Long.class);
         String email = "market-it-" + java.util.UUID.randomUUID() + "@example.test";

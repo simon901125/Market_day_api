@@ -38,7 +38,8 @@ class OrganizerServiceEventSubmitReviewTest {
         when(jwtService.isTokenValid("valid-token")).thenReturn(true);
         when(jwtService.getEmail("valid-token")).thenReturn("organizer@example.com");
         when(organizerRepository.findOrganizerAccountByEmail("organizer@example.com"))
-                .thenReturn(Optional.of(new LinkedHashMap<>(Map.of("userId", 7L, "role", "ORGANIZER"))));
+                .thenReturn(Optional.of(new LinkedHashMap<>(Map.of(
+                        "userId", 7L, "role", "ORGANIZER", "organizerName", "測試主辦方"))));
     }
 
     @Test
@@ -52,7 +53,8 @@ class OrganizerServiceEventSubmitReviewTest {
         assertThat(response.getData().workflowStatus()).isEqualTo("PENDING_REVIEW");
         assertThat(response.getData().missingFields()).isEmpty();
         verify(organizerRepository).submitOrganizerEventReview(7L, EVENT_ID);
-        verify(notificationService).notifyAdminsEventSubmitted(EVENT_ID, "Test Market", false);
+        verify(notificationService).notifyAdminsEventSubmitted(
+                EVENT_ID, "Test Market", "測試主辦方", false);
     }
 
     @Test
@@ -64,7 +66,8 @@ class OrganizerServiceEventSubmitReviewTest {
 
         assertThat(response.isSuccessStatus()).isTrue();
         assertThat(response.getData().workflowStatus()).isEqualTo("PENDING_REVIEW");
-        verify(notificationService).notifyAdminsEventSubmitted(EVENT_ID, "Test Market", true);
+        verify(notificationService).notifyAdminsEventSubmitted(
+                EVENT_ID, "Test Market", "測試主辦方", true);
     }
 
     @Test

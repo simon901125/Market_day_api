@@ -15,6 +15,12 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum NotificationType {
 
+    /** 主辦方撤回活動審核申請 */
+    EVENT_REVIEW_WITHDRAWN("eventReviewWithdrawn", "活動審核申請已撤回"),
+
+    /** 主辦方送出活動下架申請 */
+    EVENT_UNPUBLISH_REQUEST_SUBMITTED("eventUnpublishRequestSubmitted", "活動下架申請已送出"),
+
     /**主辦方資格申請已送出 */
     ORGANIZER_REGISTRATION_SUBMITTED("organizerRegistrationSubmitted", "主辦方申請已送出"),
 

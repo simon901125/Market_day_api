@@ -28,6 +28,7 @@ class OrganizerServiceEventUnpublishRequestTest {
 
     @Mock OrganizerRepository organizerRepository;
     @Mock JwtService jwtService;
+    @Mock NotificationService notificationService;
     @InjectMocks OrganizerService organizerService;
 
     @BeforeEach
@@ -36,7 +37,8 @@ class OrganizerServiceEventUnpublishRequestTest {
         when(jwtService.isTokenValid("valid-token")).thenReturn(true);
         when(jwtService.getEmail("valid-token")).thenReturn("organizer@example.com");
         when(organizerRepository.findOrganizerAccountByEmail("organizer@example.com"))
-                .thenReturn(Optional.of(new LinkedHashMap<>(Map.of("userId", 7L, "role", "ORGANIZER"))));
+                .thenReturn(Optional.of(new LinkedHashMap<>(Map.of(
+                        "userId", 7L, "role", "ORGANIZER", "organizerName", "測試主辦方"))));
     }
 
     @Test
@@ -56,6 +58,8 @@ class OrganizerServiceEventUnpublishRequestTest {
         assertThat(response.getData().status()).isEqualTo("pendingUnpublish");
         assertThat(response.getData().reason()).isEqualTo("場地臨時停用");
         assertThat(response.getData().availableActions()).isEmpty();
+        verify(notificationService).notifyAdminsEventUnpublishRequested(
+                EVENT_ID, 33L, "測試活動", "測試主辦方");
     }
 
     @Test
@@ -101,6 +105,9 @@ class OrganizerServiceEventUnpublishRequestTest {
     }
 
     private Map<String, Object> event(String workflowStatus) {
-        return new LinkedHashMap<>(Map.of("eventId", EVENT_ID, "workflowStatus", workflowStatus));
+        return new LinkedHashMap<>(Map.of(
+                "eventId", EVENT_ID,
+                "eventTitle", "測試活動",
+                "workflowStatus", workflowStatus));
     }
 }

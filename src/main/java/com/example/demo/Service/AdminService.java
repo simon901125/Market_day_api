@@ -129,6 +129,9 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     @Autowired
     MessageSource messageSource;
 
+    @Autowired
+    AdminExceptionNotificationService adminExceptionNotificationService;
+
     /** yyyy/MM/dd HH:mm */
     private final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
     /** yyyy/MM/dd */
@@ -757,7 +760,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_APPROVED, NotificationTargetType.MARKET_EVENT, eventId,
-                "審核通過", event.title() + "審核通過，開始建置攤位地圖");
+                "活動審核通過", "活動「" + event.title() + "」（活動 ID：" + eventId
+                        + "）已通過管理員審核，接下來將建置攤位地圖");
 
         saveAdminLog(
                 userRepo.getReferenceById(admin.id()), AdminOperationType.ACTIVITY_REVIEW, AdminTargetType.MARKET_EVENT,
@@ -794,7 +798,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_REVISION_REQUIRED, NotificationTargetType.MARKET_EVENT, eventId,
-                "補件通知", event.title() + "需要補件，請修改後重新送出審核");
+                "活動需要補件", "活動「" + event.title() + "」（活動 ID：" + eventId
+                        + "）需要補件；原因：" + note + "。請修改後重新送出審核");
 
         saveAdminLog(
                 userRepo.getReferenceById(admin.id()), AdminOperationType.REQUEST_REVISION, AdminTargetType.MARKET_EVENT,
@@ -877,7 +882,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_MAP_COMPLETED, NotificationTargetType.MARKET_EVENT, eventId,
-                "地圖完成", event.title() + "攤位地圖已建置完成，可前往活動詳情確認");
+                "活動攤位地圖完成", "活動「" + event.title() + "」（活動 ID：" + eventId
+                        + "）的攤位地圖已建置完成，可前往活動詳情確認");
 
         String organizerLabel = event.organizerContactName() != null ? event.organizerContactName() : "主辦方";
         String eventTitleLabel = event.title() != null ? event.title() : "活動";
@@ -928,10 +934,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElse(null);
 
         if (unpublishRequestId == null) {
-            saveNotification(
-                    adminRef, NotificationCategory.EXCEPTION, NotificationType.SYSTEM_EXCEPTION,
-                    NotificationTargetType.MARKET_EVENT, eventId,
-                    "活動狀態異常", event.title() + "活動狀態為申請下架，資料庫查無該活動下架申請單");
+            adminExceptionNotificationService.notifyMissingUnpublishRequest(
+                    adminRef,
+                    eventId,
+                    event.title());
 
             throw new IllegalArgumentException("找不到該活動的下架申請");
         }
@@ -951,7 +957,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_UNPUBLISHED, NotificationTargetType.MARKET_EVENT, eventId,
-                "活動下架", event.title() + "活動已下架");
+                "活動已下架", "活動「" + event.title() + "」（活動 ID：" + eventId
+                        + "）的下架申請已通過，活動已下架");
 
         saveAdminLog(
                 adminRef, AdminOperationType.EVENT_UNPUBLISH_REVIEW, AdminTargetType.EVENT_UNPUBLISH_REQUEST,
@@ -1015,7 +1022,8 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 userRepo.getReferenceById(review.userId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED, NotificationTargetType.EVENT_UNPUBLISH_REQUEST,
                 unpublishRequestId, "補件通知",
-                review.eventName() + "的下架申請需要補件，請修改後重新送出審核，若有問題請洽公司聯絡電話");
+                "活動「" + review.eventName() + "」的下架申請（申請 ID：" + unpublishRequestId
+                        + "）需要補件；原因：" + note + "。請修改後重新送出審核");
 
         saveAdminLog(
                 adminRef, AdminOperationType.REQUEST_REVISION, AdminTargetType.EVENT_UNPUBLISH_REQUEST,

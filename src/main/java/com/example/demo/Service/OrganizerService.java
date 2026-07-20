@@ -288,6 +288,11 @@ public class OrganizerService {
                     null);
         }
 
+        notificationService.notifyOrganizerEventCancelled(
+                organizerUserId,
+                eventId,
+                statusText(event.get("eventTitle")));
+
         return ApiResponse.success(
                 "Organizer event deleted successfully",
                 new OrganizerEventDeleteResponse(eventId, statusText(event.get("eventTitle"))));
@@ -393,6 +398,7 @@ public class OrganizerService {
         notificationService.notifyAdminsEventSubmitted(
                 eventId,
                 normalizeText(event.get("eventTitle")),
+                normalizeText(organizer.get("organizerName")),
                 workflowStatus == WorkflowStatus.REVISION_REQUIRED);
 
         return ApiResponse.success("Organizer event submitted for review successfully",
@@ -428,6 +434,14 @@ public class OrganizerService {
         if (organizerRepository.withdrawOrganizerEventReview(organizerUserId, eventId) != 1) {
             return ApiResponse.fail(409, "Event workflow status changed before withdrawal");
         }
+        notificationService.notifyAdminsEventReviewWithdrawn(
+                eventId,
+                normalizeText(event.get("eventTitle")),
+                normalizeText(organizer.get("organizerName")));
+        notificationService.notifyOrganizerApplicationResubmitted(
+                organizerUserId,
+                eventId,
+                normalizeText(event.get("eventTitle")));
 
         return ApiResponse.success("Organizer event review withdrawn successfully",
                 new OrganizerEventWithdrawResponse(
@@ -541,6 +555,11 @@ public class OrganizerService {
         LocalDateTime requestedAt = LocalDateTime.now();
         long unpublishRequestId = organizerRepository.createEventUnpublishRequest(
                 organizerUserId, eventId, reason, requestedAt);
+        notificationService.notifyAdminsEventUnpublishRequested(
+                eventId,
+                unpublishRequestId,
+                normalizeText(event.get("eventTitle")),
+                normalizeText(organizer.get("organizerName")));
         return ApiResponse.success("Organizer event unpublish requested successfully",
                 new OrganizerEventUnpublishRequestResponse(
                         eventId,
@@ -1117,7 +1136,11 @@ public class OrganizerService {
         profile.put("serviceEndTime", serviceEndTime);
 
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        boolean profileAlreadyExists = normalizeText(organizer.get("organizerName")) != null;
         organizerRepository.saveOrganizerProfile(organizerUserId, profile);
+        if (profileAlreadyExists) {
+            notificationService.notifyOrganizerProfileResubmitted(organizerUserId, organizerName);
+        }
         ApiResponse<OrganizerAccountResponse> loaded = loadOrganizerAccount(authorizationHeader, "Organizer profile loaded successfully");
         if (!loaded.isSuccessStatus()) {
             return loaded;
