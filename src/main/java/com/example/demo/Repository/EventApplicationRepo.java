@@ -27,7 +27,7 @@ public interface EventApplicationRepo extends JpaRepository<EventApplication, Lo
             )
             FROM EventApplication a
             JOIN a.event e
-            WHERE a.user.id = :userId
+            WHERE a.user.id = :userId and e.workflowStatus not in ('DRAFT', 'CANCELLED')
             ORDER BY a.createdAt DESC
             """)
     List<VenderRegApplicationProjection> findVenderRegApplications(@Param("userId") Long userId, Pageable pageable);
