@@ -60,6 +60,7 @@ class AdminServiceTest {
     @Mock UserRepo userRepo;
     @Mock AdminLogRepo logRepo;
     @Mock NotificationRepo notificationRepo;
+    @Mock AdminExceptionNotificationService adminExceptionNotificationService;
     @Mock EventUnpublishRequestRepo eventUnpublishRequestRepo;
     AdminService service;
 
@@ -71,6 +72,7 @@ class AdminServiceTest {
         ReflectionTestUtils.setField(service, "userRepo", userRepo);
         ReflectionTestUtils.setField(service, "logRepo", logRepo);
         ReflectionTestUtils.setField(service, "notificationRepo", notificationRepo);
+        ReflectionTestUtils.setField(service, "adminExceptionNotificationService", adminExceptionNotificationService);
         ReflectionTestUtils.setField(service, "eventUnpublishRequestRepo", eventUnpublishRequestRepo);
     }
 
@@ -342,8 +344,9 @@ class AdminServiceTest {
         assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_APPROVED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
-        assertThat(savedNotification.getTitle()).isEqualTo("審核通過");
-        assertThat(savedNotification.getContent()).isEqualTo("夏日市集審核通過，開始建置攤位地圖");
+        assertThat(savedNotification.getTitle()).isEqualTo("活動審核通過");
+        assertThat(savedNotification.getContent())
+                .isEqualTo("活動「夏日市集」（活動 ID：1）已通過管理員審核，接下來將建置攤位地圖");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
@@ -463,8 +466,9 @@ class AdminServiceTest {
         assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_REVISION_REQUIRED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
-        assertThat(savedNotification.getTitle()).isEqualTo("補件通知");
-        assertThat(savedNotification.getContent()).isEqualTo("夏日市集需要補件，請修改後重新送出審核");
+        assertThat(savedNotification.getTitle()).isEqualTo("活動需要補件");
+        assertThat(savedNotification.getContent())
+                .isEqualTo("活動「夏日市集」（活動 ID：1）需要補件；原因：缺少營業執照。請修改後重新送出審核");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
@@ -567,8 +571,9 @@ class AdminServiceTest {
         assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_MAP_COMPLETED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
-        assertThat(savedNotification.getTitle()).isEqualTo("地圖完成");
-        assertThat(savedNotification.getContent()).isEqualTo("夏日市集攤位地圖已建置完成，可前往活動詳情確認");
+        assertThat(savedNotification.getTitle()).isEqualTo("活動攤位地圖完成");
+        assertThat(savedNotification.getContent())
+                .isEqualTo("活動「夏日市集」（活動 ID：1）的攤位地圖已建置完成，可前往活動詳情確認");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
@@ -709,16 +714,8 @@ class AdminServiceTest {
         verify(eventUnpublishRequestRepo, never()).reviewIfCurrent(any(), any(), any(), any(), any());
         verify(logRepo, never()).save(any());
 
-        ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
-        verify(notificationRepo).save(notificationCaptor.capture());
-        Notification savedNotification = notificationCaptor.getValue();
-        assertThat(savedNotification.getUser()).isSameAs(adminRef);
-        assertThat(savedNotification.getCategory()).isEqualTo(NotificationCategory.EXCEPTION);
-        assertThat(savedNotification.getType()).isEqualTo(NotificationType.SYSTEM_EXCEPTION);
-        assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
-        assertThat(savedNotification.getTargetId()).isEqualTo(1L);
-        assertThat(savedNotification.getTitle()).isEqualTo("活動狀態異常");
-        assertThat(savedNotification.getContent()).isEqualTo("夏日市集活動狀態為申請下架，資料庫查無該活動下架申請單");
+        verify(adminExceptionNotificationService)
+                .notifyMissingUnpublishRequest(adminRef, 1L, "夏日市集");
     }
 
     @Test void setEventUnpublishApprovesRequestAndWritesNotificationAndOperationLog() {
@@ -754,8 +751,9 @@ class AdminServiceTest {
         assertThat(savedNotification.getType()).isEqualTo(NotificationType.EVENT_UNPUBLISHED);
         assertThat(savedNotification.getTargetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
-        assertThat(savedNotification.getTitle()).isEqualTo("活動下架");
-        assertThat(savedNotification.getContent()).isEqualTo("夏日市集活動已下架");
+        assertThat(savedNotification.getTitle()).isEqualTo("活動已下架");
+        assertThat(savedNotification.getContent())
+                .isEqualTo("活動「夏日市集」（活動 ID：1）的下架申請已通過，活動已下架");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
@@ -904,7 +902,7 @@ class AdminServiceTest {
         assertThat(savedNotification.getTargetId()).isEqualTo(77L);
         assertThat(savedNotification.getTitle()).isEqualTo("補件通知");
         assertThat(savedNotification.getContent())
-                .isEqualTo("夏日市集的下架申請需要補件，請修改後重新送出審核，若有問題請洽公司聯絡電話");
+                .isEqualTo("活動「夏日市集」的下架申請（申請 ID：77）需要補件；原因：缺少營業執照。請修改後重新送出審核");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());

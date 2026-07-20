@@ -49,7 +49,7 @@ public class MarketEventRepository {
                     CAST(e.end_at AS DATE) AS end_date,
                     e.cover_image_url
                 FROM dbo.market_events e
-                WHERE e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
+                WHERE e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                 """);
 
         Map<String, Object> params = new HashMap<>();
@@ -89,9 +89,17 @@ public class MarketEventRepository {
                     CAST(e.start_at AS TIME) AS start_time,
                     CAST(e.end_at AS TIME) AS end_time,
                     e.cover_image_url,
-                    e.map_image_url,
+                    CASE
+                        WHEN e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW')
+                         AND e.brands_public_at IS NOT NULL
+                         AND e.brands_public_at <= SYSDATETIME()
+                        THEN e.map_image_url
+                        ELSE NULL
+                    END AS map_image_url,
                     CAST(CASE
-                        WHEN e.brands_public_at IS NOT NULL AND e.brands_public_at <= SYSDATETIME() THEN 1
+                        WHEN e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW')
+                         AND e.brands_public_at IS NOT NULL
+                         AND e.brands_public_at <= SYSDATETIME() THEN 1
                         ELSE 0
                     END AS BIT) AS brands_public,
                     op.organizer_name,
@@ -105,7 +113,7 @@ public class MarketEventRepository {
                     ON up.user_id = e.user_id AND up.profile_type = N'ORGANIZER'
                 LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
                 WHERE e.id = :id
-                  AND e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
+                  AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                 """;
 
         Map<String, Object> params = Map.of("id", id);
@@ -125,6 +133,7 @@ public class MarketEventRepository {
                        vp.avatar_image_url, vp.cover_image_url,
                        c.id AS category_id, c.name AS category_name, c.slug AS category_slug
                 FROM dbo.event_stalls s
+                INNER JOIN dbo.market_events e ON e.id = s.event_id
                 LEFT JOIN dbo.application_dates ad
                     ON ad.selected_stall_id = s.id AND ad.apply_date = :date
                 LEFT JOIN dbo.event_applications ea
@@ -134,7 +143,11 @@ public class MarketEventRepository {
                    AND ea.review_status = N'APPROVED'
                 LEFT JOIN dbo.vendor_profiles vp ON vp.id = ea.vendor_profile_id
                 LEFT JOIN dbo.categories c ON c.id = vp.category_id
-                WHERE s.event_id = :eventId AND s.stall_no = :stallNo
+                WHERE s.event_id = :eventId
+                  AND s.stall_no = :stallNo
+                  AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW')
+                  AND e.brands_public_at IS NOT NULL
+                  AND e.brands_public_at <= SYSDATETIME()
                 """;
         Map<String, Object> params = Map.of("eventId", eventId, "date", date, "stallNo", stallNo);
         return namedParameterJdbcTemplate.query(sql, params, (rs, rowNum) -> {

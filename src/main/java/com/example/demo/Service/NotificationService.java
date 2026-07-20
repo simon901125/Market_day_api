@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.HexFormat;
 import java.util.HashMap;
@@ -130,6 +131,45 @@ public class NotificationService {
                 content));
     }
 
+    public void notifyAdminsOrganizerRegistrationSubmitted(
+            Long organizerUserId, String organizerName, String email) {
+        String displayName = requiredLabel(organizerName, "Organizer name");
+        String accountEmail = requiredLabel(email, "Organizer email");
+        notifyActiveAdmins(
+                NotificationCategory.ORGANIZER_MANAGEMENT,
+                NotificationType.ORGANIZER_REGISTRATION_SUBMITTED,
+                NotificationTargetType.USER,
+                organizerUserId,
+                "新主辦方註冊申請",
+                "主辦方「" + displayName + "」（帳號：" + accountEmail
+                        + "，使用者 ID：" + organizerUserId + "）已送出註冊審核，請確認申請資料");
+    }
+
+    public void notifyOrganizerProfileResubmitted(Long organizerUserId, String organizerName) {
+        String displayName = requiredLabel(organizerName, "Organizer name");
+        String title = "主辦方資料已送審";
+        String content = "主辦方「" + displayName + "」（使用者 ID：" + organizerUserId
+                + "）已完成補件並重新送出審核，請確認補件內容";
+        List<Long> recipients = new ArrayList<>(
+                userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE));
+        recipients.add(organizerUserId);
+        createAll(recipients.stream()
+                .distinct()
+                .sorted()
+                .map(userId -> new NotificationCreateCommand(
+                        userId,
+                        NotificationCategory.ORGANIZER_MANAGEMENT,
+                        NotificationType.ORGANIZER_PROFILE_RESUBMITTED,
+                        NotificationTargetType.USER,
+                        organizerUserId,
+                        title,
+                        content,
+                        dedupKey(userId, NotificationType.ORGANIZER_PROFILE_RESUBMITTED,
+                                NotificationTargetType.USER, organizerUserId,
+                                fingerprint(title, content))))
+                .toList());
+    }
+
     @Transactional
     public ApiResponse<MapBackedResponse> broadcastSystemAnnouncement(
             String authorizationHeader,
@@ -177,7 +217,7 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "報名已取消",
-                eventName + " 的活動報名已取消",
+                "活動「" + eventName + "」的報名（報名 ID：" + applicationId + "）已取消",
                 dedupKey(vendorUserId, NotificationType.APPLICATION_CANCELLED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
         create(new NotificationCreateCommand(
@@ -187,7 +227,8 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "攤主取消報名",
-                brandName(brandName) + "已取消活動報名：" + eventName,
+                brandName(brandName) + "已取消活動「" + eventName + "」的報名（報名 ID："
+                        + applicationId + "）",
                 dedupKey(organizerUserId, NotificationType.APPLICATION_CANCELLED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
@@ -200,7 +241,8 @@ public class NotificationService {
                 NotificationTargetType.REFUND,
                 refundId,
                 "退款申請已送出",
-                eventName(eventTitle) + " 的退款申請已送出，等待後續處理",
+                "活動「" + eventName(eventTitle) + "」的退款申請（退款 ID：" + refundId
+                        + "）已送出，等待主辦方審核",
                 dedupKey(vendorUserId, NotificationType.REFUND_REQUESTED,
                         NotificationTargetType.REFUND, refundId, null)));
     }
@@ -216,7 +258,8 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "保證金已退還",
-                eventName(eventTitle) + " 的保證金已由主辦方登記為現金退還",
+                "活動「" + eventName(eventTitle) + "」的報名（報名 ID：" + applicationId
+                        + "）保證金已由主辦方登記為現場現金退還",
                 dedupKey(vendorUserId, NotificationType.DEPOSIT_RETURNED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
@@ -270,7 +313,8 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "待審核",
-                eventName + " 已收到您的報名申請",
+                "活動「" + eventName + "」已收到您的報名申請（報名 ID：" + applicationId
+                        + "），目前等待主辦方審核",
                 dedupKey(userId, NotificationType.APPLICATION_SUBMITTED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
@@ -287,7 +331,8 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "新報名",
-                brandName(brandName) + "送出報名申請：" + eventName(eventTitle),
+                brandName(brandName) + "已送出活動「" + eventName(eventTitle)
+                        + "」的報名申請（報名 ID：" + applicationId + "），請進行審核",
                 dedupKey(organizerUserId, NotificationType.APPLICATION_SUBMITTED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
@@ -306,8 +351,10 @@ public class NotificationService {
                 applicationId,
                 approved ? "待付款" : "審核未通過",
                 approved
-                        ? eventName + " 審核通過，請完成付款"
-                        : eventName + " 報名審核未通過",
+                        ? "活動「" + eventName + "」的報名（報名 ID：" + applicationId
+                                + "）審核通過，請於期限內完成付款"
+                        : "活動「" + eventName + "」的報名（報名 ID：" + applicationId
+                                + "）審核未通過，請查看審核說明",
                 dedupKey(userId,
                         approved ? NotificationType.APPLICATION_APPROVED : NotificationType.APPLICATION_REJECTED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
@@ -327,8 +374,10 @@ public class NotificationService {
                 applicationId,
                 paid ? "付款成功" : "付款失敗",
                 paid
-                        ? eventName + " 付款成功，可於開放選位後選擇攤位"
-                        : eventName + " 付款失敗，請重新確認付款狀態",
+                        ? "活動「" + eventName + "」的報名（報名 ID：" + applicationId
+                                + "）付款成功，可於開放選位後選擇攤位"
+                        : "活動「" + eventName + "」的報名（報名 ID：" + applicationId
+                                + "）付款失敗，請重新確認付款資訊",
                 dedupKey(userId, paid ? NotificationType.PAYMENT_PAID : NotificationType.PAYMENT_FAILED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
         if (paid) {
@@ -339,7 +388,8 @@ public class NotificationService {
                     NotificationTargetType.EVENT_APPLICATION,
                     applicationId,
                     "待選位",
-                    eventName + " 付款成功，可選擇攤位",
+                    "活動「" + eventName + "」的報名（報名 ID：" + applicationId
+                            + "）已完成付款，可以開始選擇攤位",
                     dedupKey(userId, NotificationType.STALL_SELECTION_AVAILABLE,
                             NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
         }
@@ -360,7 +410,7 @@ public class NotificationService {
                 paid ? "付款完成" : "付款失敗",
                 brandName(brandName)
                         + (paid ? "已完成付款：" : "付款失敗：")
-                        + eventName(eventTitle),
+                        + "活動「" + eventName(eventTitle) + "」（報名 ID：" + applicationId + "）",
                 dedupKey(organizerUserId,
                         paid ? NotificationType.PAYMENT_PAID : NotificationType.PAYMENT_FAILED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
@@ -374,7 +424,8 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "報名完成",
-                eventName(eventTitle) + " 已完成選位",
+                "活動「" + eventName(eventTitle) + "」的報名（報名 ID：" + applicationId
+                        + "）已完成攤位選擇，報名流程完成",
                 dedupKey(userId, NotificationType.APPLICATION_COMPLETED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
@@ -391,7 +442,8 @@ public class NotificationService {
                 NotificationTargetType.EVENT_APPLICATION,
                 applicationId,
                 "完成選位",
-                brandName(brandName) + "已完成攤位選擇：" + eventName(eventTitle),
+                brandName(brandName) + "已完成活動「" + eventName(eventTitle)
+                        + "」的攤位選擇（報名 ID：" + applicationId + "）",
                 dedupKey(organizerUserId, NotificationType.STALL_SELECTION_COMPLETED,
                         NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
     }
@@ -404,7 +456,8 @@ public class NotificationService {
                 NotificationTargetType.REFUND,
                 refundId,
                 "退款申請待審核",
-                eventName(eventTitle) + " 已收到攤主退款申請，請進行審核。",
+                "活動「" + eventName(eventTitle) + "」收到退款申請（退款 ID：" + refundId
+                        + "），請確認退款資料並進行審核",
                 dedupKey(userId, NotificationType.REFUND_REQUESTED,
                         NotificationTargetType.REFUND, refundId, null)));
     }
@@ -417,7 +470,8 @@ public class NotificationService {
                 NotificationTargetType.REFUND,
                 refundId,
                 "退款處理中",
-                eventName(eventTitle) + " 的退款正在處理中",
+                "活動「" + eventName(eventTitle) + "」的退款（退款 ID：" + refundId
+                        + "）已進入處理流程",
                 dedupKey(userId, NotificationType.REFUNDING,
                         NotificationTargetType.REFUND, refundId, null)));
     }
@@ -431,7 +485,7 @@ public class NotificationService {
                 NotificationTargetType.REFUND,
                 refundId,
                 "退款完成",
-                eventName(eventTitle) + " 的退款已完成",
+                "活動「" + eventName(eventTitle) + "」的退款（退款 ID：" + refundId + "）已完成",
                 dedupKey(userId, NotificationType.REFUNDED,
                         NotificationTargetType.REFUND, refundId, null)));
     }
@@ -444,7 +498,7 @@ public class NotificationService {
                 NotificationTargetType.REFUND,
                 refundId,
                 "退款完成",
-                eventName(eventTitle) + " 的退款已完成",
+                "活動「" + eventName(eventTitle) + "」的退款（退款 ID：" + refundId + "）已完成",
                 dedupKey(organizerUserId, NotificationType.REFUNDED,
                         NotificationTargetType.REFUND, refundId, null)));
     }
@@ -457,7 +511,8 @@ public class NotificationService {
                 NotificationTargetType.REFUND,
                 refundId,
                 "退款失敗",
-                eventName(eventTitle) + " 的退款處理失敗，請等待主辦方重新處理",
+                "活動「" + eventName(eventTitle) + "」的退款（退款 ID：" + refundId
+                        + "）處理失敗，請等待主辦方重新處理",
                 dedupKey(userId, NotificationType.REFUND_FAILED,
                         NotificationTargetType.REFUND, refundId, null)));
     }
@@ -470,17 +525,21 @@ public class NotificationService {
                 NotificationTargetType.REFUND,
                 refundId,
                 "退款失敗",
-                eventName(eventTitle) + " 的退款失敗，請重試或確認藍新金流狀態",
+                "活動「" + eventName(eventTitle) + "」的退款（退款 ID：" + refundId
+                        + "）處理失敗，請重試或確認金流平台狀態",
                 dedupKey(organizerUserId, NotificationType.REFUND_FAILED,
                         NotificationTargetType.REFUND, refundId, null)));
     }
 
-    public void notifyAdminsEventSubmitted(Long eventId, String eventTitle, boolean resubmitted) {
+    public void notifyAdminsEventSubmitted(
+            Long eventId, String eventTitle, String organizerName, boolean resubmitted) {
         NotificationType type = resubmitted
                 ? NotificationType.EVENT_RESUBMITTED
                 : NotificationType.EVENT_SUBMITTED;
-        String title = resubmitted ? "活動補件重新送審" : "活動送審";
-        String content = eventName(eventTitle) + (resubmitted ? " 已完成補件並重新送審" : " 已送出審核");
+        String title = resubmitted ? "活動補件重新送審" : "新活動送審";
+        String content = "主辦方「" + requiredLabel(organizerName, "Organizer name") + "」"
+                + (resubmitted ? "已完成活動補件並重新送審：" : "建立新活動並送出審核：")
+                + "「" + eventName(eventTitle) + "」（活動 ID：" + eventId + "），請確認活動內容";
         List<Long> adminUserIds = userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE);
         createAll(adminUserIds.stream()
                 .distinct()
@@ -496,6 +555,113 @@ public class NotificationService {
                         dedupKey(userId, type, NotificationTargetType.MARKET_EVENT, eventId, null)))
                 .toList());
     }
+
+    public void notifyOrganizerApplicationResubmitted(
+            Long organizerUserId,
+            Long eventId,
+            String eventTitle) {
+        create(new NotificationCreateCommand(
+                organizerUserId,
+                NotificationCategory.EVENT_MANAGEMENT,
+                NotificationType.APPLICATION_RESUBMITTED,
+                NotificationTargetType.MARKET_EVENT,
+                eventId,
+                "活動審核申請已撤回",
+                "活動「" + eventName(eventTitle) + "」（活動 ID：" + eventId
+                        + "）的審核申請已撤回，可修改內容後重新送審",
+                dedupKey(organizerUserId, NotificationType.APPLICATION_RESUBMITTED,
+                        NotificationTargetType.MARKET_EVENT, eventId, null)));
+    }
+
+    public void notifyOrganizerEventCancelled(
+            Long organizerUserId,
+            Long eventId,
+            String eventTitle) {
+        create(new NotificationCreateCommand(
+                organizerUserId,
+                NotificationCategory.EVENT_MANAGEMENT,
+                NotificationType.EVENT_CANCELLED,
+                NotificationTargetType.MARKET_EVENT,
+                eventId,
+                "活動已取消",
+                "活動「" + eventName(eventTitle) + "」（活動 ID：" + eventId + "）已取消",
+                dedupKey(organizerUserId, NotificationType.EVENT_CANCELLED,
+                        NotificationTargetType.MARKET_EVENT, eventId, null)));
+    }
+
+    public void notifyAdminsEventReviewWithdrawn(
+            Long eventId, String eventTitle, String organizerName) {
+        notifyActiveAdmins(
+                NotificationCategory.EVENT_MANAGEMENT,
+                NotificationType.EVENT_REVIEW_WITHDRAWN,
+                NotificationTargetType.MARKET_EVENT,
+                eventId,
+                "活動審核申請已撤回",
+                "主辦方「" + requiredLabel(organizerName, "Organizer name") + "」已撤回活動「"
+                        + eventName(eventTitle) + "」（活動 ID：" + eventId + "）的審核申請");
+    }
+
+    public void notifyAdminsEventUnpublishRequested(
+            Long eventId, Long unpublishRequestId, String eventTitle, String organizerName) {
+        notifyActiveAdmins(
+                NotificationCategory.EVENT_MANAGEMENT,
+                NotificationType.EVENT_UNPUBLISH_REQUEST_SUBMITTED,
+                NotificationTargetType.EVENT_UNPUBLISH_REQUEST,
+                unpublishRequestId,
+                "活動下架申請",
+                "主辦方「" + requiredLabel(organizerName, "Organizer name") + "」已送出活動「"
+                        + eventName(eventTitle) + "」的下架申請（活動 ID：" + eventId
+                        + "，申請 ID：" + unpublishRequestId + "），請進行審核");
+    }
+
+    public void notifyPaymentExpired(Long vendorUserId, Long applicationId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                vendorUserId,
+                NotificationCategory.PAYMENT,
+                NotificationType.PAYMENT_EXPIRED,
+                NotificationTargetType.EVENT_APPLICATION,
+                applicationId,
+                "付款期限已逾期",
+                "活動「" + eventName(eventTitle) + "」的報名（報名 ID：" + applicationId
+                        + "）已超過付款期限，付款狀態已更新為逾期",
+                dedupKey(vendorUserId, NotificationType.PAYMENT_EXPIRED,
+                        NotificationTargetType.EVENT_APPLICATION, applicationId, null)));
+    }
+
+    public void notifyEventEnded(Long vendorUserId, Long eventId, String eventTitle) {
+        create(new NotificationCreateCommand(
+                vendorUserId,
+                NotificationCategory.EVENT_CHANGE,
+                NotificationType.EVENT_ENDED,
+                NotificationTargetType.MARKET_EVENT,
+                eventId,
+                "活動已結束",
+                "活動「" + eventName(eventTitle) + "」（活動 ID：" + eventId
+                        + "）已結束，感謝您的參與",
+                dedupKey(vendorUserId, NotificationType.EVENT_ENDED,
+                        NotificationTargetType.MARKET_EVENT, eventId, null)));
+    }
+
+    public void notifyLoginAnomaly(Long userId, String email) {
+        String window = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHH"));
+        String content = "帳號 " + email + " 在 10 分鐘內發生多次登入失敗，若非本人操作請立即重設密碼";
+        List<Long> recipients = userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE);
+        createAll(recipients.stream()
+                .distinct()
+                .sorted()
+                .map(recipientId -> new NotificationCreateCommand(
+                        recipientId,
+                        NotificationCategory.SYSTEM,
+                        NotificationType.LOGIN_ANOMALY,
+                        NotificationTargetType.SYSTEM,
+                        null,
+                        "登入異常提醒",
+                        content,
+                        dedupKey(recipientId, NotificationType.LOGIN_ANOMALY,
+                                NotificationTargetType.SYSTEM, null, userId + ":" + window)))
+                .toList());
+    }
+
     private void validate(NotificationCreateCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("Notification command is required");
@@ -525,12 +691,42 @@ public class NotificationService {
         }
     }
 
+    private void notifyActiveAdmins(
+            NotificationCategory category,
+            NotificationType type,
+            NotificationTargetType targetType,
+            Long targetId,
+            String title,
+            String content) {
+        List<Long> adminUserIds = userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE);
+        createAll(adminUserIds.stream()
+                .distinct()
+                .sorted()
+                .map(userId -> new NotificationCreateCommand(
+                        userId,
+                        category,
+                        type,
+                        targetType,
+                        targetId,
+                        title,
+                        content,
+                        dedupKey(userId, type, targetType, targetId, fingerprint(title, content))))
+                .toList());
+    }
+
     private String eventName(String eventTitle) {
-        return isBlank(eventTitle) ? "活動" : eventTitle.trim();
+        return requiredLabel(eventTitle, "Event title");
     }
 
     private String brandName(String brandName) {
-        return isBlank(brandName) ? "攤主" : "品牌「" + brandName.trim() + "」";
+        return "品牌「" + requiredLabel(brandName, "Brand name") + "」";
+    }
+
+    private String requiredLabel(String value, String fieldName) {
+        if (isBlank(value)) {
+            throw new IllegalArgumentException(fieldName + " is required for notification content");
+        }
+        return value.trim();
     }
 
     private List<NotificationCreateCommand> commandsForUsers(

@@ -19,6 +19,7 @@ import com.example.demo.Repository.RequestLogRepository;
 import com.example.demo.Repository.UserRepository;
 import com.example.demo.dto.request.EmailVerificationRequest;
 import com.example.demo.dto.request.LocalRegisterRequest;
+import com.example.demo.dto.request.LocalLoginRequest;
 import com.example.demo.dto.request.RequestPasswordResetRequest;
 import com.example.demo.dto.request.ResendRegistrationVerificationRequest;
 import com.example.demo.dto.request.ResetPasswordRequest;
@@ -147,6 +148,8 @@ public class RequestLogService {
         }
 
         return switch (path) {
+            case "/api/vendor/local-login", "/api/organizer/local-login", "/api/admin/local-login" ->
+                    resolveUserIdFromEmail(requestBody(request, LocalLoginRequest.class));
             case "/api/vendor/local-register", "/api/organizer/local-register" ->
                     resolveUserIdFromEmail(requestBody(request, LocalRegisterRequest.class));
             case "/api/auth/createAccount/emailVerify", "/api/auth/resetPassword/emailVerify" ->
@@ -164,6 +167,10 @@ public class RequestLogService {
     }
 
     private Long resolveUserIdFromEmail(LocalRegisterRequest body) {
+        return body == null ? null : findUserIdByEmail(body.getEmail());
+    }
+
+    private Long resolveUserIdFromEmail(LocalLoginRequest body) {
         return body == null ? null : findUserIdByEmail(body.getEmail());
     }
 
