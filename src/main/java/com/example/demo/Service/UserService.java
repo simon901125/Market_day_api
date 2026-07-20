@@ -93,6 +93,10 @@ public class UserService {
         userRepository.deleteEmailVerificationTokensByUserId(userId);
         userRepository.createEmailVerificationToken(userId, verificationCode, LocalDateTime.now().plusMinutes(10));
         emailService.sendVerificationCode(user.getEmail(), verificationCode);
+        if (isOrganizerRole(role)) {
+            notificationService.notifyAdminsOrganizerRegistrationSubmitted(
+                    userId, user.getName(), user.getEmail());
+        }
         return ApiResponse.success("User registered successfully. Verification code has been sent to email");
     }
 
@@ -130,6 +134,10 @@ public class UserService {
         userRepository.deleteEmailVerificationTokensByUserId(userId);
         userRepository.createEmailVerificationToken(userId, verificationCode, LocalDateTime.now().plusMinutes(10));
         emailService.sendVerificationCode(tokenInfo.getEmail(), verificationCode);
+        if (isOrganizerRole(role)) {
+            notificationService.notifyAdminsOrganizerRegistrationSubmitted(
+                    userId, tokenInfo.getName(), tokenInfo.getEmail());
+        }
 
         return ApiResponse.success("Google user registered successfully. Verification code has been sent to email");
     }
@@ -688,6 +696,10 @@ public class UserService {
 
     private boolean isAdminRole(String role) {
         return "ADMIN".equals(role);
+    }
+
+    private boolean isOrganizerRole(String role) {
+        return "ORGANIZER".equals(role);
     }
 
     private LocalDateTime toLocalDateTime(Object value) {

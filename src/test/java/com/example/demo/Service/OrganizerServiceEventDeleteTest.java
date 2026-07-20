@@ -25,6 +25,7 @@ class OrganizerServiceEventDeleteTest {
 
     @Mock OrganizerRepository organizerRepository;
     @Mock JwtService jwtService;
+    @Mock NotificationService notificationService;
     @InjectMocks OrganizerService organizerService;
 
     @BeforeEach
@@ -48,6 +49,7 @@ class OrganizerServiceEventDeleteTest {
         assertThat(response.getMessage()).isEqualTo("活動已刪除");
         assertThat(response.getData().eventId()).isEqualTo(EVENT_ID);
         assertThat(response.getData().eventTitle()).isEqualTo("測試活動");
+        verify(notificationService).notifyOrganizerEventCancelled(7L, EVENT_ID, "測試活動");
     }
 
     @Test
