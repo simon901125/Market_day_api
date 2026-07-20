@@ -93,6 +93,10 @@ public class UserService {
         userRepository.deleteEmailVerificationTokensByUserId(userId);
         userRepository.createEmailVerificationToken(userId, verificationCode, LocalDateTime.now().plusMinutes(10));
         emailService.sendVerificationCode(user.getEmail(), verificationCode);
+        if (isOrganizerRole(role)) {
+            notificationService.notifyAdminsOrganizerRegistrationSubmitted(
+                    userId, user.getName(), user.getEmail());
+        }
         return ApiResponse.success("User registered successfully. Verification code has been sent to email");
     }
 
@@ -130,6 +134,10 @@ public class UserService {
         userRepository.deleteEmailVerificationTokensByUserId(userId);
         userRepository.createEmailVerificationToken(userId, verificationCode, LocalDateTime.now().plusMinutes(10));
         emailService.sendVerificationCode(tokenInfo.getEmail(), verificationCode);
+        if (isOrganizerRole(role)) {
+            notificationService.notifyAdminsOrganizerRegistrationSubmitted(
+                    userId, tokenInfo.getName(), tokenInfo.getEmail());
+        }
 
         return ApiResponse.success("Google user registered successfully. Verification code has been sent to email");
     }
@@ -138,8 +146,16 @@ public class UserService {
     public ApiResponse<LoginResponse> loginLocal(LocalLoginRequest body, String expectedRole) {
         Optional<Map<String, Object>> userData = userRepository.findLocalUserByEmail(body.getEmail());
 
-        if (userData.isEmpty()
-                || !authService.matchesPassword(body.getPassword(), (String) userData.get().get("password_hash"))) {
+        if (userData.isEmpty()) {
+            return ApiResponse.fail("Invalid email or password");
+        }
+        Long loginUserId = toLong(userData.get().get("id"));
+        if (!authService.matchesPassword(body.getPassword(), (String) userData.get().get("password_hash"))) {
+            int previousFailures = userRepository.countRecentLocalLoginFailures(
+                    loginUserId, LocalDateTime.now().minusMinutes(10));
+            if (previousFailures >= 4) {
+                notificationService.notifyLoginAnomaly(loginUserId, body.getEmail());
+            }
             return ApiResponse.fail("Invalid email or password");
         }
         if (userData.get().get("emailVerifiedAt") == null) {
@@ -155,7 +171,7 @@ public class UserService {
         }
 
         LocalDateTime sessionExpiresAt = userRepository.startLoginSession(
-                toLong(userData.get().get("id")),
+                loginUserId,
                 jwtService.calculateExpiration());
         if (sessionExpiresAt == null) {
             return ApiResponse.fail("Login status update failed");
@@ -680,6 +696,10 @@ public class UserService {
 
     private boolean isAdminRole(String role) {
         return "ADMIN".equals(role);
+    }
+
+    private boolean isOrganizerRole(String role) {
+        return "ORGANIZER".equals(role);
     }
 
     private LocalDateTime toLocalDateTime(Object value) {

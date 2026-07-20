@@ -56,6 +56,25 @@ public class UserRepository {
         return count != null && count > 0;
     }
 
+    public int countRecentLocalLoginFailures(Long userId, LocalDateTime since) {
+        Integer count = namedParameterJdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM dbo.request_logs
+                WHERE user_id = :userId
+                  AND method = N'POST'
+                  AND path IN (
+                      N'/api/vendor/local-login',
+                      N'/api/organizer/local-login',
+                      N'/api/admin/local-login'
+                  )
+                  AND (status_code IS NULL OR status_code < 200 OR status_code >= 300)
+                  AND created_at >= :since
+                """, new MapSqlParameterSource()
+                        .addValue("userId", userId)
+                        .addValue("since", since), Integer.class);
+        return count == null ? 0 : count;
+    }
+
     public Long createLocalUser(String role, String email, String passwordHash) {
         String sql = """
                 INSERT INTO users (role, email, password_hash, provider)

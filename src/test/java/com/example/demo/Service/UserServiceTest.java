@@ -140,6 +140,7 @@ class UserServiceTest {
         assertThat(response.isSuccessStatus()).isTrue();
         verify(userRepository).createUserProfile(20L, "ORGANIZER", "Google User", EMAIL);
         verify(emailService).sendVerificationCode(eq(EMAIL), anyString());
+        verify(notificationService).notifyAdminsOrganizerRegistrationSubmitted(20L, "Google User", EMAIL);
     }
 
     @Test

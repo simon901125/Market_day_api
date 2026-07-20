@@ -25,6 +25,7 @@ class OrganizerServiceEventWithdrawTest {
 
     @Mock OrganizerRepository organizerRepository;
     @Mock JwtService jwtService;
+    @Mock NotificationService notificationService;
     @InjectMocks OrganizerService organizerService;
 
     @BeforeEach
@@ -33,7 +34,8 @@ class OrganizerServiceEventWithdrawTest {
         when(jwtService.isTokenValid("valid-token")).thenReturn(true);
         when(jwtService.getEmail("valid-token")).thenReturn("organizer@example.com");
         when(organizerRepository.findOrganizerAccountByEmail("organizer@example.com"))
-                .thenReturn(Optional.of(new LinkedHashMap<>(Map.of("userId", 7L, "role", "ORGANIZER"))));
+                .thenReturn(Optional.of(new LinkedHashMap<>(Map.of(
+                        "userId", 7L, "role", "ORGANIZER", "organizerName", "測試主辦方"))));
     }
 
     @Test
@@ -49,6 +51,10 @@ class OrganizerServiceEventWithdrawTest {
         assertThat(response.getData().status()).isEqualTo("draft");
         assertThat(response.getData().availableActions())
                 .containsExactly("EDIT", "SUBMIT_REVIEW", "DELETE");
+        verify(notificationService).notifyAdminsEventReviewWithdrawn(
+                EVENT_ID, "測試活動", "測試主辦方");
+        verify(notificationService).notifyOrganizerApplicationResubmitted(
+                7L, EVENT_ID, "測試活動");
     }
 
     @Test
@@ -86,6 +92,7 @@ class OrganizerServiceEventWithdrawTest {
     private Map<String, Object> event(String workflowStatus) {
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("eventId", EVENT_ID);
+        event.put("eventTitle", "測試活動");
         event.put("workflowStatus", workflowStatus);
         event.put("reviewNote", "保留原補件原因");
         return event;

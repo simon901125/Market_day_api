@@ -126,6 +126,27 @@ class NotificationServiceTest {
     }
 
     @Test
+    void organizerEventWithdrawalAndCancellationUseRequestedTypes() {
+        notificationService.notifyOrganizerApplicationResubmitted(30L, 50L, "測試活動");
+        notificationService.notifyOrganizerEventCancelled(30L, 50L, "測試活動");
+
+        ArgumentCaptor<NotificationCreateCommand> captor = ArgumentCaptor.forClass(NotificationCreateCommand.class);
+        verify(notificationRepository, times(2)).create(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(NotificationCreateCommand::type)
+                .containsExactly(
+                        NotificationType.APPLICATION_RESUBMITTED,
+                        NotificationType.EVENT_CANCELLED);
+        assertThat(captor.getAllValues()).allSatisfy(command -> {
+            assertThat(command.userId()).isEqualTo(30L);
+            assertThat(command.targetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
+            assertThat(command.targetId()).isEqualTo(50L);
+            assertThat(command.content()).contains("測試活動");
+            assertThat(command.dedupKey()).isNotBlank();
+        });
+    }
+
+    @Test
     void refundLifecycleNotificationsUseRecipientSpecificDedupKeys() {
         notificationService.notifyRefundProcessingToVendor(10L, 40L, "夏日市集");
         notificationService.notifyRefundSucceededToVendor(10L, 40L, "夏日市集");
@@ -151,7 +172,7 @@ class NotificationServiceTest {
         when(userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE))
                 .thenReturn(List.of(30L, 20L));
 
-        notificationService.notifyAdminsEventSubmitted(50L, "夏日市集", true);
+        notificationService.notifyAdminsEventSubmitted(50L, "夏日市集", "森林手作坊", true);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<NotificationCreateCommand>> captor = ArgumentCaptor.forClass(Collection.class);
@@ -167,10 +188,11 @@ class NotificationServiceTest {
     }
 
     @Test
-    void blankEventTitleUsesSafeDisplayName() {
-        notificationService.notifyPaymentStatusChanged(10L, 20L, " ", false);
-
-        assertThat(capturedCommand().content()).startsWith("活動");
+    void blankEventTitleIsRejectedInsteadOfCreatingGenericNotification() {
+        assertThatThrownBy(() -> notificationService.notifyPaymentStatusChanged(10L, 20L, " ", false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Event title");
+        verify(notificationRepository, never()).create(any());
     }
 
     @Test
