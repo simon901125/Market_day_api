@@ -263,7 +263,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     @Override
     public AdminEventDetailDto getEventDetail(@NonNull Long eventId, int pageSize) throws IllegalArgumentException {
         // ----------撈資料----------
-        AdminEventDetailProjection event = eventRepo.findEventDetailById(eventId)
+        AdminEventDetailProjection event = eventRepo.findEventDetailById(eventId)  //不會撈到草稿和取消狀態的活動
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
         List<EventStallZone> zones = eventStallZoneRepo.findByMarketEventId(eventId);
         List<CategoryResponse> categories = Optional.ofNullable(eventRepo.findCategoriesByEventId(eventId))
@@ -404,7 +404,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
     @Override
     public AdminVenderDetailDto getVenderDetail(@NonNull Long userId, int pageSize) {
         // ----------撈資料----------
-        AdminVenderDetailProjection profile = userRepo.findVenderDetailById(userId)
+        AdminVenderDetailProjection profile = userRepo.findVenderDetailById(userId) //只能撈到攤主
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的攤主"));
 
         LocalDateTime now = LocalDateTime.now();
@@ -674,36 +674,13 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         return response;
     }
 
-    /**
-     * 依原始targetType、操作對象角色(僅targetType=USER時有值)換算成前端顯示用的AdminTargetTypeForFront。<br>
-     * AdminTargetTypeForFront沒有對應任何資料庫欄位，Hibernate無法在CriteriaBuilder裡處理這個型別，
-     * 因此改成在tuple查詢只撈原始的targetType/role，這裡用一般Java程式碼換算。
-     */
-    private AdminTargetTypeForFront toTargetTypeForFront(AdminTargetType targetType, Role targetUserRole) {
-        return switch (targetType) {
-            case SYSTEM_SETTING -> AdminTargetTypeForFront.SYSTEM_SETTING;
-            case MARKET_EVENT, EVENT_UNPUBLISH_REQUEST -> AdminTargetTypeForFront.MARKET_EVENT;
-            case USER -> switch (targetUserRole) {
-                case ORGANIZER -> AdminTargetTypeForFront.ORGANIZER;
-                case VENDOR -> AdminTargetTypeForFront.VENDOR;
-                case ADMIN -> null;
-                case null -> null;
-            };
-        };
-    }
-
     @Override
     @Transactional
     public UserStatusChangeDto setUserAccountDisable(Long userId, String operatorEmail, Role operatorRole) {
         if (userId == null) {
             throw new IllegalArgumentException("請提供使用者id");
         }
-        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
-        }
-
-        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+        AdminLookupProjection admin = validateAdminOperator(operatorEmail, operatorRole);
 
         UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的帳號: id:"+ userId));
@@ -718,30 +695,20 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(targetLabel + "的帳號狀態不可執行此操作");
         }
 
-        AdminOperationLog adminLog = new AdminOperationLog();
-        adminLog.setUser(userRepo.getReferenceById(admin.id()));
-        adminLog.setOperationType(AdminOperationType.ACCOUNT_DISABLED);
-        adminLog.setTargetType(AdminTargetType.USER);
-        adminLog.setTargetId(userId);
-        adminLog.setTargetLabel(targetLabel);
-        adminLog.setContent(admin.adminName() + "停用" + targetLabel + "的帳號");
-        logRepo.save(adminLog);
+        saveAdminLog(
+                userRepo.getReferenceById(admin.id()), AdminOperationType.ACCOUNT_DISABLED, AdminTargetType.USER,
+                userId, targetLabel, admin.adminName() + "停用" + targetLabel + "的帳號");
 
         return new UserStatusChangeDto(target.contactName(), target.email(), newStatus);
     }
 
     @Override
-    @Transactional 
+    @Transactional
     public UserStatusChangeDto setUserAccountRestore(Long userId, String operatorEmail, Role operatorRole) {
         if (userId == null) {
             throw new IllegalArgumentException("請提供使用者id");
         }
-        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
-        }
-
-        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+        AdminLookupProjection admin = validateAdminOperator(operatorEmail, operatorRole);
 
         UserAccountStatusProjection target = userRepo.findAccountStatusById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的帳號: id:"+ userId));
@@ -756,14 +723,9 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(targetLabel + "的帳號狀態不可執行此操作");
         }
 
-        AdminOperationLog adminLog = new AdminOperationLog();
-        adminLog.setUser(userRepo.getReferenceById(admin.id()));
-        adminLog.setOperationType(AdminOperationType.ACCOUNT_RESTORED);
-        adminLog.setTargetType(AdminTargetType.USER);
-        adminLog.setTargetId(userId);
-        adminLog.setTargetLabel(targetLabel);
-        adminLog.setContent(admin.adminName() + "恢復" + targetLabel + "的帳號");
-        logRepo.save(adminLog);
+        saveAdminLog(
+                userRepo.getReferenceById(admin.id()), AdminOperationType.ACCOUNT_RESTORED, AdminTargetType.USER,
+                userId, targetLabel, admin.adminName() + "恢復" + targetLabel + "的帳號");
 
         return new UserStatusChangeDto(target.contactName(), target.email(), newStatus);
     }
@@ -774,12 +736,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         if (eventId == null) {
             throw new IllegalArgumentException("請提供活動id");
         }
-        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
-        }
-
-        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+        AdminLookupProjection admin = validateAdminOperator(operatorEmail, operatorRole);
 
         EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
@@ -797,24 +754,14 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "狀態已變更，請重新載入後再操作");
         }
 
-        Notification notification = new Notification();
-        notification.setUser(userRepo.getReferenceById(event.organizerId()));
-        notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType(NotificationType.EVENT_APPROVED);
-        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
-        notification.setTargetId(eventId);
-        notification.setTitle("審核通過");
-        notification.setContent(event.title() + "審核通過，開始建置攤位地圖");
-        notificationRepo.save(notification);
+        saveNotification(
+                userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
+                NotificationType.EVENT_APPROVED, NotificationTargetType.MARKET_EVENT, eventId,
+                "審核通過", event.title() + "審核通過，開始建置攤位地圖");
 
-        AdminOperationLog adminLog = new AdminOperationLog();
-        adminLog.setUser(userRepo.getReferenceById(admin.id()));
-        adminLog.setOperationType(AdminOperationType.ACTIVITY_REVIEW);
-        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
-        adminLog.setTargetId(eventId);
-        adminLog.setTargetLabel(event.title());
-        adminLog.setContent(admin.adminName() + "同意" + event.title() + "申請");
-        logRepo.save(adminLog);
+        saveAdminLog(
+                userRepo.getReferenceById(admin.id()), AdminOperationType.ACTIVITY_REVIEW, AdminTargetType.MARKET_EVENT,
+                eventId, event.title(), admin.adminName() + "同意" + event.title() + "申請");
 
         return new EventStatusChangeDto(event.title(), EventStatus.MAP_BUILDING);
     }
@@ -825,12 +772,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         if (eventId == null) {
             throw new IllegalArgumentException("請提供活動id");
         }
-        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
-        }
-
-        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+        AdminLookupProjection admin = validateAdminOperator(operatorEmail, operatorRole);
 
         if (note == null || note.isBlank()) {
             throw new IllegalArgumentException("請提供補件原因");
@@ -849,24 +791,14 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "狀態已變更，請重新載入後再操作");
         }
 
-        Notification notification = new Notification();
-        notification.setUser(userRepo.getReferenceById(event.organizerId()));
-        notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType(NotificationType.EVENT_REVISION_REQUIRED);
-        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
-        notification.setTargetId(eventId);
-        notification.setTitle("補件通知");
-        notification.setContent(event.title() + "需要補件，請修改後重新送出審核");
-        notificationRepo.save(notification);
+        saveNotification(
+                userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
+                NotificationType.EVENT_REVISION_REQUIRED, NotificationTargetType.MARKET_EVENT, eventId,
+                "補件通知", event.title() + "需要補件，請修改後重新送出審核");
 
-        AdminOperationLog adminLog = new AdminOperationLog();
-        adminLog.setUser(userRepo.getReferenceById(admin.id()));
-        adminLog.setOperationType(AdminOperationType.REQUEST_REVISION);
-        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
-        adminLog.setTargetId(eventId);
-        adminLog.setTargetLabel(event.title());
-        adminLog.setContent(admin.adminName() + "退回" + event.title() + "申請, 原因:" + note);
-        logRepo.save(adminLog);
+        saveAdminLog(
+                userRepo.getReferenceById(admin.id()), AdminOperationType.REQUEST_REVISION, AdminTargetType.MARKET_EVENT,
+                eventId, event.title(), admin.adminName() + "退回" + event.title() + "申請, 原因:" + note);
 
         return new EventStatusChangeDto(event.title(), EventStatus.REVISION_REQUIRED);
     }
@@ -877,12 +809,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         if (eventId == null) {
             throw new IllegalArgumentException("請提供活動id");
         }
-        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
-        }
-
-        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+        AdminLookupProjection admin = validateAdminOperator(operatorEmail, operatorRole);
 
         EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
@@ -947,27 +874,17 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             }
         }
 
-        Notification notification = new Notification();
-        notification.setUser(userRepo.getReferenceById(event.organizerId()));
-        notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType(NotificationType.EVENT_MAP_COMPLETED);
-        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
-        notification.setTargetId(eventId);
-        notification.setTitle("地圖完成");
-        notification.setContent(event.title() + "攤位地圖已建置完成，可前往活動詳情確認");
-        notificationRepo.save(notification);
+        saveNotification(
+                userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
+                NotificationType.EVENT_MAP_COMPLETED, NotificationTargetType.MARKET_EVENT, eventId,
+                "地圖完成", event.title() + "攤位地圖已建置完成，可前往活動詳情確認");
 
         String organizerLabel = event.organizerContactName() != null ? event.organizerContactName() : "主辦方";
         String eventTitleLabel = event.title() != null ? event.title() : "活動";
 
-        AdminOperationLog adminLog = new AdminOperationLog();
-        adminLog.setUser(userRepo.getReferenceById(admin.id()));
-        adminLog.setOperationType(AdminOperationType.MAP_BUILD_COMPLETED);
-        adminLog.setTargetType(AdminTargetType.MARKET_EVENT);
-        adminLog.setTargetId(eventId);
-        adminLog.setTargetLabel(event.title());
-        adminLog.setContent(admin.adminName() + "通知主辦方" + organizerLabel + " " + eventTitleLabel + "地圖建置完成");
-        logRepo.save(adminLog);
+        saveAdminLog(
+                userRepo.getReferenceById(admin.id()), AdminOperationType.MAP_BUILD_COMPLETED, AdminTargetType.MARKET_EVENT,
+                eventId, event.title(), admin.adminName() + "通知主辦方" + organizerLabel + " " + eventTitleLabel + "地圖建置完成");
 
         return new EventStatusChangeDto(event.title(), EventStatus.READY_TO_PUBLISH);
     }
@@ -995,12 +912,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         if (eventId == null) {
             throw new IllegalArgumentException("請提供活動id");
         }
-        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
-        }
-
-        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+        AdminLookupProjection admin = validateAdminOperator(operatorEmail, operatorRole);
 
         EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
@@ -1016,15 +928,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElse(null);
 
         if (unpublishRequestId == null) {
-            Notification exceptionNotification = new Notification();
-            exceptionNotification.setUser(adminRef);
-            exceptionNotification.setCategory(NotificationCategory.EXCEPTION);
-            exceptionNotification.setType(NotificationType.SYSTEM_EXCEPTION);
-            exceptionNotification.setTargetType(NotificationTargetType.MARKET_EVENT);
-            exceptionNotification.setTargetId(eventId);
-            exceptionNotification.setTitle("活動狀態異常");
-            exceptionNotification.setContent(event.title() + "活動狀態為申請下架，資料庫查無該活動下架申請單");
-            notificationRepo.save(exceptionNotification);
+            saveNotification(
+                    adminRef, NotificationCategory.EXCEPTION, NotificationType.SYSTEM_EXCEPTION,
+                    NotificationTargetType.MARKET_EVENT, eventId,
+                    "活動狀態異常", event.title() + "活動狀態為申請下架，資料庫查無該活動下架申請單");
 
             throw new IllegalArgumentException("找不到該活動的下架申請");
         }
@@ -1041,24 +948,14 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "下架申請狀態已變更，請重新載入後再操作");
         }
 
-        Notification notification = new Notification();
-        notification.setUser(userRepo.getReferenceById(event.organizerId()));
-        notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType(NotificationType.EVENT_UNPUBLISHED);
-        notification.setTargetType(NotificationTargetType.MARKET_EVENT);
-        notification.setTargetId(eventId);
-        notification.setTitle("活動下架");
-        notification.setContent(event.title() + "活動已下架");
-        notificationRepo.save(notification);
+        saveNotification(
+                userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
+                NotificationType.EVENT_UNPUBLISHED, NotificationTargetType.MARKET_EVENT, eventId,
+                "活動下架", event.title() + "活動已下架");
 
-        AdminOperationLog adminLog = new AdminOperationLog();
-        adminLog.setUser(adminRef);
-        adminLog.setOperationType(AdminOperationType.EVENT_UNPUBLISH_REVIEW);
-        adminLog.setTargetType(AdminTargetType.EVENT_UNPUBLISH_REQUEST);
-        adminLog.setTargetId(unpublishRequestId);
-        adminLog.setTargetLabel(event.title());
-        adminLog.setContent(admin.adminName() + "審核通過" + event.title() + "活動下架申請");
-        logRepo.save(adminLog);
+        saveAdminLog(
+                adminRef, AdminOperationType.EVENT_UNPUBLISH_REVIEW, AdminTargetType.EVENT_UNPUBLISH_REQUEST,
+                unpublishRequestId, event.title(), admin.adminName() + "審核通過" + event.title() + "活動下架申請");
 
         return new EventStatusChangeDto(event.title(), EventStatus.UNPUBLISHED);
     }
@@ -1080,12 +977,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         if (unpublishRequestId == null) {
             throw new IllegalArgumentException("請提供下架申請id");
         }
-        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
-            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
-        }
-
-        AdminLookupProjection admin = userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
-                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+        AdminLookupProjection admin = validateAdminOperator(operatorEmail, operatorRole);
 
         if (note == null || note.isBlank()) {
             throw new IllegalArgumentException("請提供補件原因");
@@ -1119,25 +1011,15 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(review.eventName() + "下架申請狀態已變更，請重新載入後再操作");
         }
 
-        Notification notification = new Notification();
-        notification.setUser(userRepo.getReferenceById(review.userId()));
-        notification.setCategory(NotificationCategory.EVENT_CHANGE);
-        notification.setType(NotificationType.EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED);
-        notification.setTargetType(NotificationTargetType.EVENT_UNPUBLISH_REQUEST);
-        notification.setTargetId(unpublishRequestId);
-        notification.setTitle("補件通知");
-        notification.setContent(
+        saveNotification(
+                userRepo.getReferenceById(review.userId()), NotificationCategory.EVENT_CHANGE,
+                NotificationType.EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED, NotificationTargetType.EVENT_UNPUBLISH_REQUEST,
+                unpublishRequestId, "補件通知",
                 review.eventName() + "的下架申請需要補件，請修改後重新送出審核，若有問題請洽公司聯絡電話");
-        notificationRepo.save(notification);
 
-        AdminOperationLog adminLog = new AdminOperationLog();
-        adminLog.setUser(adminRef);
-        adminLog.setOperationType(AdminOperationType.REQUEST_REVISION);
-        adminLog.setTargetType(AdminTargetType.EVENT_UNPUBLISH_REQUEST);
-        adminLog.setTargetId(unpublishRequestId);
-        adminLog.setTargetLabel(review.eventName());
-        adminLog.setContent(admin.adminName() + "退回" + review.eventName() + "下架申請, 原因:" + note);
-        logRepo.save(adminLog);
+        saveAdminLog(
+                adminRef, AdminOperationType.REQUEST_REVISION, AdminTargetType.EVENT_UNPUBLISH_REQUEST,
+                unpublishRequestId, review.eventName(), admin.adminName() + "退回" + review.eventName() + "下架申請, 原因:" + note);
 
         return new EventStatusChangeDto(review.eventName(), EventStatus.PUBLISHED);
     }
@@ -1210,6 +1092,62 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             return hasRefundedAt ? RefundStatus.REFUNDED.getStatus() : RefundStatus.REFUNDING.getStatus();
         }
         return paymentStatus == null ? null : paymentStatus.getStatus();
+    }
+
+    /**
+     * 依原始targetType、操作對象角色(僅targetType=USER時有值)換算成前端顯示用的AdminTargetTypeForFront。<br>
+     * AdminTargetTypeForFront沒有對應任何資料庫欄位，Hibernate無法在CriteriaBuilder裡處理這個型別，
+     * 因此改成在tuple查詢只撈原始的targetType/role，這裡用一般Java程式碼換算。
+     */
+    private AdminTargetTypeForFront toTargetTypeForFront(AdminTargetType targetType, Role targetUserRole) {
+        return switch (targetType) {
+            case SYSTEM_SETTING -> AdminTargetTypeForFront.SYSTEM_SETTING;
+            case MARKET_EVENT, EVENT_UNPUBLISH_REQUEST -> AdminTargetTypeForFront.MARKET_EVENT;
+            case USER -> switch (targetUserRole) {
+                case ORGANIZER -> AdminTargetTypeForFront.ORGANIZER;
+                case VENDOR -> AdminTargetTypeForFront.VENDOR;
+                case ADMIN -> null;
+                case null -> null;
+            };
+        };
+    }
+
+    /** 驗證操作者為有效管理員，並回傳該管理員資料 */
+    private AdminLookupProjection validateAdminOperator(String operatorEmail, Role operatorRole) {
+        if (operatorEmail == null || operatorEmail.isBlank() || operatorRole != Role.ADMIN) {
+            throw new IllegalArgumentException("權限不足，請重新登入管理員帳號再操作");
+        }
+        return userRepo.findAdminLookupByEmailAndRole(operatorEmail, Role.ADMIN)
+                .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
+    }
+
+    /** 建立並儲存一筆管理員操作紀錄 */
+    private void saveAdminLog(
+            User admin, AdminOperationType operationType, AdminTargetType targetType,
+            Long targetId, String targetLabel, String content) {
+        AdminOperationLog adminLog = new AdminOperationLog();
+        adminLog.setUser(admin);
+        adminLog.setOperationType(operationType);
+        adminLog.setTargetType(targetType);
+        adminLog.setTargetId(targetId);
+        adminLog.setTargetLabel(targetLabel);
+        adminLog.setContent(content);
+        logRepo.save(adminLog);
+    }
+
+    /** 建立並儲存一筆通知 */
+    private void saveNotification(
+            User user, NotificationCategory category, NotificationType type, NotificationTargetType targetType,
+            Long targetId, String title, String content) {
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setCategory(category);
+        notification.setType(type);
+        notification.setTargetType(targetType);
+        notification.setTargetId(targetId);
+        notification.setTitle(title);
+        notification.setContent(content);
+        notificationRepo.save(notification);
     }
 
     /**
