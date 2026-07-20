@@ -96,6 +96,10 @@ public class OrganizerRefundService {
 
         Long refundId = toLong(refund.get("refundId"));
         paymentRepository.markRefundProcessing(refundId);
+        notificationService.notifyRefundProcessingToVendor(
+                toLong(refund.get("vendorUserId")),
+                refundId,
+                stringValue(refund.get("eventName")));
 
         try {
             NewebPayRefundResultResponse newebpayResult = newebPayService.closeCreditCardRefund(
@@ -197,6 +201,10 @@ public class OrganizerRefundService {
 
     private void notifyRefundFailed(Map<String, Object> refund) {
         Long refundId = toLong(refund.get("refundId"));
+        notificationService.notifyRefundFailedToVendor(
+                toLong(refund.get("vendorUserId")),
+                refundId,
+                stringValue(refund.get("eventName")));
         notificationService.notifyRefundFailedToOrganizer(
                 toLong(refund.get("organizerUserId")),
                 refundId,

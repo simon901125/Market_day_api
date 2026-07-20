@@ -335,7 +335,7 @@ public class OrganizerController {
         return organizerService.getOrganizerApplicationDetail(authorizationHeader, id);
     }
 
-    @Operation(summary = "審核通過主辦方報名", description = "主辦方審核通過指定報名。")
+    @Operation(summary = "審核通過攤主報名", description = "主辦方審核通過指定攤主的活動報名申請。")
     @PostMapping("/api/organizer/applications/{id}/approve")
     public ApiResponse<MapBackedResponse> approveOrganizerApplication(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -343,7 +343,7 @@ public class OrganizerController {
         return organizerService.approveOrganizerApplication(authorizationHeader, id);
     }
 
-    @Operation(summary = "退回主辦方報名", description = "主辦方退回指定報名並可填寫審核原因。")
+    @Operation(summary = "審核未通過攤主報名", description = "主辦方將指定攤主的活動報名設為審核未通過，並填寫未通過原因。")
     @PostMapping("/api/organizer/applications/{id}/reject")
     public ApiResponse<MapBackedResponse> rejectOrganizerApplication(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,

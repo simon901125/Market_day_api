@@ -654,6 +654,7 @@ public class OrganizerRepository {
                 SELECT
                     e.id AS eventId,
                     e.title AS eventTitle,
+                    e.cover_image_url AS coverImageUrl,
                     e.workflow_status AS publishStatus,
                     e.start_at AS eventStartAt,
                     e.end_at AS eventEndAt,
@@ -706,6 +707,7 @@ public class OrganizerRepository {
                 GROUP BY
                     e.id,
                     e.title,
+                    e.cover_image_url,
                     e.workflow_status,
                     e.start_at,
                     e.end_at,
@@ -1547,6 +1549,7 @@ public class OrganizerRepository {
                 SELECT
                     e.id AS eventId,
                     e.title AS eventTitle,
+                    e.cover_image_url AS coverImageUrl,
                     e.location_name AS locationName,
                     e.city,
                     e.district,

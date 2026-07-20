@@ -390,6 +390,10 @@ public class OrganizerService {
         if (organizerRepository.submitOrganizerEventReview(organizerUserId, eventId) != 1) {
             return ApiResponse.fail(409, "Event cannot be submitted in its current workflow status");
         }
+        notificationService.notifyAdminsEventSubmitted(
+                eventId,
+                normalizeText(event.get("eventTitle")),
+                workflowStatus == WorkflowStatus.REVISION_REQUIRED);
 
         return ApiResponse.success("Organizer event submitted for review successfully",
                 new OrganizerEventSubmitReviewResponse(
@@ -1877,6 +1881,7 @@ public class OrganizerService {
         return orderedMap(
                 "eventId", account.get("eventId"),
                 "eventTitle", account.get("eventTitle"),
+                "coverImageUrl", account.get("coverImageUrl"),
                 "publishStatus", account.get("publishStatus"),
                 "publishStatusText", account.get("publishStatusText"),
                 "statusNote", account.get("statusNote"),
@@ -1937,6 +1942,7 @@ public class OrganizerService {
 
     private Map<String, Object> toAccountingPaymentDetailResponse(Map<String, Object> payment) {
         return orderedMap(
+                "applicationId", payment.get("applicationId"),
                 "paymentNo", payment.get("paymentNo"),
                 "brandName", payment.get("brandName"),
                 "contactName", payment.get("contactName"),
@@ -2032,6 +2038,7 @@ public class OrganizerService {
         return orderedMap(
                 "eventId", event.get("eventId"),
                 "eventTitle", event.get("eventTitle"),
+                "coverImageUrl", event.get("coverImageUrl"),
                 "status", event.get("status"),
                 "statusNote", event.get("statusNote"),
                 "eventTime", formatEventDateTimeRange(event.get("eventStartAt"), event.get("eventEndAt")),
@@ -2409,7 +2416,9 @@ public class OrganizerService {
                         application.get("vendorAddress"))));
 
         response.put("brand", orderedMap(
+                "brandId", application.get("vendorProfileId"),
                 "brandName", application.get("vendorName"),
+                "avatarImageUrl", application.get("vendorAvatarUrl"),
                 "category", vendorCategory(toLong(application.get("vendorProfileId"))),
                 "brandDescription", application.get("brandDescription")));
 
