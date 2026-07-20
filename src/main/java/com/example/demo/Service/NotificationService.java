@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.HexFormat;
 import java.util.HashMap;
@@ -496,6 +497,26 @@ public class NotificationService {
                         dedupKey(userId, type, NotificationTargetType.MARKET_EVENT, eventId, null)))
                 .toList());
     }
+    public void notifyLoginAnomaly(Long userId, String email) {
+        String window = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHH"));
+        String content = "帳號 " + email + " 在 10 分鐘內發生多次登入失敗，若非本人操作請立即重設密碼";
+        List<Long> recipients = userRepo.findIdsByRoleAndStatus(Role.ADMIN, UserStatus.ACTIVE);
+        createAll(recipients.stream()
+                .distinct()
+                .sorted()
+                .map(recipientId -> new NotificationCreateCommand(
+                        recipientId,
+                        NotificationCategory.SYSTEM,
+                        NotificationType.LOGIN_ANOMALY,
+                        NotificationTargetType.SYSTEM,
+                        null,
+                        "登入異常提醒",
+                        content,
+                        dedupKey(recipientId, NotificationType.LOGIN_ANOMALY,
+                                NotificationTargetType.SYSTEM, null, userId + ":" + window)))
+                .toList());
+    }
+
     private void validate(NotificationCreateCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("Notification command is required");
