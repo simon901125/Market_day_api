@@ -42,7 +42,7 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
         assertThat(categoryIds).hasSize(3);
         for (String categoryName : categoryNames) {
             var request = new MarketSearchRequest("Integration Market", "Taipei",
-                    List.of("籌備中"), LocalDate.now(), LocalDate.now().plusDays(30), List.of(categoryName), "目前活動");
+                    List.of("活動預告"), LocalDate.now(), LocalDate.now().plusDays(30), List.of(categoryName), "目前活動");
             var cards = repository.searchMarketEvents(request);
             assertThat(cards).extracting(card -> card.id()).contains(eventId);
             assertThat(cards.stream().filter(card -> card.id().equals(eventId)).findFirst().orElseThrow().categories())

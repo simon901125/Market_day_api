@@ -42,7 +42,7 @@ class MarketControllerTest {
                         .param("startDate", "2026-08-01")
                         .param("endDate", "2026-08-31")
                         .param("city", "臺北市")
-                        .param("eventStatus", "準備開始")
+                        .param("eventStatus", "即將開始")
                         .param("categoryNames", "餐飲美食,文創手作")
                         .param("page", "2")
                         .param("pageSize", "5"))
