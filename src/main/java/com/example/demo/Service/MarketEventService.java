@@ -108,18 +108,27 @@ public class MarketEventService {
             return true;
         }
 
-        if (request.eventStatuses().stream()
+        List<String> statuses = request.eventStatuses().stream()
                 .filter(status -> status != null && !status.isBlank())
-                .count() > 1) {
+                .map(String::trim)
+                .toList();
+        if (statuses.size() > 1) {
             return false;
         }
 
-        return request.eventStatuses().stream()
-                .filter(status -> status != null && !status.isBlank())
-                .map(String::trim)
-                .allMatch(status -> switch (status) {
-                    case "籌備中", "準備開始", "活動進行中" -> true;
+        boolean validStatuses = statuses.stream().allMatch(status -> switch (status) {
+                    case "活動預告", "即將開始", "進行中", "已結束" -> true;
                     default -> false;
                 });
+        if (!validStatuses || statuses.isEmpty() || request.eventType() == null) {
+            return validStatuses;
+        }
+
+        String eventType = request.eventType().trim();
+        return switch (eventType) {
+            case "目前活動" -> !statuses.contains("已結束");
+            case "歷史活動" -> statuses.contains("已結束");
+            default -> true;
+        };
     }
 }

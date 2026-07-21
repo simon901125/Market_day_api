@@ -255,21 +255,21 @@ public class MarketEventRepository {
             return;
         }
 
-        if (statuses.contains("籌備中") || statuses.contains("準備開始")) {
+        if (statuses.contains("活動預告") || statuses.contains("即將開始")) {
             params.put("startingSoonDays", STARTING_SOON_DAYS);
         }
 
         sql.append(" AND (");
         boolean hasCondition = false;
 
-        if (statuses.contains("籌備中")) {
+        if (statuses.contains("活動預告")) {
             sql.append("""
                     CAST(e.start_at AS DATE) > DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
                     """);
             hasCondition = true;
         }
 
-        if (statuses.contains("準備開始")) {
+        if (statuses.contains("即將開始")) {
             if (hasCondition) {
                 sql.append(" OR ");
             }
@@ -282,7 +282,7 @@ public class MarketEventRepository {
             hasCondition = true;
         }
 
-        if (statuses.contains("活動進行中")) {
+        if (statuses.contains("進行中")) {
             if (hasCondition) {
                 sql.append(" OR ");
             }
@@ -293,6 +293,13 @@ public class MarketEventRepository {
                     )
                     """);
             hasCondition = true;
+        }
+
+        if (statuses.contains("已結束")) {
+            if (hasCondition) {
+                sql.append(" OR ");
+            }
+            sql.append("CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)");
         }
 
         sql.append(")");
@@ -427,11 +434,11 @@ public class MarketEventRepository {
 
         if (startDate != null && today.isBefore(startDate)) {
             return today.plusDays(STARTING_SOON_DAYS).isBefore(startDate)
-                    ? "籌備中"
-                    : "準備開始";
+                    ? "活動預告"
+                    : "即將開始";
         }
 
-        return "活動進行中";
+        return "進行中";
     }
 
     private static String toChineseDayOfWeek(LocalDate date) {
