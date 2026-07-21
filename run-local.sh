@@ -3,6 +3,9 @@
 # Ubuntu Spring Boot launcher.
 # Environment values mirror run-local.cmd.
 
+# Public application URL
+export SWAGGER_PUBLIC_BASE_URL='http://34.80.36.65:8081'
+
 # SQL Server settings
 export DB_USERNAME='sqlserver'
 export DB_PASSWORD='Simon901125'

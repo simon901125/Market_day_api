@@ -18,7 +18,11 @@ public class DemoApplication {
 		Environment env = event.getApplicationContext().getEnvironment();
 		String port = env.getProperty("server.port", "8080");
 		String swaggerPath = env.getProperty("springdoc.swagger-ui.path", "/swagger-ui/index.html");
-		System.out.println("Swagger UI: http://localhost:" + port + swaggerPath);
+		String publicBaseUrl = env.getProperty("app.swagger.public-base-url", "").replaceAll("/+$", "");
+		if (publicBaseUrl.isBlank()) {
+			publicBaseUrl = "http://localhost:" + port;
+		}
+		System.out.println("Swagger UI: " + publicBaseUrl + swaggerPath);
 	}
 
 }
