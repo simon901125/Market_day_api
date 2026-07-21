@@ -154,6 +154,13 @@ public class StallService {
             return ApiResponse.fail("Application has been cancelled");
         }
 
+        if (!"PUBLISHED".equals(stringValue(application.get("workflowStatus")))) {
+            return ApiResponse.fail("Event is not open for stall selection");
+        }
+        if (!isTrue(application.get("selectionOpen"))) {
+            return ApiResponse.fail("Stall selection is not open yet");
+        }
+
         String reviewStatus = stringValue(application.get("reviewStatus"));
         if ("PENDING".equals(reviewStatus)) {
             return ApiResponse.fail("Application review is pending");
@@ -617,7 +624,6 @@ public class StallService {
         if (applicationData.get("currentApplyDate") == null) {
             return ApiResponse.fail("Apply date is not part of this application");
         }
-
         Long vendorUserId = ((Number) vendor.get("userId")).longValue();
         Long applicationUserId = ((Number) applicationData.get("userId")).longValue();
         if (!vendorUserId.equals(applicationUserId)) {
@@ -1215,7 +1221,8 @@ public class StallService {
         if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
             return "待發布";
         }
-        if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
+        if (registrationEndAt != null
+                && !now.toLocalDate().isAfter(registrationEndAt.toLocalDate())) {
             return isOrganizerEventFull(eventData) ? "已額滿" : "報名中";
         }
         if (brandsPublicAt == null || !now.isBefore(brandsPublicAt)) {
@@ -1236,7 +1243,8 @@ public class StallService {
         if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
             return "\u672a\u958b\u59cb\u5831\u540d";
         }
-        if (registrationEndAt != null && now.isAfter(registrationEndAt)) {
+        if (registrationEndAt != null
+                && now.toLocalDate().isAfter(registrationEndAt.toLocalDate())) {
             return "\u5831\u540d\u622a\u6b62";
         }
         return "\u5831\u540d\u4e2d";
@@ -1550,7 +1558,8 @@ public class StallService {
         if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
             return ApiResponse.fail("活動報名尚未開始");
         }
-        if (registrationEndAt != null && now.isAfter(registrationEndAt)) {
+        if (registrationEndAt != null
+                && now.toLocalDate().isAfter(registrationEndAt.toLocalDate())) {
             return ApiResponse.fail("活動報名已結束");
         }
 
