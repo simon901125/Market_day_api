@@ -143,6 +143,12 @@ public class StallRepository {
                     a.review_status AS reviewStatus,
                     a.payment_status AS paymentStatus,
                     a.is_cancelled AS isCancelled,
+                    e.workflow_status AS workflowStatus,
+                    CAST(CASE
+                        WHEN e.workflow_status = N'PUBLISHED'
+                         AND CAST(SYSDATETIME() AS date) <= CAST(e.registration_end_at AS date)
+                        THEN 1 ELSE 0
+                    END AS BIT) AS selectionOpen,
                     date_counts.applicationDateCount,
                     date_counts.selectedStallCount
                 FROM dbo.event_applications a
@@ -725,6 +731,7 @@ public class StallRepository {
                     e.start_at AS startAt,
                     e.end_at AS endAt,
                     e.end_at AS eventEndAt,
+                    e.workflow_status AS workflowStatus,
                     refund_data.refundStatus
                 FROM dbo.event_applications a
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
@@ -890,7 +897,8 @@ public class StallRepository {
                     e.end_at AS endAt
                 FROM dbo.market_events e
                 WHERE e.id = :eventId
-                  AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW')
+                  AND e.workflow_status IN (N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                  AND e.brands_public_at IS NOT NULL
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1012,7 +1020,8 @@ public class StallRepository {
                 LEFT JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
                 LEFT JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
                 WHERE s.event_id = :eventId
-                  AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW')
+                  AND e.workflow_status IN (N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                  AND e.brands_public_at IS NOT NULL
                 ORDER BY z.zone_name ASC, s.stall_no ASC
                 """;
 
@@ -1067,7 +1076,7 @@ public class StallRepository {
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
                     CASE
-                        WHEN GETDATE() > e.registration_end_at THEN 0
+                        WHEN CAST(GETDATE() AS date) > CAST(e.registration_end_at AS date) THEN 0
                         ELSE DATEDIFF(DAY, CONVERT(date, GETDATE()), CONVERT(date, e.registration_end_at))
                     END AS registrationDaysRemaining,
                     e.base_fee AS baseFee,
@@ -1088,7 +1097,8 @@ public class StallRepository {
                     ON op.user_profile_id = up.id
 
                 WHERE e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
-                        AND GETDATE() BETWEEN e.registration_start_at AND e.registration_end_at
+                        AND GETDATE() >= e.registration_start_at
+                        AND CAST(GETDATE() AS date) <= CAST(e.registration_end_at AS date)
                         """);
 
         Map<String, Object> params = new HashMap<>();
@@ -1153,7 +1163,7 @@ public class StallRepository {
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
                     CASE
-                        WHEN GETDATE() > e.registration_end_at THEN 0
+                        WHEN CAST(GETDATE() AS date) > CAST(e.registration_end_at AS date) THEN 0
                         ELSE DATEDIFF(DAY, CONVERT(date, GETDATE()), CONVERT(date, e.registration_end_at))
                     END AS registrationDaysRemaining,
                     e.max_booths AS maxBooths,
@@ -1179,7 +1189,8 @@ public class StallRepository {
                 LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
                 WHERE e.id = :eventId
                   AND e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
-                  AND GETDATE() BETWEEN e.registration_start_at AND e.registration_end_at
+                  AND GETDATE() >= e.registration_start_at
+                  AND CAST(GETDATE() AS date) <= CAST(e.registration_end_at AS date)
                 """;
         return RepositoryResultMapper.normalizeOptional(
                 namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)).stream().findFirst());
