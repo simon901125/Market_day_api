@@ -33,7 +33,7 @@ public class AutomaticStallAssignmentRepository {
                 SELECT event.id
                 FROM dbo.market_events event
                 WHERE event.workflow_status = N'PUBLISHED'
-                  AND event.registration_end_at <= :now
+                  AND CAST(event.registration_end_at AS date) < CAST(:now AS date)
                 ORDER BY event.registration_end_at, event.id
                 """;
         return jdbcTemplate.query(
@@ -50,7 +50,7 @@ public class AutomaticStallAssignmentRepository {
                 FROM dbo.market_events event WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
                 WHERE event.id = :eventId
                   AND event.workflow_status = N'PUBLISHED'
-                  AND event.registration_end_at <= :now
+                  AND CAST(event.registration_end_at AS date) < CAST(:now AS date)
                 """;
         List<AssignmentEvent> rows = jdbcTemplate.query(
                 sql,
@@ -91,6 +91,17 @@ public class AutomaticStallAssignmentRepository {
                         rs.getLong("applicationDateId"),
                         rs.getLong("applicationId"),
                         rs.getDate("applyDate").toLocalDate()));
+    }
+
+    public int cancelUnpaidApplications(Long eventId) {
+        String sql = """
+                UPDATE dbo.event_applications
+                SET is_cancelled = 1
+                WHERE event_id = :eventId
+                  AND payment_status <> N'PAID'
+                  AND is_cancelled = 0
+                """;
+        return jdbcTemplate.update(sql, new MapSqlParameterSource("eventId", eventId));
     }
 
     public Long findFirstAvailableStall(Long eventId, LocalDate applyDate) {
@@ -201,13 +212,16 @@ public class AutomaticStallAssignmentRepository {
                         rs.getString("brandName")));
     }
 
-    public int finishFinalReview(Long eventId) {
+    public int finishFinalReview(Long eventId, LocalDateTime publishedAt) {
         String sql = """
                 UPDATE dbo.market_events
-                SET workflow_status = N'FINAL_REVIEW'
+                SET workflow_status = N'FINAL_REVIEW',
+                    brands_public_at = COALESCE(brands_public_at, :publishedAt)
                 WHERE id = :eventId
                   AND workflow_status = N'PUBLISHED'
                 """;
-        return jdbcTemplate.update(sql, new MapSqlParameterSource("eventId", eventId));
+        return jdbcTemplate.update(sql, new MapSqlParameterSource()
+                .addValue("eventId", eventId)
+                .addValue("publishedAt", publishedAt));
     }
 }

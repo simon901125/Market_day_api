@@ -173,7 +173,16 @@ class OrganizerServiceTest {
                 "zoneName", "A區",
                 "width", new BigDecimal("3"),
                 "length", new BigDecimal("3"))));
-        when(repository.findApplicationEquipmentRentals(applicationId)).thenReturn(List.of());
+        when(repository.findApplicationEquipmentRentals(applicationId)).thenReturn(List.of(Map.of(
+                "equipmentRentalId", 81L,
+                "equipmentName", "桌子 180×60 公分",
+                "equipmentDescription", "每日計費。",
+                "quantity", 1,
+                "pricingUnit", "DAY",
+                "rentalFee", new BigDecimal("100"),
+                "subtotal", new BigDecimal("200"),
+                "chargeType", "PAID",
+                "itemType", "EQUIPMENT")));
         when(repository.findApplicationStatusLogs(applicationId)).thenReturn(List.of());
 
         Map<String, Object> response = service.buildApplicationDetailResponse(applicationId, application);
@@ -190,8 +199,14 @@ class OrganizerServiceTest {
         assertThat((Map<String, Object>) response.get("refund"))
                 .containsEntry("refundStatusText", "已退款")
                 .containsEntry("refundNo", "REF-008");
-        assertThat((Map<String, Object>) response.get("equipmentRentals"))
+        Map<String, Object> equipmentRentals = (Map<String, Object>) response.get("equipmentRentals");
+        assertThat(equipmentRentals)
                 .containsKeys("freeEquipments", "freeBasicPower", "rentalEquipments", "extraPower");
+        List<Map<String, Object>> rentalEquipments =
+                (List<Map<String, Object>>) equipmentRentals.get("rentalEquipments");
+        assertThat(rentalEquipments).hasSize(1);
+        assertThat(rentalEquipments.getFirst())
+                .containsEntry("unitPrice", new BigDecimal("100"));
     }
     @Test void paymentDetailContainsAllSectionsAndOmitsRefundWhenAbsent() {
         Long applicationId = 12L;

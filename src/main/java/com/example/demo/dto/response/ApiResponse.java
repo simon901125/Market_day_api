@@ -287,6 +287,12 @@ public class ApiResponse<T> {
                 "\u6b64\u7533\u8acb\u4e0d\u5c6c\u65bc\u76ee\u524d\u767b\u5165\u5e33\u865f";
             case "Application is not selectable for stall map" ->
                 "\u6b64\u7533\u8acb\u76ee\u524d\u4e0d\u80fd\u67e5\u770b\u9078\u4f4d\u5730\u5716";
+            case "Event is not open for stall selection" ->
+                "\u6d3b\u52d5\u6d41\u7a0b\u5c1a\u672a\u958b\u653e\u9078\u4f4d";
+            case "Stall selection is not open yet" ->
+                "\u5c1a\u672a\u5230\u9078\u4f4d\u8cc7\u8a0a\u516c\u958b\u6642\u9593";
+            case "Stall map is not available yet" ->
+                "\u5c1a\u672a\u5230\u6524\u4f4d\u5730\u5716\u8cc7\u8a0a\u516c\u958b\u6642\u9593";
             case "Application is not approved, paid, or selectable" ->
                 "\u6b64\u7533\u8acb\u5c1a\u672a\u901a\u904e\u5be9\u6838\u3001\u5c1a\u672a\u4ed8\u6b3e\u6216\u4e0d\u80fd\u9078\u4f4d";
             case "Application review is pending" -> "\u7533\u8acb\u5c1a\u5f85\u4e3b\u8fa6\u65b9\u5be9\u6838";

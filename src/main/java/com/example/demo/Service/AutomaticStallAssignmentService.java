@@ -33,6 +33,8 @@ public class AutomaticStallAssignmentService {
             return false;
         }
 
+        repository.cancelUnpaidApplications(eventId);
+
         Set<Long> changedApplicationIds = new LinkedHashSet<>();
         boolean allocationBlocked = false;
         List<PendingDate> pendingDates = repository.findPendingDates(eventId);
@@ -68,6 +70,6 @@ public class AutomaticStallAssignmentService {
             return false;
         }
 
-        return repository.finishFinalReview(eventId) == 1;
+        return repository.finishFinalReview(eventId, now) == 1;
     }
 }

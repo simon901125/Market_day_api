@@ -104,7 +104,7 @@ public class NotificationService {
      */
     public void create(NotificationCreateCommand command) {
         validate(command);
-        notificationRepository.create(command);
+        notificationRepository.create(withPublicContent(command));
     }
 
     /**
@@ -117,7 +117,29 @@ public class NotificationService {
             throw new IllegalArgumentException("Notification commands are required");
         }
         commands.forEach(this::validate);
-        notificationRepository.createAll(commands);
+        notificationRepository.createAll(commands.stream()
+                .map(this::withPublicContent)
+                .toList());
+    }
+
+    private NotificationCreateCommand withPublicContent(NotificationCreateCommand command) {
+        if (command.targetId() == null || command.content() == null) {
+            return command;
+        }
+        return new NotificationCreateCommand(
+                command.userId(),
+                command.category(),
+                command.type(),
+                command.targetType(),
+                command.targetId(),
+                command.title(),
+                removeStandaloneTargetId(command.content(), command.targetId()),
+                command.dedupKey());
+    }
+
+    private String removeStandaloneTargetId(String content, Long targetId) {
+        String id = java.util.regex.Pattern.quote(targetId.toString());
+        return content.replaceAll("(?<!\\d)" + id + "(?!\\d)", "");
     }
 
     public void notifySystemAnnouncement(Collection<Long> userIds, String title, String content) {
