@@ -3,9 +3,6 @@ package com.example.demo.Service;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -13,14 +10,13 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.example.demo.Repository.ImageStorageRepository;
+import com.example.demo.Storage.ImageFileStore;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.StoredImageResponse;
 
@@ -36,18 +32,15 @@ public class ImageStorageService {
 
     private final JwtService jwtService;
     private final ImageStorageRepository imageStorageRepository;
-    private final Path imageStorageRoot;
-    private final String configuredPublicBaseUrl;
+    private final ImageFileStore imageFileStore;
 
     public ImageStorageService(
             JwtService jwtService,
             ImageStorageRepository imageStorageRepository,
-            @Value("${app.image.directory:images}") String imageDirectory,
-            @Value("${app.image.public-base-url:}") String configuredPublicBaseUrl) {
+            ImageFileStore imageFileStore) {
         this.jwtService = jwtService;
         this.imageStorageRepository = imageStorageRepository;
-        this.imageStorageRoot = Path.of(imageDirectory).toAbsolutePath().normalize();
-        this.configuredPublicBaseUrl = trimTrailingSlash(configuredPublicBaseUrl);
+        this.imageFileStore = imageFileStore;
     }
 
     @Transactional
@@ -100,27 +93,25 @@ public class ImageStorageService {
         String email = jwtService.getEmail(token);
         String fileName = UUID.randomUUID() + "." + fileType.extension();
         String accountKey = accountKey(email);
-        Path targetDirectory = imageStorageRoot.resolve(accountKey).resolve(purpose.directory()).normalize();
-        Path targetFile = targetDirectory.resolve(fileName).normalize();
-        if (!targetFile.startsWith(imageStorageRoot)) {
-            return ApiResponse.fail("Invalid upload path");
-        }
-        String relativeUrl = "/images/" + accountKey + "/" + purpose.directory() + "/" + fileName;
-        String imageUrl = publicUrl(relativeUrl);
+        String objectName = accountKey + "/" + purpose.directory() + "/" + fileName;
+        String imageUrl;
+        boolean stored = false;
 
         try {
-            Files.createDirectories(targetDirectory);
             try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetFile, StandardCopyOption.REPLACE_EXISTING);
+                imageUrl = imageFileStore.save(objectName, fileType.contentType(), inputStream);
+                stored = true;
             }
             int updatedRows = bindImageToDatabase(email, purpose, productId, eventId, imageUrl);
             if (updatedRows != 1) {
-                Files.deleteIfExists(targetFile);
+                imageFileStore.delete(objectName);
                 markTransactionRollbackOnly();
                 return ApiResponse.fail("Image target not found or does not belong to this account");
             }
         } catch (IOException | RuntimeException exception) {
-            deleteQuietly(targetFile);
+            if (stored) {
+                deleteQuietly(objectName);
+            }
             markTransactionRollbackOnly();
             return ApiResponse.fail("Image save failed");
         }
@@ -202,16 +193,9 @@ public class ImageStorageService {
         }
     }
 
-    private String publicUrl(String relativeUrl) {
-        if (!configuredPublicBaseUrl.isBlank()) {
-            return configuredPublicBaseUrl + relativeUrl;
-        }
-        return ServletUriComponentsBuilder.fromCurrentContextPath().path(relativeUrl).toUriString();
-    }
-
-    private void deleteQuietly(Path file) {
+    private void deleteQuietly(String objectName) {
         try {
-            Files.deleteIfExists(file);
+            imageFileStore.delete(objectName);
         } catch (IOException ignored) {
             // Failed saves must not replace the database URL; leftover files can be inspected manually.
         }
@@ -223,10 +207,6 @@ public class ImageStorageService {
         } catch (RuntimeException ignored) {
             // Unit tests may call the service without a Spring transaction.
         }
-    }
-
-    private static String trimTrailingSlash(String value) {
-        return value == null ? "" : value.replaceAll("/+$", "");
     }
 
     private enum ImagePurpose {

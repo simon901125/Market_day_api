@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
 
 import com.example.demo.Repository.ImageStorageRepository;
+import com.example.demo.Storage.LocalImageFileStore;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.StoredImageResponse;
 
@@ -36,8 +37,7 @@ class ImageStorageServiceTest {
         imageStorageService = new ImageStorageService(
                 jwtService,
                 imageStorageRepository,
-                imageRoot.toString(),
-                "https://api.example.test");
+                new LocalImageFileStore(imageRoot.toString(), "https://api.example.test"));
         when(jwtService.extractTokenFromAuthorizationHeader(AUTHORIZATION)).thenReturn("valid-token");
         when(jwtService.isTokenValid("valid-token")).thenReturn(true);
         when(jwtService.getEmail("valid-token")).thenReturn("vendor1@example.test");

@@ -3,11 +3,13 @@ package com.example.demo.Config;
 import java.nio.file.Path;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@ConditionalOnProperty(name = "app.image.storage", havingValue = "local", matchIfMissing = true)
 public class ImageResourceConfig implements WebMvcConfigurer {
 
     private final Path imageStorageRoot;
