@@ -3,6 +3,7 @@ package com.example.demo.Storage;
 import java.io.IOException;
 import java.io.InputStream;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,7 @@ public class GcsImageFileStore implements ImageFileStore {
     private final String bucket;
     private final String publicBaseUrl;
 
+    @Autowired
     public GcsImageFileStore(
             @Value("${app.image.gcs.bucket}") String bucket,
             @Value("${app.image.gcs.public-base-url:https://storage.googleapis.com}") String publicBaseUrl) {
