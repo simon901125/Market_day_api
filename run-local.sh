@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+# Ubuntu Spring Boot launcher.
+# Environment values mirror run-local.cmd.
+
+# SQL Server settings
+export DB_USERNAME='sqlserver'
+export DB_PASSWORD='Simon901125'
+
+# Google OAuth settings
+export GOOGLE_CLIENT_ID='322007662830-udt5d156946h171o1edm93bj6pfu16cj.apps.googleusercontent.com'
+
+# Gmail SMTP settings
+export MAIL_USERNAME='simon901125@gmail.com'
+export MAIL_PASSWORD='srdn gsqs aote ftzr'
+
+# NewebPay settings
+export NEWEBPAY_MERCHANT_ID='MS159696944'
+export NEWEBPAY_HASH_KEY='X4PbYeq4MAD5kNo6Ha7m5H1jl2R61bDx'
+export NEWEBPAY_HASH_IV='CLy3UEghj63S3YKP'
+export NEWEBPAY_NOTIFY_URL='https://disengage-chaste-musky.ngrok-free.dev/api/newebpay/notify'
+export NEWEBPAY_RETURN_URL='https://disengage-chaste-musky.ngrok-free.dev/api/newebpay/return'
+
+exec ./mvnw spring-boot:run
