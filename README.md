@@ -11,6 +11,14 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - `sql/test*.sql` 屬於開發及驗證用測試資料，不在更新日誌中記錄檔名、建立筆數、測試帳號或測試資料內容。
 - 測試資料的使用方式與預期結果應直接寫在對應的 `test*.sql` 註解內，不重複放入 README 更新日誌。
 
+### 2026-07-21
+
+#### maisy branch
+
+- 攤主首頁初始化 API `GET /api/vendor/dashboard/init` 新增 `pendingRefundCount`，回傳目前登入攤主處於退款申請中或退款處理中的報名筆數。
+- 退款處理數量依 `refunds.refund_status IN (REFUND_REQUESTED, REFUNDING)` 統計，並以報名單去重，避免同一筆報名重複計數；尚未建立攤主資料時回傳 `0`。
+- 同步更新攤主首頁 Response、Service、Repository 查詢及單元測試；`VendorDashboardServiceTest` 共 3 項測試通過。
+
 ### 2026-07-20
 
 #### yingtung branch
