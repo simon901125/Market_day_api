@@ -19,6 +19,15 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 退款處理數量依 `refunds.refund_status IN (REFUND_REQUESTED, REFUNDING)` 統計，並以報名單去重，避免同一筆報名重複計數；尚未建立攤主資料時回傳 `0`。
 - 同步更新攤主首頁 Response、Service、Repository 查詢及單元測試；`VendorDashboardServiceTest` 共 3 項測試通過。
 
+#### simon branch
+
+- 攤主人工選位與報名截止統一使用 `registration_end_at` 的完整日期時間判斷；到達前端設定的確切截止時間後即停止報名與人工選位，不再只比較日期。
+- 自動配位排程改為台北時區每分鐘整點執行，僅查詢 `workflow_status = PUBLISHED` 且 `registration_end_at < 現在時間` 的活動，使截止後的處理偏差維持在一分鐘內。
+- 自動程序會取消未付款申請，替已付款但尚未選位的申請分配可用攤位；全部符合資格的申請完成選位後，將活動更新為 `FINAL_REVIEW`，並以 `COALESCE` 寫入 `brands_public_at`。
+- 公開活動地圖、攤位及品牌活動資訊統一要求 `brands_public_at IS NOT NULL AND brands_public_at <= SYSDATETIME()`；尚未寫入公開時間或公開時間尚未到達時不回傳品牌公開資料。
+- 修正活動狀態文字：`brands_public_at` 為空時顯示「最終名單確認中」，已寫入且公開後顯示「品牌已公開」。
+- 更新自動配位排程測試，並通過自動配位、公開活動、品牌、攤位及 Controller 相關 34 項測試。
+
 ### 2026-07-20
 
 #### yingtung branch

@@ -33,7 +33,7 @@ public class AutomaticStallAssignmentRepository {
                 SELECT event.id
                 FROM dbo.market_events event
                 WHERE event.workflow_status = N'PUBLISHED'
-                  AND CAST(event.registration_end_at AS date) < CAST(:now AS date)
+                  AND event.registration_end_at < :now
                 ORDER BY event.registration_end_at, event.id
                 """;
         return jdbcTemplate.query(
@@ -50,7 +50,7 @@ public class AutomaticStallAssignmentRepository {
                 FROM dbo.market_events event WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
                 WHERE event.id = :eventId
                   AND event.workflow_status = N'PUBLISHED'
-                  AND CAST(event.registration_end_at AS date) < CAST(:now AS date)
+                  AND event.registration_end_at < :now
                 """;
         List<AssignmentEvent> rows = jdbcTemplate.query(
                 sql,

@@ -27,7 +27,7 @@ public class AutomaticStallAssignmentScheduler {
         this.assignmentService = assignmentService;
     }
 
-    @Scheduled(cron = "0 0 0 * * *", zone = TAIPEI_TIME_ZONE)
+    @Scheduled(cron = "0 * * * * *", zone = TAIPEI_TIME_ZONE)
     public void assignClosedEvents() {
         LocalDateTime now = LocalDateTime.now(ZoneId.of(TAIPEI_TIME_ZONE));
         List<Long> eventIds = repository.findDueEventIds(now);

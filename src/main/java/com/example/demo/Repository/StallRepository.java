@@ -146,7 +146,7 @@ public class StallRepository {
                     e.workflow_status AS workflowStatus,
                     CAST(CASE
                         WHEN e.workflow_status = N'PUBLISHED'
-                         AND CAST(SYSDATETIME() AS date) <= CAST(e.registration_end_at AS date)
+                         AND SYSDATETIME() <= e.registration_end_at
                         THEN 1 ELSE 0
                     END AS BIT) AS selectionOpen,
                     date_counts.applicationDateCount,
@@ -899,6 +899,7 @@ public class StallRepository {
                 WHERE e.id = :eventId
                   AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND e.brands_public_at IS NOT NULL
+                  AND e.brands_public_at <= SYSDATETIME()
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1022,6 +1023,7 @@ public class StallRepository {
                 WHERE s.event_id = :eventId
                   AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND e.brands_public_at IS NOT NULL
+                  AND e.brands_public_at <= SYSDATETIME()
                 ORDER BY z.zone_name ASC, s.stall_no ASC
                 """;
 
@@ -1076,7 +1078,7 @@ public class StallRepository {
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
                     CASE
-                        WHEN CAST(GETDATE() AS date) > CAST(e.registration_end_at AS date) THEN 0
+                        WHEN GETDATE() > e.registration_end_at THEN 0
                         ELSE DATEDIFF(DAY, CONVERT(date, GETDATE()), CONVERT(date, e.registration_end_at))
                     END AS registrationDaysRemaining,
                     e.base_fee AS baseFee,
@@ -1098,7 +1100,7 @@ public class StallRepository {
 
                 WHERE e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
                         AND GETDATE() >= e.registration_start_at
-                        AND CAST(GETDATE() AS date) <= CAST(e.registration_end_at AS date)
+                        AND GETDATE() <= e.registration_end_at
                         """);
 
         Map<String, Object> params = new HashMap<>();
@@ -1163,7 +1165,7 @@ public class StallRepository {
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
                     CASE
-                        WHEN CAST(GETDATE() AS date) > CAST(e.registration_end_at AS date) THEN 0
+                        WHEN GETDATE() > e.registration_end_at THEN 0
                         ELSE DATEDIFF(DAY, CONVERT(date, GETDATE()), CONVERT(date, e.registration_end_at))
                     END AS registrationDaysRemaining,
                     e.max_booths AS maxBooths,
@@ -1190,7 +1192,7 @@ public class StallRepository {
                 WHERE e.id = :eventId
                   AND e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
                   AND GETDATE() >= e.registration_start_at
-                  AND CAST(GETDATE() AS date) <= CAST(e.registration_end_at AS date)
+                  AND GETDATE() <= e.registration_end_at
                 """;
         return RepositoryResultMapper.normalizeOptional(
                 namedParameterJdbcTemplate.queryForList(sql, Map.of("eventId", eventId)).stream().findFirst());

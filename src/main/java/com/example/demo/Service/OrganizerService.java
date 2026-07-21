@@ -962,8 +962,7 @@ public class OrganizerService {
                 if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
                     yield EventStatus.PUBLISHED;
                 }
-                if (registrationEndAt != null
-                        && !now.toLocalDate().isAfter(registrationEndAt.toLocalDate())) {
+                if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
                     yield registeredCount < capacity ? EventStatus.REGISTRATION_OPEN : EventStatus.FULL;
                 }
                 if (startAt != null && now.isBefore(startAt)) yield EventStatus.FINAL_CONFIRMATION;
@@ -2565,12 +2564,11 @@ public class OrganizerService {
         if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
             return "待發布";
         }
-        if (registrationEndAt != null
-                && !now.toLocalDate().isAfter(registrationEndAt.toLocalDate())) {
+        if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
             return isStallEventFull(event) ? "已額滿" : "報名中";
         }
-        if (brandsPublicAt == null || !now.isBefore(brandsPublicAt)) {
-            return "品牌已公開";
+        if (brandsPublicAt == null) {
+            return "最終名單確認中";
         }
         return "品牌已公開";
     }
@@ -2583,8 +2581,7 @@ public class OrganizerService {
         if (registrationStartAt != null && now.isBefore(registrationStartAt)) {
             return "\u672a\u958b\u59cb\u5831\u540d";
         }
-        if (registrationEndAt != null
-                && now.toLocalDate().isAfter(registrationEndAt.toLocalDate())) {
+        if (registrationEndAt != null && now.isAfter(registrationEndAt)) {
             return "\u5831\u540d\u622a\u6b62";
         }
         return "\u5831\u540d\u4e2d";
