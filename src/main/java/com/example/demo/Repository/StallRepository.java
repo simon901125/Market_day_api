@@ -897,7 +897,7 @@ public class StallRepository {
                     e.end_at AS endAt
                 FROM dbo.market_events e
                 WHERE e.id = :eventId
-                  AND e.workflow_status IN (N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                  AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND e.brands_public_at IS NOT NULL
                 """;
 
@@ -1020,7 +1020,7 @@ public class StallRepository {
                 LEFT JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
                 LEFT JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
                 WHERE s.event_id = :eventId
-                  AND e.workflow_status IN (N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                  AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND e.brands_public_at IS NOT NULL
                 ORDER BY z.zone_name ASC, s.stall_no ASC
                 """;

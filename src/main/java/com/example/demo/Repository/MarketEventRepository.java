@@ -90,13 +90,13 @@ public class MarketEventRepository {
                     CAST(e.end_at AS TIME) AS end_time,
                     e.cover_image_url,
                     CASE
-                        WHEN e.workflow_status IN (N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                        WHEN e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                          AND e.brands_public_at IS NOT NULL
                         THEN e.map_image_url
                         ELSE NULL
                     END AS map_image_url,
                     CAST(CASE
-                        WHEN e.workflow_status IN (N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                        WHEN e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                          AND e.brands_public_at IS NOT NULL
                         THEN 1
                         ELSE 0
@@ -144,7 +144,7 @@ public class MarketEventRepository {
                 LEFT JOIN dbo.categories c ON c.id = vp.category_id
                 WHERE s.event_id = :eventId
                   AND s.stall_no = :stallNo
-                  AND e.workflow_status IN (N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                  AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND e.brands_public_at IS NOT NULL
                 """;
         Map<String, Object> params = Map.of("eventId", eventId, "date", date, "stallNo", stallNo);
