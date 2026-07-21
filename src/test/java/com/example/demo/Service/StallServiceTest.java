@@ -59,6 +59,28 @@ class StallServiceTest {
         assertThat(service.saveVendorStallProfile("Bearer token", null).isSuccessStatus()).isFalse();
     }
 
+    @Test void selectionRequiresPublishedWorkflow() {
+        authenticateVendor(9L);
+        when(repository.findApplicationForSelection("APP-1")).thenReturn(Optional.of(selectionApplication(
+                "FINAL_REVIEW", true)));
+
+        var response = service.selectEventStall("Bearer token", selectionRequest());
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        assertThat(response.getMessage()).isEqualTo("\u6d3b\u52d5\u6d41\u7a0b\u5c1a\u672a\u958b\u653e\u9078\u4f4d");
+    }
+
+    @Test void selectionRequiresPublicSelectionTimeToHaveStarted() {
+        authenticateVendor(9L);
+        when(repository.findApplicationForSelection("APP-1")).thenReturn(Optional.of(selectionApplication(
+                "PUBLISHED", false)));
+
+        var response = service.selectEventStall("Bearer token", selectionRequest());
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        assertThat(response.getMessage()).isEqualTo("\u5c1a\u672a\u5230\u9078\u4f4d\u8cc7\u8a0a\u516c\u958b\u6642\u9593");
+    }
+
     @Test void publicStatusValidatesEventAndDateRange() {
         assertThat(service.getPublicEventStallsStatus(null, null).isSuccessStatus()).isFalse();
         when(repository.findEventForStallStatus(1L)).thenReturn(Optional.empty());
@@ -199,6 +221,33 @@ class StallServiceTest {
         when(jwtService.getEmail("token")).thenReturn("vendor@example.test");
         when(repository.findVendorAccountByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(Map.of("userId", userId, "role", "VENDOR")));
+    }
+
+    private StallSelectionRequest selectionRequest() {
+        StallSelectionRequest.Selection selection = new StallSelectionRequest.Selection();
+        selection.setApplyDate(LocalDate.of(2026, 8, 1));
+        selection.setStallNo("A01");
+        StallSelectionRequest request = new StallSelectionRequest();
+        request.setApplicationNo("APP-1");
+        request.setSelections(List.of(selection));
+        return request;
+    }
+
+    private Map<String, Object> selectionApplication(String workflowStatus, boolean selectionOpen) {
+        return Map.ofEntries(
+                Map.entry("applicationId", 1L),
+                Map.entry("applicationNo", "APP-1"),
+                Map.entry("eventId", 10L),
+                Map.entry("eventTitle", "Selection Event"),
+                Map.entry("organizerUserId", 20L),
+                Map.entry("brandName", "Test Brand"),
+                Map.entry("userId", 9L),
+                Map.entry("vendorProfileId", 30L),
+                Map.entry("reviewStatus", "APPROVED"),
+                Map.entry("paymentStatus", "PAID"),
+                Map.entry("isCancelled", false),
+                Map.entry("workflowStatus", workflowStatus),
+                Map.entry("selectionOpen", selectionOpen));
     }
 
     private Map<String, Object> application(Long id, String applicationNo, String eventTitle) {

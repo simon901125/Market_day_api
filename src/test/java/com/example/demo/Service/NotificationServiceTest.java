@@ -69,7 +69,11 @@ class NotificationServiceTest {
 
         notificationService.create(command);
 
-        verify(notificationRepository).create(command);
+        ArgumentCaptor<NotificationCreateCommand> captor = ArgumentCaptor.forClass(NotificationCreateCommand.class);
+        verify(notificationRepository).create(captor.capture());
+        assertThat(captor.getValue().targetType()).isEqualTo(NotificationTargetType.MARKET_EVENT);
+        assertThat(captor.getValue().targetId()).isEqualTo(20L);
+        assertThat(captor.getValue().content()).doesNotContain("20");
     }
 
     @Test
@@ -83,6 +87,7 @@ class NotificationServiceTest {
         assertThat(command.targetId()).isEqualTo(20L);
         assertThat(command.dedupKey()).isEqualTo(
                 "10:APPLICATION_SUBMITTED:EVENT_APPLICATION:20:v1");
+        assertThat(command.content()).doesNotContain("20");
         assertThat(command.content()).contains("夏日市集");
     }
 

@@ -251,6 +251,16 @@ public class NotificationRepository {
                 .addValue("targetId", command.targetId())
                 .addValue("dedupKey", command.dedupKey())
                 .addValue("title", command.title())
-                .addValue("content", command.content());
+                .addValue("content", publicContent(command));
+    }
+
+    private String publicContent(NotificationCreateCommand command) {
+        if (command.targetId() == null || command.content() == null) {
+            return command.content();
+        }
+        // Routing identifiers belong in target_type/target_id. They must not be
+        // embedded in the human-readable notification body returned to clients.
+        String id = java.util.regex.Pattern.quote(command.targetId().toString());
+        return command.content().replaceAll("(?<!\\d)" + id + "(?!\\d)", "");
     }
 }

@@ -46,7 +46,7 @@ class AutomaticStallAssignmentServiceTest {
         when(repository.findCompletedApplications(1L, List.of(11L))).thenReturn(List.of(
                 new CompletedApplication(11L, 8L, "夏日市集", "森林手作")));
         when(repository.countIncompleteEligibleApplications(1L)).thenReturn(0);
-        when(repository.finishFinalReview(1L)).thenReturn(1);
+        when(repository.finishFinalReview(1L, now)).thenReturn(1);
 
         assertThat(service.assignEvent(1L, now)).isTrue();
 
@@ -57,7 +57,8 @@ class AutomaticStallAssignmentServiceTest {
         verify(notificationService).notifyStallSelectionCompleted(8L, 11L, "夏日市集");
         verify(notificationService).notifyOrganizerStallSelectionCompleted(
                 9L, 11L, "夏日市集", "森林手作");
-        verify(repository).finishFinalReview(1L);
+        verify(repository).cancelUnpaidApplications(1L);
+        verify(repository).finishFinalReview(1L, now);
     }
 
     @Test
@@ -73,7 +74,8 @@ class AutomaticStallAssignmentServiceTest {
 
         assertThat(service.assignEvent(1L, now)).isFalse();
 
-        verify(repository, never()).finishFinalReview(1L);
+        verify(repository, never()).finishFinalReview(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         verify(notificationService, never()).notifyStallSelectionCompleted(
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
@@ -88,6 +90,7 @@ class AutomaticStallAssignmentServiceTest {
         assertThat(service.assignEvent(1L, now)).isFalse();
 
         verify(repository, never()).findPendingDates(1L);
+        verify(repository, never()).cancelUnpaidApplications(1L);
     }
 
     @Test
@@ -110,7 +113,8 @@ class AutomaticStallAssignmentServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("notification unavailable");
 
-        verify(repository, never()).finishFinalReview(1L);
+        verify(repository, never()).finishFinalReview(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         verify(notificationService, never()).notifyOrganizerStallSelectionCompleted(
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
