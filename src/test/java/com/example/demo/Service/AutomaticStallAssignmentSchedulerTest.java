@@ -36,12 +36,12 @@ class AutomaticStallAssignmentSchedulerTest {
     }
 
     @Test
-    void runsOnceAtMidnightInTaipeiTime() throws NoSuchMethodException {
+    void runsEveryMinuteInTaipeiTime() throws NoSuchMethodException {
         Scheduled scheduled = AutomaticStallAssignmentScheduler.class
                 .getMethod("assignClosedEvents")
                 .getAnnotation(Scheduled.class);
 
-        assertThat(scheduled.cron()).isEqualTo("0 0 0 * * *");
+        assertThat(scheduled.cron()).isEqualTo("0 * * * * *");
         assertThat(scheduled.zone()).isEqualTo("Asia/Taipei");
     }
 }
