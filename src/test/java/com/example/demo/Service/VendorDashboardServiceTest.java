@@ -66,7 +66,8 @@ class VendorDashboardServiceTest {
         when(stallRepository.findVendorDashboardApplicationCounts(7L)).thenReturn(Map.of(
                 "pendingReviewCount", 12,
                 "pendingPaymentCount", 6,
-                "pendingStallSelectionCount", 2));
+                "pendingStallSelectionCount", 2,
+                "pendingRefundCount", 4));
         VendorNotificationItemResponse notification = new VendorNotificationItemResponse(
                 30L,
                 "APPLICATION_REVIEW",
@@ -90,6 +91,7 @@ class VendorDashboardServiceTest {
         assertThat(response.getData().pendingReviewCount()).isEqualTo(12);
         assertThat(response.getData().pendingPaymentCount()).isEqualTo(6);
         assertThat(response.getData().pendingStallSelectionCount()).isEqualTo(2);
+        assertThat(response.getData().pendingRefundCount()).isEqualTo(4);
         assertThat(response.getData().notifications()).containsExactly(notification);
     }
 
@@ -104,7 +106,8 @@ class VendorDashboardServiceTest {
         when(stallRepository.findVendorDashboardApplicationCounts(7L)).thenReturn(Map.of(
                 "pendingReviewCount", 0,
                 "pendingPaymentCount", 0,
-                "pendingStallSelectionCount", 0));
+                "pendingStallSelectionCount", 0,
+                "pendingRefundCount", 0));
         when(notificationRepository.findVendorNotifications(
                 eq(7L), eq(null), eq(false), any(LocalDateTime.class), eq(0), eq(6)))
                 .thenReturn(List.of());

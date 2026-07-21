@@ -381,7 +381,15 @@ public class StallRepository {
                          AND COALESCE(application_dates.applicationDateCount, 0) > 0
                          AND COALESCE(application_dates.selectedStallCount, 0)
                              < application_dates.applicationDateCount
-                        THEN 1 ELSE 0 END), 0) AS pendingStallSelectionCount
+                        THEN 1 ELSE 0 END), 0) AS pendingStallSelectionCount,
+                    COALESCE((
+                        SELECT COUNT(DISTINCT refund.application_id)
+                        FROM dbo.refunds refund
+                        INNER JOIN dbo.event_applications refund_application
+                            ON refund_application.id = refund.application_id
+                        WHERE refund_application.user_id = :userId
+                          AND refund.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING')
+                    ), 0) AS pendingRefundCount
                 FROM dbo.event_applications a
                 LEFT JOIN (
                     SELECT
