@@ -35,7 +35,7 @@ class MarketEventServiceTest {
         when(repository.searchMarketEvents(any())).thenReturn(List.of());
         assertThat(service.searchMarkets(null, 1, 10).isSuccessStatus()).isTrue();
         MarketSearchRequest request = new MarketSearchRequest(null, null,
-                List.of("活動進行中"), null, null, null, "目前活動");
+                List.of("進行中"), null, null, null, "目前活動");
         assertThat(service.searchMarkets(request, 1, 10).isSuccessStatus()).isTrue();
         verify(repository).searchMarketEvents(request);
     }
@@ -45,7 +45,7 @@ class MarketEventServiceTest {
         var badStatus = new MarketSearchRequest(null, null, List.of("CANCELLED"), null, null, null, null);
         var endedStatus = new MarketSearchRequest(null, null, List.of("已結束"), null, null, null, "目前活動");
         var multipleStatuses = new MarketSearchRequest(
-                null, null, List.of("籌備中", "準備開始"), null, null, null, "目前活動");
+                null, null, List.of("活動預告", "即將開始"), null, null, null, "目前活動");
         assertThat(service.searchMarkets(badType, 1, 10).isSuccessStatus()).isFalse();
         assertThat(service.searchMarkets(badStatus, 1, 10).isSuccessStatus()).isFalse();
         assertThat(service.searchMarkets(endedStatus, 1, 10).isSuccessStatus()).isFalse();
