@@ -2704,6 +2704,7 @@ public class OrganizerService {
                 "specification", row.get("equipmentDescription"),
                 "quantity", row.get("quantity"),
                 "unit", quantityUnit(row),
+                "unitPrice", row.get("rentalFee"),
                 "subtotal", row.get("subtotal"),
                 "subtotalContent", unitContent("共", applicationDays, "天"),
                 "total", row.get("subtotal"));
