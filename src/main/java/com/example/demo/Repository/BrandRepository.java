@@ -43,6 +43,7 @@ public class BrandRepository {
                   AND ea.is_cancelled = 0
                   AND me.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND me.brands_public_at IS NOT NULL
+                  AND me.brands_public_at <= SYSDATETIME()
                   AND c.is_active = 1
                   AND (:categoryName IS NULL OR c.name = :categoryName)
                 ORDER BY me.title ASC
@@ -77,6 +78,7 @@ public class BrandRepository {
                           AND ea.is_cancelled = 0
                           AND me.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                           AND me.brands_public_at IS NOT NULL
+                          AND me.brands_public_at <= SYSDATETIME()
                     ) participation
                     WHERE u.status = 'ACTIVE'
                       AND (:categoryName IS NULL OR EXISTS (
@@ -112,6 +114,7 @@ public class BrandRepository {
                                   AND ea.is_cancelled = 0
                                   AND me.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                                   AND me.brands_public_at IS NOT NULL
+                                  AND me.brands_public_at <= SYSDATETIME()
                                   AND me.title LIKE N'%' + :marketName + N'%'
                             )
                       )
@@ -201,6 +204,7 @@ public class BrandRepository {
                       AND ea.is_cancelled = 0
                       AND me.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                       AND me.brands_public_at IS NOT NULL
+                      AND me.brands_public_at <= SYSDATETIME()
                       AND me.end_at < SYSDATETIME()
                 ) participation
                 WHERE vp.id = :brandId
@@ -245,6 +249,7 @@ public class BrandRepository {
                   AND ea.is_cancelled = 0
                   AND me.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND me.brands_public_at IS NOT NULL
+                  AND me.brands_public_at <= SYSDATETIME()
                   AND me.end_at < SYSDATETIME()
                 ORDER BY me.start_at DESC, me.id DESC
                 """;
