@@ -1849,7 +1849,13 @@ public class OrganizerService {
 
     private Map<String, Object> withDisplayPublishStatus(Map<String, Object> account) {
         Map<String, Object> response = new LinkedHashMap<>(account);
-        response.put("publishStatusText", displayPublishStatus(account.get("publishStatus")));
+        String workflowStatus = statusText(account.get("publishStatus"));
+        if (Set.of("PUBLISHED", "FINAL_REVIEW").contains(workflowStatus)) {
+            response.put("workflowStatus", workflowStatus);
+            response.put("publishStatusText", displayStallEventStatus(response));
+        } else {
+            response.put("publishStatusText", displayPublishStatus(account.get("publishStatus")));
+        }
         response.put("statusNote", displayRegistrationProgress(account));
         return response;
     }
@@ -3122,7 +3128,7 @@ public class OrganizerService {
             case "READY_TO_PUBLISH" -> "\u5f85\u767c\u5e03";
             case "PUBLISHED" -> "\u5df2\u767c\u5e03";
             case "BRANDS_PUBLISHED" -> "\u6524\u5546\u540d\u55ae\u5df2\u767c\u5e03";
-            case "FINAL_REVIEW" -> "\u54c1\u724c\u516c\u958b\u524d\u9a57\u6536";
+            case "FINAL_REVIEW" -> "\u6700\u7d42\u540d\u55ae\u78ba\u8a8d\u4e2d";
             case "UNPUBLISH_REQUESTED" -> "\u4e0b\u67b6\u7533\u8acb\u4e2d";
             case "UNPUBLISHED" -> "\u5df2\u4e0b\u67b6";
             case "CANCELLED" -> "\u5df2\u53d6\u6d88";

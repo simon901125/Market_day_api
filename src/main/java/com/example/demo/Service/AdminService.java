@@ -1037,7 +1037,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 userRepo.getReferenceById(review.userId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED, NotificationTargetType.EVENT_UNPUBLISH_REQUEST,
                 unpublishRequestId, "補件通知",
-                "活動「" + review.eventName() + "」的下架申請需要補件；原因： " + note + " 請修改後重新送出審核");
+                "活動「" + review.eventName() + "」的下架申請需要補件；原因：" + note + "。請修改後重新送出審核");
 
         saveAdminLog(
                 adminRef, AdminOperationType.REQUEST_REVISION, AdminTargetType.EVENT_UNPUBLISH_REQUEST,
