@@ -4,9 +4,10 @@
 # Environment values mirror run-local.cmd.
 
 # Public application URL
-export SWAGGER_PUBLIC_BASE_URL='http://34.80.36.65:8081'
+export SWAGGER_PUBLIC_BASE_URL='https://api.marketday.dev'
 
 # SQL Server settings
+export DB_URL='jdbc:sqlserver://10.21.160.3:1433;databaseName=MarketDayDB;encrypt=true;trustServerCertificate=true'
 export DB_USERNAME='sqlserver'
 export DB_PASSWORD='Simon901125'
 
