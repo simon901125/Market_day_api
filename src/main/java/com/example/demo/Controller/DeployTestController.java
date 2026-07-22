@@ -12,7 +12,7 @@ public class DeployTestController {
     @GetMapping("/api/deploy-test")
     public Map<String, String> deployTest() {
         return Map.of(
-                "status", "ok",
+                "status", "ok123",
                 "version", "deploy-test-001",
                 "message", "GitHub Actions auto deployment works",
                 "serverTime", Instant.now().toString()
