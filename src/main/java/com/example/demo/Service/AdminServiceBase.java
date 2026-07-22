@@ -84,4 +84,7 @@ public abstract class AdminServiceBase {
         /** 設定確認活動下架 */
         public abstract EventStatusChangeDto setEventUnpublish(Long userId, String operatorEmail, Role operatorRole, String note);
 
+        /** 通知主辦方活動款項已結清 */
+        public abstract EventStatusChangeDto setEventPaymentNotification(Long userId, String operatorEmail, Role operatorRole);
+
 }

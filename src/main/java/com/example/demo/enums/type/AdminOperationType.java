@@ -34,7 +34,10 @@ public enum AdminOperationType {
     REQUEST_REVISION("requestRevision", "要求補件"), 
 
     /**活動審核 */
-    ACTIVITY_REVIEW("activityReview", "活動審核");
+    ACTIVITY_REVIEW("activityReview", "活動審核"),
+
+    /**通知主辦方活動款項已結清 */
+    NOTIFY_EVENT_PAYMENT("AdminOperationType增加notifyEventPayment", "結清款項");
 
     @JsonValue
     private final String type;

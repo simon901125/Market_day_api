@@ -140,6 +140,14 @@ public class MarketEvent {
     @Column(name = "deposit_amount", precision = 10, scale = 2)
     private BigDecimal depositAmount;
 
+    /** 收款帳號 */
+    @Column(name = "payment_account", length = 100)
+    private String paymentAccount;
+
+    /** 是否已收款 */
+    @Column(name = "payment_received", nullable = false)
+    private Boolean paymentReceived = false;
+
     /** 開車交通資訊 */
     @Column(name = "traffic_info_driving", columnDefinition = "nvarchar(max)")
     private String driving; 

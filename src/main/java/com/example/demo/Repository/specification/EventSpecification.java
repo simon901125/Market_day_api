@@ -7,15 +7,20 @@ import org.springframework.data.jpa.domain.Specification;
 import com.example.demo.dto.request.admin.AdminEventSearchDto;
 import com.example.demo.entity.EventApplication;
 import com.example.demo.entity.MarketEvent;
+import com.example.demo.entity.RequestLog;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.ReviewStatus;
 import com.example.demo.enums.status.WorkflowStatus;
+import com.example.demo.enums.type.Role;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
+
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
+import org.hibernate.query.criteria.JpaExpression;
 
 /** 管理員: 活動搜尋頁面 動態查詢條件組合 */
 public class EventSpecification {
@@ -127,6 +132,11 @@ public class EventSpecification {
                         root.get("workflowStatus").in(WorkflowStatus.PUBLISHED, WorkflowStatus.FINAL_REVIEW),
                         cb.lessThanOrEqualTo(root.<LocalDateTime>get("startAt"), now),
                         cb.greaterThan(root.<LocalDateTime>get("endAt"), now));
+                case PAYMENT -> cb.and(
+                    cb.equal(root.get("workflowStatus"), WorkflowStatus.FINAL_REVIEW),
+                    cb.lessThanOrEqualTo(root.<LocalDateTime>get("endAt"), now),
+                    cb.isFalse(root.<Boolean>get("paymentReceived"))
+                );
                 case ENDED -> cb.and(
                         root.get("workflowStatus").in(WorkflowStatus.PUBLISHED, WorkflowStatus.FINAL_REVIEW),
                         cb.lessThanOrEqualTo(root.<LocalDateTime>get("endAt"), now));
@@ -149,6 +159,33 @@ public class EventSpecification {
         subquery.where(
                 cb.equal(application.get("event"), correlatedEvent),
                 cb.notEqual(application.get("reviewStatus"), ReviewStatus.REJECTED));
+
+        return subquery;
+    }
+
+    /**
+     * 計算管理員已成功通知過活動款項的次數，作法對應{@link com.example.demo.Repository.EventRepo#countEndedEventsPaymentNotNotified}
+     */
+    private static Expression<Long> paymentNotifiedCountSubquery(
+            Root<MarketEvent> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        Subquery<Long> subquery = query.subquery(Long.class);
+        Root<RequestLog> requestLog = subquery.from(RequestLog.class);
+        Root<MarketEvent> correlatedEvent = subquery.correlate(root);
+
+        // Expression.as() 只是型別轉換，不會真的產生 SQL CAST，直接 concat 會讓 SQL Server
+        // 誤判成 bigint 運算 (nvarchar 轉 bigint 失敗)，所以要用 HibernateCriteriaBuilder.cast() 產生真正的 CAST
+        HibernateCriteriaBuilder hibernateCb = (HibernateCriteriaBuilder) cb;
+        JpaExpression<String> eventIdAsString = hibernateCb.cast(
+                (JpaExpression<Long>) correlatedEvent.<Long>get("id"), String.class);
+        Expression<String> paymentNotifyPath = cb.concat(
+                cb.concat("/api/admin/events/", eventIdAsString),
+                "/payment");
+
+        subquery.select(cb.count(requestLog.get("id")));
+        subquery.where(
+                cb.equal(requestLog.get("user").get("role"), Role.ADMIN),
+                cb.equal(requestLog.get("statusCode"), 200),
+                cb.equal(requestLog.get("path"), paymentNotifyPath));
 
         return subquery;
     }
