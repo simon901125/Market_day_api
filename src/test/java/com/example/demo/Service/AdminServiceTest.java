@@ -926,16 +926,17 @@ class AdminServiceTest {
         when(userRepo.getReferenceById(9L)).thenReturn(adminRef);
         when(userRepo.getReferenceById(5L)).thenReturn(new User());
         when(eventRepo.updateWorkflowStatusIfCurrent(
-                1L, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.PUBLISHED)).thenReturn(1);
+                1L, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.FINAL_REVIEW)).thenReturn(1);
         when(eventUnpublishRequestRepo.reviewIfCurrent(
                 77L, adminRef, UnpublishRequestStatus.PENDING,
                 UnpublishRequestStatus.REJECTED, "缺少營業執照")).thenReturn(1);
 
         var result = service.setEventUnpublishRequestReject(77L, "op@test.com", Role.ADMIN, "缺少營業執照");
 
-        verify(eventRepo).updateWorkflowStatusIfCurrent(1L, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.PUBLISHED);
+        verify(eventRepo).updateWorkflowStatusIfCurrent(
+                1L, WorkflowStatus.UNPUBLISH_REQUESTED, WorkflowStatus.FINAL_REVIEW);
         assertThat(result.eventName()).isEqualTo("夏日市集");
-        assertThat(result.newEventStatus()).isEqualTo(EventStatus.PUBLISHED);
+        assertThat(result.newEventStatus()).isEqualTo(EventStatus.BRANDS_PUBLISHED);
     }
 
     @Test void setEventUnpublishRequestRejectDetectsConcurrentRequestReview() {

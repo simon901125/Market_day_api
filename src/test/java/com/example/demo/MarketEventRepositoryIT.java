@@ -16,6 +16,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.MarketEventRepository;
+import com.example.demo.Repository.AutomaticStallAssignmentRepository;
 import com.example.demo.Repository.UserRepository;
 import com.example.demo.dto.request.MarketSearchRequest;
 
@@ -24,6 +25,7 @@ import com.example.demo.dto.request.MarketSearchRequest;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
     @Autowired MarketEventRepository repository;
+    @Autowired AutomaticStallAssignmentRepository assignmentRepository;
     @Autowired UserRepository userRepository;
     @Autowired NamedParameterJdbcTemplate jdbc;
 
@@ -83,6 +85,49 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
         var finalDetail = repository.findMarketEventDetailById(eventId).orElseThrow();
         assertThat(finalDetail.brandsPublic()).isTrue();
         assertThat(finalDetail.mapImageUrl()).isEqualTo("/images/final-map.jpg");
+    }
+
+    @Test void brandAndMapStayPrivateWithoutPublicationTime() {
+        Long eventId = createPublishedEvent();
+        jdbc.update("UPDATE market_events SET map_image_url = N'/images/private-map.jpg' WHERE id = :id",
+                Map.of("id", eventId));
+
+        var detail = repository.findMarketEventDetailById(eventId).orElseThrow();
+
+        assertThat(detail.brandsPublic()).isFalse();
+        assertThat(detail.mapImageUrl()).isNull();
+    }
+
+    @Test void futureBrandPublicationTimeStaysPrivateUntilReached() {
+        Long eventId = createPublishedEvent();
+        jdbc.update("""
+                UPDATE market_events
+                SET brands_public_at = DATEADD(HOUR, 1, SYSDATETIME()),
+                    map_image_url = N'/images/future-map.jpg'
+                WHERE id = :id
+                """, Map.of("id", eventId));
+
+        var detail = repository.findMarketEventDetailById(eventId).orElseThrow();
+
+        assertThat(detail.brandsPublic()).isFalse();
+        assertThat(detail.mapImageUrl()).isNull();
+    }
+
+    @Test void finishingFinalReviewStoresBrandPublicationTime() {
+        Long eventId = createPublishedEvent();
+        LocalDateTime publishedAt = LocalDateTime.now().withNano(0);
+
+        assertThat(assignmentRepository.finishFinalReview(eventId, publishedAt)).isOne();
+
+        Map<String, Object> row = jdbc.queryForMap("""
+                SELECT workflow_status AS workflowStatus,
+                       brands_public_at AS brandsPublicAt
+                FROM market_events
+                WHERE id = :id
+                """, Map.of("id", eventId));
+        assertThat(row).containsEntry("workflowStatus", "FINAL_REVIEW");
+        assertThat(((java.sql.Timestamp) row.get("brandsPublicAt")).toLocalDateTime())
+                .isEqualTo(publishedAt);
     }
 
     private Long createPublishedEvent() {
