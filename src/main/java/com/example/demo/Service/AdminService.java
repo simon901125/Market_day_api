@@ -760,8 +760,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_APPROVED, NotificationTargetType.MARKET_EVENT, eventId,
-                "活動審核通過", "活動「" + event.title() + "」（活動 ID：" + eventId
-                        + "）已通過管理員審核，接下來將建置攤位地圖");
+                "活動審核通過", "活動「" + event.title() + "」已通過管理員審核，接下來將建置攤位地圖");
 
         saveAdminLog(
                 userRepo.getReferenceById(admin.id()), AdminOperationType.ACTIVITY_REVIEW, AdminTargetType.MARKET_EVENT,
@@ -798,8 +797,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_REVISION_REQUIRED, NotificationTargetType.MARKET_EVENT, eventId,
-                "活動需要補件", "活動「" + event.title() + "」（活動 ID：" + eventId
-                        + "）需要補件；原因：" + note + "。請修改後重新送出審核");
+                "活動需要補件", "活動「" + event.title() + "」需要補件；原因：" + note + "。請修改後重新送出審核");
 
         saveAdminLog(
                 userRepo.getReferenceById(admin.id()), AdminOperationType.REQUEST_REVISION, AdminTargetType.MARKET_EVENT,
@@ -882,8 +880,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_MAP_COMPLETED, NotificationTargetType.MARKET_EVENT, eventId,
-                "活動攤位地圖完成", "活動「" + event.title() + "」（活動 ID：" + eventId
-                        + "）的攤位地圖已建置完成，可前往活動詳情確認");
+                "活動攤位地圖完成", "活動「" + event.title() + "」的攤位地圖已建置完成，可前往活動詳情確認");
 
         String organizerLabel = event.organizerContactName() != null ? event.organizerContactName() : "主辦方";
         String eventTitleLabel = event.title() != null ? event.title() : "活動";
@@ -957,8 +954,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_UNPUBLISHED, NotificationTargetType.MARKET_EVENT, eventId,
-                "活動已下架", "活動「" + event.title() + "」（活動 ID：" + eventId
-                        + "）的下架申請已通過，活動已下架");
+                "活動已下架", "活動「" + event.title() + "」的下架申請已通過，活動已下架");
 
         saveAdminLog(
                 adminRef, AdminOperationType.EVENT_UNPUBLISH_REVIEW, AdminTargetType.EVENT_UNPUBLISH_REQUEST,
@@ -1004,7 +1000,11 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         }
 
         User adminRef = userRepo.getReferenceById(admin.id());
-        WorkflowStatus newWorkflowStatus = WorkflowStatus.PUBLISHED;
+        LocalDateTime now = LocalDateTime.now();
+        WorkflowStatus newWorkflowStatus = review.brandPublicAt() != null
+                && !review.brandPublicAt().isAfter(now)
+                        ? WorkflowStatus.FINAL_REVIEW
+                        : WorkflowStatus.PUBLISHED;
 
         int eventUpdatedRows = eventRepo.updateWorkflowStatusIfCurrent(
                 review.eventId(), WorkflowStatus.UNPUBLISH_REQUESTED, newWorkflowStatus);
@@ -1022,14 +1022,16 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 userRepo.getReferenceById(review.userId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.EVENT_UNPUBLISH_REQUEST_REVISION_REQUIRED, NotificationTargetType.EVENT_UNPUBLISH_REQUEST,
                 unpublishRequestId, "補件通知",
-                "活動「" + review.eventName() + "」的下架申請（申請 ID：" + unpublishRequestId
-                        + "）需要補件；原因：" + note + "。請修改後重新送出審核");
+                "活動「" + review.eventName() + "」的下架申請需要補件；原因：" + note + "。請修改後重新送出審核");
 
         saveAdminLog(
                 adminRef, AdminOperationType.REQUEST_REVISION, AdminTargetType.EVENT_UNPUBLISH_REQUEST,
                 unpublishRequestId, review.eventName(), admin.adminName() + "退回" + review.eventName() + "下架申請, 原因:" + note);
 
-        return new EventStatusChangeDto(review.eventName(), EventStatus.PUBLISHED);
+        EventStatus newEventStatus = newWorkflowStatus == WorkflowStatus.FINAL_REVIEW
+                ? EventStatus.BRANDS_PUBLISHED
+                : EventStatus.PUBLISHED;
+        return new EventStatusChangeDto(review.eventName(), newEventStatus);
     }
 
     // 處理通知中心:通知建立時間格式映射

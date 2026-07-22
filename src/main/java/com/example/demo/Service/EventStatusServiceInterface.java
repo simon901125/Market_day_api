@@ -48,19 +48,21 @@ public interface EventStatusServiceInterface<T> {
                 if (startTime != null && startTime.isAfter(now)) {
                     return EventStatus.FINAL_CONFIRMATION;
                 }
-                if (endTime != null && endTime.isBefore(now)) {
+                if (endTime != null && !endTime.isAfter(now)) {
                     return EventStatus.ENDED;
                 }
                 return EventStatus.ACTIVE;
             case FINAL_REVIEW:
-                if (brandPublicTime == null || brandPublicTime.isAfter(now)) {
-                    return EventStatus.FULL;
-                } else if (brandPublicTime.isBefore(now) && startTime.isAfter(now)) {
-                    return EventStatus.PUBLISHED;
-                } else if (startTime.isBefore(now) && endTime.isAfter(now)) {
+                if (endTime != null && !endTime.isAfter(now)) {
+                    return EventStatus.ENDED;
+                }
+                if (startTime != null && !startTime.isAfter(now)) {
                     return EventStatus.ACTIVE;
                 }
-                return EventStatus.ENDED;
+                if (brandPublicTime == null || brandPublicTime.isAfter(now)) {
+                    return EventStatus.FINAL_CONFIRMATION;
+                }
+                return EventStatus.BRANDS_PUBLISHED;
             case UNPUBLISH_REQUESTED:
                 return EventStatus.UNPUBLISH_REQUESTED;
             case UNPUBLISHED:
