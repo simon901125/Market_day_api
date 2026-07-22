@@ -71,7 +71,12 @@ public class RequestLogService {
                 statusLogService.recordForRequest(requestLogId, request);
             }
         } catch (DataAccessException exception) {
-            LOGGER.warn("Failed to write request log for {} {}", request.getMethod(), request.getRequestURI(), exception);
+            LOGGER.warn(
+                    "Failed to write request log for {} {}: {}",
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    exception.getMessage());
+            LOGGER.debug("Request log persistence failure details", exception);
         }
     }
 

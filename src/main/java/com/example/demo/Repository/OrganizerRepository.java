@@ -656,6 +656,7 @@ public class OrganizerRepository {
                     e.title AS eventTitle,
                     e.cover_image_url AS coverImageUrl,
                     e.workflow_status AS publishStatus,
+                    e.brands_public_at AS brandsPublicAt,
                     e.start_at AS eventStartAt,
                     e.end_at AS eventEndAt,
                     e.registration_start_at AS registrationStartAt,
@@ -709,6 +710,7 @@ public class OrganizerRepository {
                     e.title,
                     e.cover_image_url,
                     e.workflow_status,
+                    e.brands_public_at,
                     e.start_at,
                     e.end_at,
                     e.registration_start_at,
@@ -781,6 +783,7 @@ public class OrganizerRepository {
                     e.district,
                     e.address,
                     e.workflow_status AS publishStatus,
+                    e.brands_public_at AS brandsPublicAt,
                     e.start_at AS eventStartAt,
                     e.end_at AS eventEndAt,
                     e.registration_start_at AS registrationStartAt,
@@ -861,6 +864,7 @@ public class OrganizerRepository {
                     e.district,
                     e.address,
                     e.workflow_status,
+                    e.brands_public_at,
                     e.start_at,
                     e.end_at,
                     e.registration_start_at,
@@ -1052,7 +1056,11 @@ public class OrganizerRepository {
                          AND NOT EXISTS (
                             SELECT 1
                             FROM (
-                                SELECT TOP (DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1)
+                                SELECT TOP (CASE
+                                    WHEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) >= 0
+                                    THEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1
+                                    ELSE 0
+                                END)
                                     DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY object_id) - 1, CONVERT(date, e.start_at)) AS applyDate
                                 FROM sys.all_objects
                             ) event_dates
@@ -1074,7 +1082,11 @@ public class OrganizerRepository {
                 OUTER APPLY (
                     SELECT MAX(COALESCE(selected_count.selectedStallCount, 0)) AS selectedStallCount
                     FROM (
-                        SELECT TOP (DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1)
+                        SELECT TOP (CASE
+                            WHEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) >= 0
+                            THEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1
+                            ELSE 0
+                        END)
                             DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY object_id) - 1, CONVERT(date, e.start_at)) AS applyDate
                         FROM sys.all_objects
                     ) event_dates
@@ -1185,7 +1197,11 @@ public class OrganizerRepository {
                          AND NOT EXISTS (
                             SELECT 1
                             FROM (
-                                SELECT TOP (DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1)
+                                SELECT TOP (CASE
+                                    WHEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) >= 0
+                                    THEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1
+                                    ELSE 0
+                                END)
                                     DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY object_id) - 1, CONVERT(date, e.start_at)) AS applyDate
                                 FROM sys.all_objects
                             ) event_dates
@@ -1574,7 +1590,11 @@ public class OrganizerRepository {
                          AND NOT EXISTS (
                             SELECT 1
                             FROM (
-                                SELECT TOP (DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1)
+                                SELECT TOP (CASE
+                                    WHEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) >= 0
+                                    THEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1
+                                    ELSE 0
+                                END)
                                     DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY object_id) - 1, CONVERT(date, e.start_at)) AS applyDate
                                 FROM sys.all_objects
                             ) event_dates

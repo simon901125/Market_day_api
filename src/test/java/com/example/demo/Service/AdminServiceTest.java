@@ -346,7 +346,7 @@ class AdminServiceTest {
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("活動審核通過");
         assertThat(savedNotification.getContent())
-                .isEqualTo("活動「夏日市集」（活動 ID：1）已通過管理員審核，接下來將建置攤位地圖");
+                .isEqualTo("活動「夏日市集」已通過管理員審核，接下來將建置攤位地圖");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
@@ -468,7 +468,7 @@ class AdminServiceTest {
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("活動需要補件");
         assertThat(savedNotification.getContent())
-                .isEqualTo("活動「夏日市集」（活動 ID：1）需要補件；原因：缺少營業執照。請修改後重新送出審核");
+                .isEqualTo("活動「夏日市集」需要補件；原因：缺少營業執照。請修改後重新送出審核");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
@@ -573,7 +573,7 @@ class AdminServiceTest {
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("活動攤位地圖完成");
         assertThat(savedNotification.getContent())
-                .isEqualTo("活動「夏日市集」（活動 ID：1）的攤位地圖已建置完成，可前往活動詳情確認");
+                .isEqualTo("活動「夏日市集」的攤位地圖已建置完成，可前往活動詳情確認");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
@@ -753,7 +753,7 @@ class AdminServiceTest {
         assertThat(savedNotification.getTargetId()).isEqualTo(1L);
         assertThat(savedNotification.getTitle()).isEqualTo("活動已下架");
         assertThat(savedNotification.getContent())
-                .isEqualTo("活動「夏日市集」（活動 ID：1）的下架申請已通過，活動已下架");
+                .isEqualTo("活動「夏日市集」的下架申請已通過，活動已下架");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
@@ -902,7 +902,7 @@ class AdminServiceTest {
         assertThat(savedNotification.getTargetId()).isEqualTo(77L);
         assertThat(savedNotification.getTitle()).isEqualTo("補件通知");
         assertThat(savedNotification.getContent())
-                .isEqualTo("活動「夏日市集」的下架申請（申請 ID：77）需要補件；原因：缺少營業執照。請修改後重新送出審核");
+                .isEqualTo("活動「夏日市集」的下架申請需要補件；原因：缺少營業執照。請修改後重新送出審核");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
