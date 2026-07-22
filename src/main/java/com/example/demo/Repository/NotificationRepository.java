@@ -102,7 +102,7 @@ public class NotificationRepository {
                         resultSet.getString("target_type"),
                         nullableLong(resultSet.getObject("target_id")),
                         resultSet.getString("title"),
-                        resultSet.getString("content"),
+                        displayContent(resultSet.getString("content")),
                         resultSet.getBoolean("is_read"),
                         nullableDateTime(resultSet.getTimestamp("read_at")),
                         nullableDateTime(resultSet.getTimestamp("created_at"))));
@@ -168,7 +168,7 @@ public class NotificationRepository {
                         resultSet.getString("target_type"),
                         nullableLong(resultSet.getObject("target_id")),
                         resultSet.getString("title"),
-                        resultSet.getString("content"),
+                        displayContent(resultSet.getString("content")),
                         resultSet.getBoolean("is_read"),
                         nullableDateTime(resultSet.getTimestamp("read_at")),
                         nullableDateTime(resultSet.getTimestamp("created_at"))));
@@ -240,6 +240,17 @@ public class NotificationRepository {
 
     private LocalDateTime nullableDateTime(Timestamp value) {
         return value == null ? null : value.toLocalDateTime();
+    }
+
+    /** Removes event routing IDs and labels from client-facing notification text. */
+    static String displayContent(String content) {
+        if (content == null) {
+            return null;
+        }
+        return content
+                .replaceAll("(?i)活動\\s*ID\\s*[：:]\\s*\\d*\\s*[，,]?\\s*", "")
+                .replace("（）", "")
+                .replace("()", "");
     }
 
     private MapSqlParameterSource parameters(NotificationCreateCommand command) {
