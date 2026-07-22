@@ -1004,7 +1004,11 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         }
 
         User adminRef = userRepo.getReferenceById(admin.id());
-        WorkflowStatus newWorkflowStatus = WorkflowStatus.PUBLISHED;
+        LocalDateTime now = LocalDateTime.now();
+        WorkflowStatus newWorkflowStatus = review.brandPublicAt() != null
+                && !review.brandPublicAt().isAfter(now)
+                        ? WorkflowStatus.FINAL_REVIEW
+                        : WorkflowStatus.PUBLISHED;
 
         int eventUpdatedRows = eventRepo.updateWorkflowStatusIfCurrent(
                 review.eventId(), WorkflowStatus.UNPUBLISH_REQUESTED, newWorkflowStatus);
@@ -1029,7 +1033,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 adminRef, AdminOperationType.REQUEST_REVISION, AdminTargetType.EVENT_UNPUBLISH_REQUEST,
                 unpublishRequestId, review.eventName(), admin.adminName() + "退回" + review.eventName() + "下架申請, 原因:" + note);
 
-        return new EventStatusChangeDto(review.eventName(), EventStatus.PUBLISHED);
+        EventStatus newEventStatus = newWorkflowStatus == WorkflowStatus.FINAL_REVIEW
+                ? EventStatus.BRANDS_PUBLISHED
+                : EventStatus.PUBLISHED;
+        return new EventStatusChangeDto(review.eventName(), newEventStatus);
     }
 
     // 處理通知中心:通知建立時間格式映射

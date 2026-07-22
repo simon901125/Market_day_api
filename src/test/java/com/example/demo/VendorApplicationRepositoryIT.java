@@ -101,6 +101,34 @@ class VendorApplicationRepositoryIT extends SqlServerIntegrationTestSupport {
         assertThat(notOwned).isEmpty();
     }
 
+    @Test
+    void stallSelectionClosesAfterExactDeadlineOnTheSameDay() {
+        Long organizerId = createUser("ORGANIZER", "selection-time-organizer@example.test");
+        Vendor vendor = createVendor("selection-time-vendor@example.test", "Selection Time Vendor");
+        Long eventId = createEvent(organizerId, "Selection Time Integration Market",
+                LocalDateTime.now().plusDays(10).withNano(0));
+        createApplication("SELECTION-TIME-APP", eventId, vendor, LocalDateTime.now().withNano(0));
+
+        jdbc.update("""
+                UPDATE market_events
+                SET registration_end_at = DATEADD(
+                    SECOND, -1,
+                    DATEADD(DAY, 1, CAST(CAST(SYSDATETIME() AS date) AS datetime2))
+                )
+                WHERE id = :eventId
+                """, Map.of("eventId", eventId));
+        assertThat(repository.findApplicationForSelection("SELECTION-TIME-APP").orElseThrow())
+                .containsEntry("selectionOpen", true);
+
+        jdbc.update("""
+                UPDATE market_events
+                SET registration_end_at = CAST(CAST(SYSDATETIME() AS date) AS datetime2)
+                WHERE id = :eventId
+                """, Map.of("eventId", eventId));
+        assertThat(repository.findApplicationForSelection("SELECTION-TIME-APP").orElseThrow())
+                .containsEntry("selectionOpen", false);
+    }
+
     private Long createUser(String role, String email) {
         Long userId = userRepository.createLocalUser(role, email, "hash");
         userRepository.markEmailVerified(userId);

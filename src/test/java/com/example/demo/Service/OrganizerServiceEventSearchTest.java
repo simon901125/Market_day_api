@@ -107,6 +107,31 @@ class OrganizerServiceEventSearchTest {
                 .containsExactly(6L);
     }
 
+    @Test
+    void distinguishesFinalConfirmationFromPublishedBrands() {
+        LocalDateTime now = LocalDateTime.now();
+        Map<String, Object> confirming = eventRow(10L, 20, 10, 10, 8);
+        confirming.put("workflowStatus", "FINAL_REVIEW");
+        confirming.put("registrationEndAt", now.minusMinutes(2));
+        confirming.put("brandsPublicAt", now.plusMinutes(2));
+        Map<String, Object> published = eventRow(11L, 20, 10, 10, 10);
+        published.put("workflowStatus", "FINAL_REVIEW");
+        published.put("registrationEndAt", now.minusMinutes(2));
+        published.put("brandsPublicAt", now.minusMinutes(1));
+        when(organizerRepository.findOrganizerEvents(7L, null, null, null))
+                .thenReturn(List.of(confirming, published));
+
+        var response = organizerService.searchOrganizerEvents(
+                AUTH, null, null, null, null, "DEFAULT", 1, 6, false);
+
+        assertThat(response.getData().getEvents().getItems())
+                .extracting(event -> event.status())
+                .containsExactlyInAnyOrder("finalConfirmation", "brandsPublished");
+        assertThat(response.getData().getEvents().getItems())
+                .extracting(event -> event.statusText())
+                .containsExactlyInAnyOrder("最終名單確認中", "品牌已公開");
+    }
+
     private Map<String, Object> eventRow(
             Long id, int capacity, int registered, int paid, int selected) {
         LocalDateTime now = LocalDateTime.now();
