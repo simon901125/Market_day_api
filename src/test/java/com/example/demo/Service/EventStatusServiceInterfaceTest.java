@@ -52,10 +52,13 @@ class EventStatusServiceInterfaceTest {
 
         assertThat(service.checkEventStatus(WorkflowStatus.FINAL_REVIEW,
                 now.minusDays(3), now.minusDays(2), null, now.plusDays(1), now.plusDays(2), 10, 10))
-                .isEqualTo(EventStatus.FULL);
+                .isEqualTo(EventStatus.FINAL_CONFIRMATION);
+        assertThat(service.checkEventStatus(WorkflowStatus.FINAL_REVIEW,
+                now.minusDays(3), now.minusDays(2), now.plusHours(1), now.plusDays(1), now.plusDays(2), 10, 10))
+                .isEqualTo(EventStatus.FINAL_CONFIRMATION);
         assertThat(service.checkEventStatus(WorkflowStatus.FINAL_REVIEW,
                 now.minusDays(3), now.minusDays(2), now.minusHours(1), now.plusDays(1), now.plusDays(2), 10, 10))
-                .isEqualTo(EventStatus.PUBLISHED);
+                .isEqualTo(EventStatus.BRANDS_PUBLISHED);
         assertThat(service.checkEventStatus(WorkflowStatus.FINAL_REVIEW,
                 now.minusDays(3), now.minusDays(2), now.minusDays(2), now.minusHours(1), now.plusHours(1), 10, 10))
                 .isEqualTo(EventStatus.ACTIVE);
