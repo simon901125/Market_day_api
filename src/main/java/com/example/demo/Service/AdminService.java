@@ -1062,22 +1062,31 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
 
         LocalDateTime now = LocalDateTime.now();
+        String paymentAccount = event.paymentAccount() == null? "指定帳戶" : event.paymentAccount();
+        //活動已結束
         boolean eventEnded = event.workflowStatus() == WorkflowStatus.FINAL_REVIEW
                 && event.endAt() != null && !event.endAt().isAfter(now);
+        //24小時內有通知紀錄
         boolean notifiedRecently = eventRepo.existsPaymentNotificationSince(eventId, now.minusHours(24));
 
-        if (!eventEnded || !Boolean.FALSE.equals(event.paymentReceived()) || notifiedRecently) {
+        if (!eventEnded) {
             throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
+        }
+        if (Boolean.TRUE.equals(event.paymentReceived())) {
+            throw new IllegalArgumentException(event.title() + "主辦方已確認收到活動款項");
+        }
+        if (notifiedRecently) {
+            throw new IllegalArgumentException("在24小時內通知過"+ event.title() + "主辦方");
         }
 
         saveNotification(
                 userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
                 NotificationType.PAYMENT_SETTLED, NotificationTargetType.MARKET_EVENT, eventId,
-                "確認款項", "小集市已將活動「" + event.title() + "」的款項轉至帳戶: " + event.paymentAccount() + "請盡速確認");
+                "確認款項", "小集市已將活動「" + event.title() + "」的款項轉至帳戶: " + paymentAccount + "請盡速確認");
 
         saveAdminLog(
                 userRepo.getReferenceById(admin.id()), AdminOperationType.NOTIFY_EVENT_PAYMENT, AdminTargetType.MARKET_EVENT,
-                eventId, event.title(), admin.adminName() + "通知" + event.title() + "款項已結清");
+                eventId, event.title(), admin.adminName() + "通知" + event.title() + "主辦方款項已結清");
 
         return new EventStatusChangeDto(event.title(), EventStatus.ENDED);
     }

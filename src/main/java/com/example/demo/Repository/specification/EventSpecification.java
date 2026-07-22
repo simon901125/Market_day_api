@@ -139,7 +139,8 @@ public class EventSpecification {
                 );
                 case ENDED -> cb.and(
                         root.get("workflowStatus").in(WorkflowStatus.PUBLISHED, WorkflowStatus.FINAL_REVIEW),
-                        cb.lessThanOrEqualTo(root.<LocalDateTime>get("endAt"), now));
+                        cb.lessThanOrEqualTo(root.<LocalDateTime>get("endAt"), now),
+                        cb.isTrue(root.<Boolean>get("paymentReceived")));
                 case UNPUBLISH_REQUESTED -> cb.equal(root.get("workflowStatus"), WorkflowStatus.UNPUBLISH_REQUESTED);
                 case UNPUBLISHED -> cb.equal(root.get("workflowStatus"), WorkflowStatus.UNPUBLISHED);
             };
