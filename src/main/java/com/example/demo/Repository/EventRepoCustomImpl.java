@@ -58,6 +58,7 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
                 root.get("registrationEndAt").alias("registrationEndAt"),
                 root.get("brandPublicAt").alias("brandPublicAt"),
                 root.get("maxBooths").alias("maxBooths"),
+                root.get("paymentReceived").alias("paymentReceived"),
                 EventSpecification.registeredBoothCountSubquery(root, cq, cb).alias("registeredBoothCount"),
                 submittedAtSubquery(root, cq, cb).alias("submittedAt")
             );

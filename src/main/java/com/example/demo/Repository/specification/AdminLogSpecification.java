@@ -68,12 +68,8 @@ public class AdminLogSpecification {
         return (root, cq, cb) -> {
             if (operationType == null) {
                 return null;
-            } else if (operationType.equals(AdminOperationType.ACTIVITY_REVIEW)) {
-                return cb.or(
-                        cb.equal(root.get("operationType"), AdminOperationType.ACTIVITY_REVIEW),
-                        cb.equal(root.get("operationType"), AdminOperationType.EVENT_UNPUBLISH_REVIEW),
-                        cb.equal(root.get("operationType"), AdminOperationType.MAP_BUILD_COMPLETED));
-            }
+            } 
+            
             return cb.equal(root.get("operationType"), operationType);
         };
     }
