@@ -31,21 +31,19 @@ jobs:
 
       - name: Restart backend service
         run: |
-          sudo systemctl restart marketday
+          sudo -n /usr/bin/systemctl restart marketday.service
 
       - name: Wait for backend startup
         run: |
-          for i in {1..30}; do
-            if curl --silent --fail http://localhost:8081/v3/api-docs > /dev/null; then
-              echo "Market Day backend is healthy."
-              exit 0
-            fi
-
-            echo "Waiting for backend... attempt $i/30"
-            sleep 2
-          done
-
-          echo "Backend health check failed."
-          sudo systemctl status marketday --no-pager
-          sudo journalctl -u marketday -n 100 --no-pager
-          exit 1
+         for i in {1..30}; do
+           if curl --silent --fail http://localhost:8081/v3/api-docs > /dev/null; then
+             echo "Market Day backend is healthy."
+             exit 0
+           fi     
+           echo "Waiting for backend... attempt $i/30"
+           sleep 2
+         done     
+         echo "Backend health check failed."
+         sudo -n /usr/bin/systemctl status marketday.service --no-pager
+         sudo -n /usr/bin/journalctl -u marketday.service -n 100 --no-pager
+         exit 1
