@@ -902,7 +902,7 @@ class AdminServiceTest {
         assertThat(savedNotification.getTargetId()).isEqualTo(77L);
         assertThat(savedNotification.getTitle()).isEqualTo("補件通知");
         assertThat(savedNotification.getContent())
-                .isEqualTo("活動「夏日市集」的下架申請需要補件；原因： 缺少營業執照 請修改後重新送出審核");
+                .isEqualTo("活動「夏日市集」的下架申請需要補件；原因：缺少營業執照。請修改後重新送出審核");
 
         ArgumentCaptor<AdminOperationLog> logCaptor = ArgumentCaptor.forClass(AdminOperationLog.class);
         verify(logRepo).save(logCaptor.capture());
