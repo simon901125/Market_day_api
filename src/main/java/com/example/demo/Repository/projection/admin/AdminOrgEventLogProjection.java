@@ -15,6 +15,7 @@ import com.example.demo.enums.status.WorkflowStatus;
  * @param registrationEndAt 報名結束時間
  * @param brandPublicAt 品牌公開時間
  * @param maxBooths 攤位總數
+ * @param paymentReceived 是否已收款
  *
  * @see com.example.demo.Repository.EventRepo#findOrgEventLogs(Long, org.springframework.data.domain.Pageable)
  */
@@ -27,5 +28,6 @@ public record AdminOrgEventLogProjection(
     LocalDateTime registrationStartAt,
     LocalDateTime registrationEndAt,
     LocalDateTime brandPublicAt,
-    Integer maxBooths
+    Integer maxBooths,
+    Boolean paymentReceived
 ) {}
