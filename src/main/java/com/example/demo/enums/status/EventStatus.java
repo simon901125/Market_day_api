@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 
 
 /**
- * 對應資前端顯示的市集活動狀態，包含草稿、待審核、補件中、地圖建置中、待發布、報名中、已額滿、品牌已公開、進行中、已結束、下架申請中、已下架
+ * 對應前端顯示的市集活動狀態。
  */
 @Getter
 @RequiredArgsConstructor
@@ -28,12 +28,14 @@ public enum EventStatus {
     REGISTRATION_OPEN("registrationOpen", "報名中"), 
     /**活動公開後狀態:攤位已額滿 */
     FULL("full", "已額滿"),
-    /**活動公開後狀態:活動參與品牌已公開 */
+    /** 活動已發布，但報名尚未開始。 */
     PUBLISHED("published", "已發布"),
     /**活動公開後狀態:活動進行中 */
     ACTIVE("active", "進行中"),
-    /**報名截止後、活動開始前的最終確認階段*/
-    FINAL_CONFIRMATION("finalConfirmation", "最終確認"),
+    /** 報名截止後，系統尚未完成取消未付款報名及自動選位。 */
+    FINAL_CONFIRMATION("finalConfirmation", "最終名單確認中"),
+    /** 自動選位完成且品牌公開時間已到，活動尚未開始。 */
+    BRANDS_PUBLISHED("brandsPublished", "品牌已公開"),
     /**活動公開後狀態:活動已結束 */
     ENDED("ended", "已結束"),
     /**活動公開後狀態:主辦方提出活動下架申請 */

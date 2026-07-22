@@ -966,16 +966,20 @@ public class OrganizerService {
                     yield registeredCount < capacity ? EventStatus.REGISTRATION_OPEN : EventStatus.FULL;
                 }
                 if (startAt != null && now.isBefore(startAt)) yield EventStatus.FINAL_CONFIRMATION;
-                if (endAt != null && now.isAfter(endAt)) yield EventStatus.ENDED;
+                if (endAt != null && !endAt.isAfter(now)) yield EventStatus.ENDED;
                 yield EventStatus.ACTIVE;
             }
             case FINAL_REVIEW -> {
                 LocalDateTime now = LocalDateTime.now();
+                LocalDateTime brandsPublicAt = toLocalDateTime(event.get("brandsPublicAt"));
                 LocalDateTime startAt = toLocalDateTime(firstPresent(event.get("eventStartAt"), event.get("startAt")));
                 LocalDateTime endAt = toLocalDateTime(firstPresent(event.get("eventEndAt"), event.get("endAt")));
-                if (endAt != null && now.isAfter(endAt)) yield EventStatus.ENDED;
+                if (endAt != null && !endAt.isAfter(now)) yield EventStatus.ENDED;
                 if (startAt != null && !now.isBefore(startAt)) yield EventStatus.ACTIVE;
-                yield EventStatus.PUBLISHED;
+                if (brandsPublicAt == null || now.isBefore(brandsPublicAt)) {
+                    yield EventStatus.FINAL_CONFIRMATION;
+                }
+                yield EventStatus.BRANDS_PUBLISHED;
             }
         };
     }
@@ -2527,7 +2531,7 @@ public class OrganizerService {
         LocalDateTime startAt = toLocalDateTime(application.get("eventStartAt"));
         LocalDateTime endAt = toLocalDateTime(application.get("eventEndAt"));
         LocalDateTime now = LocalDateTime.now();
-        if (endAt != null && now.isAfter(endAt)) {
+        if (endAt != null && !now.isBefore(endAt)) {
             return "已結束";
         }
         if (startAt != null && !now.isBefore(startAt) && (endAt == null || !now.isAfter(endAt))) {
@@ -2555,7 +2559,7 @@ public class OrganizerService {
         LocalDateTime startAt = toLocalDateTime(event.get("eventStartAt"));
         LocalDateTime endAt = toLocalDateTime(event.get("eventEndAt"));
 
-        if (endAt != null && now.isAfter(endAt)) {
+        if (endAt != null && !now.isBefore(endAt)) {
             return "已結束";
         }
         if (startAt != null && !now.isBefore(startAt) && (endAt == null || !now.isAfter(endAt))) {
@@ -2567,7 +2571,7 @@ public class OrganizerService {
         if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
             return isStallEventFull(event) ? "已額滿" : "報名中";
         }
-        if (brandsPublicAt == null) {
+        if (brandsPublicAt == null || now.isBefore(brandsPublicAt)) {
             return "最終名單確認中";
         }
         return "品牌已公開";

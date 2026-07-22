@@ -1212,7 +1212,7 @@ public class StallService {
         LocalDateTime startAt = toLocalDateTime(eventData.get("startAt"));
         LocalDateTime endAt = toLocalDateTime(eventData.get("endAt"));
 
-        if (endAt != null && now.isAfter(endAt)) {
+        if (endAt != null && !now.isBefore(endAt)) {
             return "已結束";
         }
         if (startAt != null && !now.isBefore(startAt) && (endAt == null || !now.isAfter(endAt))) {
@@ -1224,7 +1224,7 @@ public class StallService {
         if (registrationEndAt != null && !now.isAfter(registrationEndAt)) {
             return isOrganizerEventFull(eventData) ? "已額滿" : "報名中";
         }
-        if (brandsPublicAt == null) {
+        if (brandsPublicAt == null || now.isBefore(brandsPublicAt)) {
             return "最終名單確認中";
         }
         return "品牌已公開";
