@@ -31,7 +31,7 @@ jobs:
 
       - name: Restart backend service
         run: |
-          sudo -n /usr/bin/systemctl restart marketday.service
+          /usr/bin/sudo.ws -n /usr/bin/systemctl restart marketday.service
 
       - name: Wait for backend startup
         run: |
