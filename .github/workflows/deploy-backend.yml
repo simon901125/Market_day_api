@@ -1,0 +1,51 @@
+name: Deploy Market Day Backend
+
+on:
+  push:
+    branches:
+      - ubuntu
+
+concurrency:
+  group: marketday-backend-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+
+    steps:
+      - name: Update production source
+        working-directory: /home/chengchih1125/Market_day_api
+        run: |
+          git fetch origin ubuntu
+          git reset --hard origin/ubuntu
+
+      - name: Build Spring Boot JAR
+        working-directory: /home/chengchih1125/Market_day_api
+        run: |
+          chmod +x mvnw
+          ./mvnw clean package -DskipTests
+
+      - name: Restart backend service
+        run: |
+          sudo systemctl restart marketday
+
+      - name: Wait for backend startup
+        run: |
+          for i in {1..30}; do
+            if curl --silent --fail http://localhost:8081/v3/api-docs > /dev/null; then
+              echo "Market Day backend is healthy."
+              exit 0
+            fi
+
+            echo "Waiting for backend... attempt $i/30"
+            sleep 2
+          done
+
+          echo "Backend health check failed."
+          sudo systemctl status marketday --no-pager
+          sudo journalctl -u marketday -n 100 --no-pager
+          exit 1
