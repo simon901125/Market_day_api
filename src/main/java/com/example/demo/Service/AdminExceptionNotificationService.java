@@ -32,8 +32,7 @@ public class AdminExceptionNotificationService {
         notification.setTargetType(NotificationTargetType.MARKET_EVENT);
         notification.setTargetId(eventId);
         notification.setTitle("活動狀態異常");
-        notification.setContent("活動「" + eventTitle.trim() + "」（活動 ID：" + eventId
-                + "）目前為申請下架狀態，但資料庫查無對應的活動下架申請單，請立即確認資料一致性");
+        notification.setContent("活動「" + eventTitle.trim() + "」目前為申請下架狀態，但資料庫查無對應的活動下架申請單，請立即確認資料一致性");
         notificationRepo.save(notification);
     }
 }
