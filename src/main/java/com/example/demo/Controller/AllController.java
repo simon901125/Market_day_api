@@ -34,6 +34,7 @@ import com.example.demo.dto.response.StoredImageResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -123,6 +124,11 @@ public class AllController {
     @PostMapping(value = "/api/images", consumes = "multipart/form-data")
     public ApiResponse<StoredImageResponse> storeImage(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @Parameter(
+                    description = "圖片用途：VENDOR_AVATAR（攤主大頭照）、VENDOR_COVER（攤主封面）、PRODUCT（商品圖片）、EVENT_COVER（活動封面）、EVENT_MAP（活動地圖）",
+                    schema = @Schema(
+                            allowableValues = { "VENDOR_AVATAR", "VENDOR_COVER", "PRODUCT", "EVENT_COVER", "EVENT_MAP" },
+                            example = "VENDOR_AVATAR"))
             @RequestParam(value = "purpose", required = false) String purpose,
             @RequestParam(value = "productId", required = false) Long productId,
             @RequestParam(value = "eventId", required = false) Long eventId,
