@@ -46,6 +46,7 @@ import com.example.demo.enums.status.WorkflowStatus;
  * @param mrt 捷運交通資訊
  * @param bus 公車交通資訊
  * @param driving 開車交通資訊
+ * @param paymentReceived 是否已收款
  *
  * @see com.example.demo.Repository.EventRepo#findEventDetailById(Long)
 */
@@ -83,5 +84,6 @@ public record AdminEventDetailProjection(
     LocalTime serviceEndTime,
     String mrt,
     String bus,
-    String driving
+    String driving,
+    Boolean paymentReceived
 ) {}

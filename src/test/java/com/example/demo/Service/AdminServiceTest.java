@@ -79,7 +79,7 @@ class AdminServiceTest {
     @Test void dashboardAggregatesRepositoryCounters() {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
-        when(notificationRepo.countUnreadNoticesByCategory(9L, NotificationCategory.EXCEPTION)).thenReturn(8L);
+        when(eventRepo.countEndedEventsPaymentNotNotified(any())).thenReturn(8);
         AdminNoticeProjection notice = new AdminNoticeProjection(
                 101L, NotificationType.SYSTEM_EXCEPTION, NotificationTargetType.MARKET_EVENT, 1L,
                 "標題", "內容", false, LocalDateTime.of(2026, 1, 1, 12, 0));
@@ -97,7 +97,7 @@ class AdminServiceTest {
         assertThat(result.pendingReview()).isEqualTo(1);
         assertThat(result.mapBuilding()).isEqualTo(2);
         assertThat(result.pendingUnpublish()).isEqualTo(3);
-        assertThat(result.systemWarning()).isEqualTo(8);
+        assertThat(result.eventPayment()).isEqualTo(8);
         assertThat(result.totalOrganizer()).isEqualTo(4);
         assertThat(result.totalVender()).isEqualTo(5);
         assertThat(result.totalActivity()).isEqualTo(6);
@@ -309,7 +309,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L, "王小華", null, null, null)));
 
         assertThatThrownBy(() -> service.setEventApprove(1L, "op@test.com", Role.ADMIN, null))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -322,7 +322,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventRepo.updateWorkflowStatusIfCurrent(
                 1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING)).thenReturn(1);
         User adminRef = new User();
@@ -363,7 +363,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
                 1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING, "已補充審查資料")).thenReturn(1);
         when(userRepo.getReferenceById(9L)).thenReturn(new User());
@@ -380,7 +380,7 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(
-                        1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+                        1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventRepo.updateWorkflowStatusIfCurrent(
                 1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.MAP_BUILDING)).thenReturn(0);
 
@@ -431,7 +431,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.DRAFT, "夏日市集", 5L, "王小華", null, null, null)));
 
         assertThatThrownBy(() -> service.setEventRevision(1L, "op@test.com", Role.ADMIN, "缺少營業執照"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -444,7 +444,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
                 1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.REVISION_REQUIRED, "缺少營業執照")).thenReturn(1);
         User adminRef = new User();
@@ -486,7 +486,7 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(
-                        1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+                        1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventRepo.updateWorkflowStatusAndReviewNoteIfCurrent(
                 1L, WorkflowStatus.PENDING_REVIEW, WorkflowStatus.REVISION_REQUIRED, "缺少營業執照"))
                 .thenReturn(0);
@@ -529,7 +529,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.PENDING_REVIEW, "夏日市集", 5L, "王小華", null, null, null)));
 
         assertThatThrownBy(() -> service.setEventMapComplete(1L, "op@test.com", Role.ADMIN))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -542,7 +542,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華", null, null, null)));
         stubMapGenerationData(1L);
         User adminRef = new User();
         User organizerRef = new User();
@@ -590,7 +590,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, null)));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, null, null, null, null)));
         stubMapGenerationData(1L);
         when(userRepo.getReferenceById(9L)).thenReturn(new User());
         when(userRepo.getReferenceById(5L)).thenReturn(new User());
@@ -609,7 +609,7 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(
-                        1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華")));
+                        1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華", null, null, null)));
         stubMapGenerationData(1L);
         when(eventRepo.updateWorkflowStatusIfCurrent(
                 1L, WorkflowStatus.MAP_BUILDING, WorkflowStatus.READY_TO_PUBLISH)).thenReturn(0);
@@ -625,7 +625,7 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(
-                        1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華")));
+                        1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華", null, null, null)));
         MarketEvent marketEvent = marketEvent(1L, 3);
         when(eventRepo.findById(1L)).thenReturn(Optional.of(marketEvent));
         when(zoneRepo.findByMarketEventId(1L)).thenReturn(List.of(zone("A 區", 2)));
@@ -643,7 +643,7 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(
-                        1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華")));
+                        1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventRepo.findById(1L)).thenReturn(Optional.of(marketEvent(1L, 3)));
         when(zoneRepo.findByMarketEventId(1L)).thenReturn(List.of(
                 zone("A 區", 2), zone("B 區", 1)));
@@ -688,7 +688,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.MAP_BUILDING, "夏日市集", 5L, "王小華", null, null, null)));
 
         assertThatThrownBy(() -> service.setEventUnpublish(1L, "op@test.com", Role.ADMIN, "庫存已清空"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -700,7 +700,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventUnpublishRequestRepo.findLatestRequestIdByEventIdAndStatus(1L, UnpublishRequestStatus.PENDING))
                 .thenReturn(Optional.empty());
         User adminRef = new User();
@@ -722,7 +722,7 @@ class AdminServiceTest {
         when(userRepo.findAdminLookupByEmailAndRole("op@test.com", Role.ADMIN))
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
-                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", 5L, "王小華")));
+                .thenReturn(Optional.of(new EventApprovalProjection(1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventUnpublishRequestRepo.findLatestRequestIdByEventIdAndStatus(1L, UnpublishRequestStatus.PENDING))
                 .thenReturn(Optional.of(77L));
         when(eventRepo.updateWorkflowStatusIfCurrent(
@@ -771,7 +771,7 @@ class AdminServiceTest {
                 .thenReturn(Optional.of(new AdminLookupProjection(9L, "管理員小明")));
         when(eventRepo.findApprovalStatusById(1L))
                 .thenReturn(Optional.of(new EventApprovalProjection(
-                        1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", 5L, "王小華")));
+                        1L, WorkflowStatus.UNPUBLISH_REQUESTED, "夏日市集", 5L, "王小華", null, null, null)));
         when(eventUnpublishRequestRepo.findLatestRequestIdByEventIdAndStatus(
                 1L, UnpublishRequestStatus.PENDING)).thenReturn(Optional.of(77L));
         when(userRepo.getReferenceById(9L)).thenReturn(new User());

@@ -115,7 +115,11 @@ public enum NotificationType {
     LOGIN_ANOMALY("loginAnomaly", "登入異常"),
 
     /**密碼重設完成 */
-    PASSWORD_RESET_COMPLETED("passwordResetCompleted", "密碼重設完成");
+    PASSWORD_RESET_COMPLETED("passwordResetCompleted", "密碼重設完成"),
+
+    /**平台將活動款項結清 */
+    PAYMENT_SETTLED("paymentSettled", "款項已結清");
+
 
     @JsonValue
     private final String type; //序列化
