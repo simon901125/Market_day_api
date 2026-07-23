@@ -27,11 +27,36 @@ jobs:
         working-directory: /home/chengchih1125/Market_day_api
         run: |
           chmod +x mvnw
+          chmod +x run-local.sh
           ./mvnw clean package -DskipTests
 
-      - name: Restart backend service
+      - name: Install backend service
+        run: |
+          /usr/bin/sudo.ws -n /usr/bin/install -m 0644 \
+            /home/chengchih1125/Market_day_api/deploy/marketday.service \
+            /etc/systemd/system/marketday.service
+          /usr/bin/sudo.ws -n /usr/bin/systemctl daemon-reload
+
+      - name: Restart backend through run-local.sh
         run: |
           /usr/bin/sudo.ws -n /usr/bin/systemctl restart marketday.service
+
+      - name: Verify deployed runtime configuration
+        run: |
+          exec_start="$(/usr/bin/systemctl show marketday.service -p ExecStart --value)"
+          echo "${exec_start}" | /usr/bin/grep -F '/home/chengchih1125/Market_day_api/run-local.sh'
+
+          main_pid="$(/usr/bin/systemctl show marketday.service -p MainPID --value)"
+          test "${main_pid}" -gt 0
+
+          runtime_environment="$(/usr/bin/tr '\0' '\n' < "/proc/${main_pid}/environ")"
+          for expected in \
+            'FRONTEND_URL=https://market-day-1hp.pages.dev' \
+            'NEWEBPAY_NOTIFY_URL=https://api.marketday.dev/api/newebpay/notify' \
+            'NEWEBPAY_RETURN_URL=https://api.marketday.dev/api/newebpay/return'
+          do
+            echo "${runtime_environment}" | /usr/bin/grep -Fx "${expected}"
+          done
 
       - name: Wait for backend startup
         run: |
@@ -44,6 +69,6 @@ jobs:
            sleep 2
          done     
          echo "Backend health check failed."
-         sudo -n /usr/bin/systemctl status marketday.service --no-pager
-         sudo -n /usr/bin/journalctl -u marketday.service -n 100 --no-pager
+         /usr/bin/sudo.ws -n /usr/bin/systemctl status marketday.service --no-pager
+         /usr/bin/sudo.ws -n /usr/bin/journalctl -u marketday.service -n 100 --no-pager
          exit 1
