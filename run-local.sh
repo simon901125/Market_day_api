@@ -22,7 +22,7 @@ export MAIL_PASSWORD='srdn gsqs aote ftzr'
 export NEWEBPAY_MERCHANT_ID='MS159696944'
 export NEWEBPAY_HASH_KEY='X4PbYeq4MAD5kNo6Ha7m5H1jl2R61bDx'
 export NEWEBPAY_HASH_IV='CLy3UEghj63S3YKP'
-export NEWEBPAY_NOTIFY_URL='https://disengage-chaste-musky.ngrok-free.dev/api/newebpay/notify'
-export NEWEBPAY_RETURN_URL='https://disengage-chaste-musky.ngrok-free.dev/api/newebpay/return'
+export NEWEBPAY_NOTIFY_URL='https://35.206.243.153:8081/api/newebpay/notify'
+export NEWEBPAY_RETURN_URL='https://35.206.243.153:8081/api/newebpay/return'
 
 exec ./mvnw spring-boot:run
