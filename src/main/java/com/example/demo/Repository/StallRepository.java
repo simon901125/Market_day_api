@@ -1478,6 +1478,7 @@ public class StallRepository {
                 FROM dbo.event_applications
                 WHERE event_id = :eventId
                   AND vendor_profile_id = :vendorProfileId
+                  AND is_cancelled = 0
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1562,6 +1563,7 @@ public class StallRepository {
                     deposit_amount,
                     payment_due_at
                 )
+                OUTPUT INSERTED.id
                 VALUES (
                     :applicationNo,
                     :eventId,
@@ -1585,9 +1587,11 @@ public class StallRepository {
                 .addValue("totalAmount", totalAmount)
                 .addValue("depositAmount", depositAmount)
                 .addValue("paymentDueAt", paymentDueAt);
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        namedParameterJdbcTemplate.update(sql, params, keyHolder, new String[] { "id" });
-        return keyHolder.getKey().longValue();
+        Long applicationId = namedParameterJdbcTemplate.queryForObject(sql, params, Long.class);
+        if (applicationId == null || applicationId <= 0) {
+            throw new IllegalStateException("Event application was created without a valid generated id");
+        }
+        return applicationId;
     }
 
     /**

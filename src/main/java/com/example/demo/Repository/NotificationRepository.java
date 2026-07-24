@@ -13,6 +13,7 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.stereotype.Repository;
 
 import com.example.demo.dto.notification.NotificationCreateCommand;
+import com.example.demo.dto.notification.NotificationContentSanitizer;
 import com.example.demo.dto.response.VendorNotificationItemResponse;
 import com.example.demo.dto.response.OrganizerNotificationItemResponse;
 import com.example.demo.enums.notification.NotificationCategory;
@@ -242,15 +243,9 @@ public class NotificationRepository {
         return value == null ? null : value.toLocalDateTime();
     }
 
-    /** Removes event routing IDs and labels from client-facing notification text. */
+    /** Removes routing ID fields from historical client-facing notification text. */
     static String displayContent(String content) {
-        if (content == null) {
-            return null;
-        }
-        return content
-                .replaceAll("(?i)活動\\s*ID\\s*[：:]\\s*\\d*\\s*[，,]?\\s*", "")
-                .replace("（）", "")
-                .replace("()", "");
+        return NotificationContentSanitizer.sanitize(content);
     }
 
     private MapSqlParameterSource parameters(NotificationCreateCommand command) {
@@ -262,16 +257,6 @@ public class NotificationRepository {
                 .addValue("targetId", command.targetId())
                 .addValue("dedupKey", command.dedupKey())
                 .addValue("title", command.title())
-                .addValue("content", publicContent(command));
-    }
-
-    private String publicContent(NotificationCreateCommand command) {
-        if (command.targetId() == null || command.content() == null) {
-            return command.content();
-        }
-        // Routing identifiers belong in target_type/target_id. They must not be
-        // embedded in the human-readable notification body returned to clients.
-        String id = java.util.regex.Pattern.quote(command.targetId().toString());
-        return command.content().replaceAll("(?<!\\d)" + id + "(?!\\d)", "");
+                .addValue("content", NotificationContentSanitizer.sanitize(command.content()));
     }
 }

@@ -58,6 +58,7 @@ import com.example.demo.dto.response.admin.AdminEventDetailDto;
 import com.example.demo.dto.response.CategoryResponse;
 import com.example.demo.dto.response.admin.AdminEventListDto;
 import com.example.demo.dto.response.admin.AdminNoticeDto;
+import com.example.demo.dto.notification.NotificationContentSanitizer;
 import com.example.demo.dto.response.admin.AdminOperationLogDto;
 import com.example.demo.dto.response.admin.AdminOrgDetailDto;
 import com.example.demo.dto.response.admin.AdminOrgEventManagementDto;
@@ -1101,7 +1102,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 notice.targetType(),
                 notice.targetId(),
                 notice.title(),
-                notice.content(),
+                NotificationContentSanitizer.sanitize(notice.content()),
                 notice.isRead(),
                 time);
     }
@@ -1213,7 +1214,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         notification.setTargetType(targetType);
         notification.setTargetId(targetId);
         notification.setTitle(title);
-        notification.setContent(content);
+        notification.setContent(NotificationContentSanitizer.sanitize(content));
         notificationRepo.save(notification);
     }
 

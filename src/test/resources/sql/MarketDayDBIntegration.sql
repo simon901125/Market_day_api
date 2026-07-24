@@ -427,7 +427,6 @@ CREATE TABLE dbo.event_applications
     created_at DATETIME2(0) NOT NULL CONSTRAINT DF_event_applications_created_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_event_applications PRIMARY KEY (id),
     CONSTRAINT UQ_event_applications_application_no UNIQUE (application_no),
-    CONSTRAINT UQ_event_applications_event_vendor_profile UNIQUE (event_id, vendor_profile_id),
     CONSTRAINT FK_event_applications_market_events FOREIGN KEY (event_id) REFERENCES dbo.market_events(id),
     CONSTRAINT FK_event_applications_users FOREIGN KEY (user_id) REFERENCES dbo.users(id),
     CONSTRAINT FK_event_applications_vendor_profiles FOREIGN KEY (vendor_profile_id) REFERENCES dbo.vendor_profiles(id),
@@ -442,6 +441,9 @@ CREATE INDEX IX_event_applications_user ON dbo.event_applications(user_id);
 CREATE INDEX IX_event_applications_payment_due ON dbo.event_applications(payment_status, payment_due_at);
 CREATE INDEX IX_event_applications_cancelled ON dbo.event_applications(is_cancelled);
 CREATE INDEX IX_event_applications_created ON dbo.event_applications(created_at);
+CREATE UNIQUE INDEX UX_event_applications_active_event_vendor
+ON dbo.event_applications(event_id, vendor_profile_id)
+WHERE is_cancelled = 0;
 GO
 
 CREATE TABLE dbo.application_review_notes
@@ -650,6 +652,7 @@ CREATE TABLE dbo.admin_operation_logs
         N'ACCOUNT_RESTORED',
         N'EVENT_UNPUBLISH_REVIEW',
         N'MAP_BUILD_COMPLETED',
+        N'NOTIFY_EVENT_PAYMENT',
         N'SYSTEM_SETTING'
     )),
     CONSTRAINT CK_admin_operation_logs_target_type CHECK (target_type IN (

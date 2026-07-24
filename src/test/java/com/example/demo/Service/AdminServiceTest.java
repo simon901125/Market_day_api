@@ -82,7 +82,8 @@ class AdminServiceTest {
         when(eventRepo.countEndedEventsPaymentNotNotified(any())).thenReturn(8);
         AdminNoticeProjection notice = new AdminNoticeProjection(
                 101L, NotificationType.SYSTEM_EXCEPTION, NotificationTargetType.MARKET_EVENT, 1L,
-                "標題", "內容", false, LocalDateTime.of(2026, 1, 1, 12, 0));
+                "標題", "主辦方建立新活動（活動 ID：），請確認活動內容",
+                false, LocalDateTime.of(2026, 1, 1, 12, 0));
         when(notificationRepo.findAdminNotices(eq(9L), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(List.of(notice));
         when(notificationRepo.countAdminNotices(9L, null, null)).thenReturn(1L);
@@ -104,6 +105,8 @@ class AdminServiceTest {
         assertThat(result.active()).isEqualTo(7);
         assertThat(result.notices()).hasSize(1);
         assertThat(result.notices().get(0).id()).isEqualTo(101L);
+        assertThat(result.notices().get(0).targetId()).isEqualTo(1L);
+        assertThat(result.notices().get(0).content()).isEqualTo("主辦方建立新活動，請確認活動內容");
     }
 
     @Test void dashboardRejectsWhenOperatorIsNotFound() {
