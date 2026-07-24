@@ -939,6 +939,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
         }
 
+        if (eventApplicationRepo.existsUnprocessedPayment(eventId)) {
+            throw new IllegalArgumentException("當前活動尚有未處理款項");
+        }
+
         User adminRef = userRepo.getReferenceById(admin.id());
 
         Long unpublishRequestId = eventUnpublishRequestRepo

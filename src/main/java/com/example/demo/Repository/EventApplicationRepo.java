@@ -99,4 +99,14 @@ public interface EventApplicationRepo extends JpaRepository<EventApplication, Lo
                 and e.workflowStatus = 'FINAL_REVIEW'
             """)
     int countEndedEvents(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+    /** 管理員後台: 檢查活動是否還有已付款且未取消的報名申請(款項尚未處理) */
+    @Query("""
+            select count(a.id) > 0
+            from EventApplication a
+            where a.event.id = :eventId
+                and a.isCancelled = false
+                and a.paymentStatus = 'PAID'
+            """)
+    boolean existsUnprocessedPayment(@Param("eventId") Long eventId);
 }
