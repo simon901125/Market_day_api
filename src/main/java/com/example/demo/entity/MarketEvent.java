@@ -140,14 +140,6 @@ public class MarketEvent {
     @Column(name = "deposit_amount", precision = 10, scale = 2)
     private BigDecimal depositAmount;
 
-    /** 管理員轉交活動款項時使用的主辦方付款帳號 */
-    @Column(name = "payment_account", length = 100, columnDefinition = "varchar(100)")
-    private String paymentAccount;
-
-    /** 主辦方是否已確認收到活動全部款項 */
-    @Column(name = "payment_received", nullable = false)
-    private Boolean paymentReceived = false;
-
     /** 開車交通資訊 */
     @Column(name = "traffic_info_driving", columnDefinition = "nvarchar(max)")
     private String driving; 

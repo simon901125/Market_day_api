@@ -41,10 +41,7 @@ public enum EventStatus {
     /**活動公開後狀態:主辦方提出活動下架申請 */
     UNPUBLISH_REQUESTED("pendingUnpublish", "下架申請中"),
     /**活動公開後狀態:活動下架 */
-    UNPUBLISHED("unpublished", "已下架"),
-    /**活動已結束款項未交付 */
-    PAYMENT("payment", "款項未結清");
-
+    UNPUBLISHED("unpublished", "已下架");
 
 
     @JsonValue

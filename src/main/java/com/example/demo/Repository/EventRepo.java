@@ -35,38 +35,6 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
         """)
     int countByEventInPlatform(@Param("now") LocalDateTime now);
 
-    /** 計算活動已結束款項未交付且未通知過的數量*/
-    @Query("""
-            select count(e.id)
-            from MarketEvent e
-            where e.workflowStatus = 'FINAL_REVIEW'
-            and e.endAt <= :now
-            and e.paymentReceived = false
-            and 0 = (
-                select count(r)
-                from RequestLog r
-                where r.user.role = 'ADMIN'
-                    and r.path = CONCAT('/api/admin/events/', e.id, '/payment')
-                    and r.statusCode = 200
-            )
-            """)
-    int countEndedEventsPaymentNotNotified(@Param("now") LocalDateTime now);
-
-    /** 判斷指定活動是否符合"款項未交付且管理員未通知過"的條件，用於活動詳細頁的eventStatus判斷 */
-    @Query("""
-            select case when e.paymentReceived = false and 0 = (
-                select count(r)
-                from RequestLog r
-                where r.user.role = 'ADMIN'
-                    and r.path = CONCAT('/api/admin/events/', e.id, '/payment')
-                    and r.statusCode = 200
-            ) then true else false end
-            from MarketEvent e
-            where e.id = :eventId
-            """)
-    boolean isPaymentNotNotified(@Param("eventId") Long eventId);
-
-
     /** 管理員後台: 主辦方詳細:活動管理紀錄列表 (只撈頁面需要用到的欄位，依活動開始時間新到舊) */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.AdminOrgEventLogProjection(
@@ -78,8 +46,7 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
                 e.registrationStartAt,
                 e.registrationEndAt,
                 e.brandPublicAt,
-                e.maxBooths,
-                e.paymentReceived
+                e.maxBooths
             )
             FROM MarketEvent e
             WHERE e.user.id = :userId and e.workflowStatus not in ('DRAFT', 'CANCELLED')
@@ -158,8 +125,7 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
                 organizerProfile.serviceEndTime,
                 market.metro,
                 market.bus,
-                market.driving,
-                market.paymentReceived
+                market.driving
             )
             FROM MarketEvent market
             JOIN market.user user
@@ -172,17 +138,14 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
     @Query("SELECT category FROM MarketEvent market JOIN market.categories category WHERE market.id = :id ORDER BY category.id")
     List<Category> findCategoriesByEventId(@Param("id") Long id);
 
-    /** 管理員後台: 活動審核:查詢操作對象目前活動狀態，只查id、流程狀態、活動名稱、主辦方id、主辦方聯絡人姓名、結束時間、收款狀態、收款帳號 */
+    /** 管理員後台: 活動審核:查詢操作對象目前活動狀態，只查id、流程狀態、活動名稱、主辦方id、主辦方聯絡人姓名 */
     @Query("""
             SELECT new com.example.demo.Repository.projection.admin.EventApprovalProjection(
                 market.id,
                 market.workflowStatus,
                 market.title,
                 market.user.id,
-                userProfile.contactName,
-                market.endAt,
-                market.paymentReceived,
-                market.paymentAccount
+                userProfile.contactName
             )
             FROM MarketEvent market
             JOIN market.user user
@@ -190,17 +153,6 @@ public interface EventRepo extends JpaRepository<MarketEvent, Long>, JpaSpecific
             WHERE market.id = :eventId
             """)
     Optional<EventApprovalProjection> findApprovalStatusById(@Param("eventId") Long eventId);
-
-    /** 判斷指定活動在指定時間之後，是否已有管理員成功呼叫過通知款項api，用於避免24小時內重複通知 */
-    @Query("""
-            select case when count(r) > 0 then true else false end
-            from RequestLog r
-            where r.user.role = 'ADMIN'
-                and r.path = CONCAT('/api/admin/events/', :eventId, '/payment')
-                and r.statusCode = 200
-                and r.createdAt >= :since
-            """)
-    boolean existsPaymentNotificationSince(@Param("eventId") Long eventId, @Param("since") LocalDateTime since);
 
     /** 管理員後台: 活動審核:僅當目前流程狀態符合預期時才更新狀態，回傳影響筆數 */
     @Modifying

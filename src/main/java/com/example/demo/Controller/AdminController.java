@@ -315,31 +315,6 @@ public class AdminController {
         }
     }
 
-    @Operation(summary = "通知主辦方活動款項已結清", description = "通知主辦方活動款項已結清")
-    @PostMapping("/events/{id}/payment")
-    public ApiResponse<?> setEventPaymentNotification(
-            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-            @PathVariable Long id) {
-        if (id == null) {
-            return ApiResponse.fail("請提供活動id");
-        }
-
-        String token = jwtService.extractTokenFromAuthorizationHeader(authorizationHeader);
-        if (token == null || token.isBlank() || !jwtService.isTokenValid(token)) {
-            return ApiResponse.fail("驗證憑證無效或已過期");
-        }
-
-        try {
-            String operatorEmail = jwtService.getEmail(token);
-            Role operatorRole = Role.fromRole(jwtService.getRole(token));
-            return ApiResponse.success("ok", service.setEventPaymentNotification(id, operatorEmail, operatorRole));
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.fail(e.getMessage());
-        } catch (Exception e) {
-            return ApiResponse.fail("通知主辦方活動款項已結清失敗");
-        }
-    }
-
     /**
      * 用來獲取管理員後台: 使用者搜尋頁面所需資料<br>
      * <b>API路徑</b>: /api/admin/users/search<br>
