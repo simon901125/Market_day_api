@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - ubuntu
+  workflow_dispatch:
 
 concurrency:
   group: marketday-backend-deploy
@@ -18,13 +19,13 @@ jobs:
 
     steps:
       - name: Update production source
-        working-directory: /home/chengchih1125/Market_day_api
+        working-directory: /home/zxcasdqwe901125/Market_day_api
         run: |
           git fetch origin ubuntu
           git reset --hard origin/ubuntu
 
       - name: Build Spring Boot JAR
-        working-directory: /home/chengchih1125/Market_day_api
+        working-directory: /home/zxcasdqwe901125/Market_day_api
         run: |
           chmod +x mvnw
           chmod +x run-local.sh
@@ -32,43 +33,61 @@ jobs:
 
       - name: Install backend service
         run: |
-          /usr/bin/sudo.ws -n /usr/bin/install -m 0644 \
-            /home/chengchih1125/Market_day_api/deploy/marketday.service \
+          /usr/bin/sudo -n /usr/bin/install -m 0644 \
+            /home/zxcasdqwe901125/Market_day_api/deploy/marketday.service \
             /etc/systemd/system/marketday.service
-          /usr/bin/sudo.ws -n /usr/bin/systemctl daemon-reload
+          /usr/bin/sudo -n /usr/bin/systemctl daemon-reload
+          /usr/bin/sudo -n /usr/bin/systemctl enable marketday.service
 
       - name: Restart backend through run-local.sh
         run: |
-          /usr/bin/sudo.ws -n /usr/bin/systemctl restart marketday.service
+          /usr/bin/sudo -n /usr/bin/systemctl restart marketday.service
 
       - name: Verify deployed runtime configuration
         run: |
           exec_start="$(/usr/bin/systemctl show marketday.service -p ExecStart --value)"
-          echo "${exec_start}" | /usr/bin/grep -F '/home/chengchih1125/Market_day_api/run-local.sh'
+          echo "${exec_start}" | /usr/bin/grep -F '/home/zxcasdqwe901125/Market_day_api/run-local.sh'
 
           main_pid="$(/usr/bin/systemctl show marketday.service -p MainPID --value)"
           test "${main_pid}" -gt 0
 
           runtime_environment="$(/usr/bin/tr '\0' '\n' < "/proc/${main_pid}/environ")"
           for expected in \
-            'FRONTEND_URL=https://market-day-1hp.pages.dev' \
+            'SWAGGER_PUBLIC_BASE_URL=https://api.marketday.dev' \
+            'DB_URL=jdbc:sqlserver://127.0.0.1:1433;databaseName=MarketDayDB;encrypt=true;trustServerCertificate=true' \
+            'DB_USERNAME=sa' \
+            'FRONTEND_URL=https://market-day-web.pages.dev' \
             'NEWEBPAY_NOTIFY_URL=https://api.marketday.dev/api/newebpay/notify' \
-            'NEWEBPAY_RETURN_URL=https://api.marketday.dev/api/newebpay/return'
+            'NEWEBPAY_RETURN_URL=https://api.marketday.dev/api/newebpay/return' \
+            'IMAGE_STORAGE=gcs' \
+            'GCS_BUCKET=market-day-images-503508' \
+            'GCS_PUBLIC_BASE_URL=https://storage.googleapis.com'
           do
             echo "${runtime_environment}" | /usr/bin/grep -Fx "${expected}"
           done
 
+          echo "${runtime_environment}" \
+            | /usr/bin/grep -E '^PAYMENT_CREDENTIAL_ENCRYPTION_KEY=.{32,}$' \
+            > /dev/null
+
+          if echo "${runtime_environment}" \
+            | /usr/bin/grep -Eq '^NEWEBPAY_(MERCHANT_ID|HASH_KEY|HASH_IV)='
+          then
+            echo "Legacy global NewebPay credentials must not be set."
+            exit 1
+          fi
+
       - name: Wait for backend startup
         run: |
-         for i in {1..30}; do
-           if curl --silent --fail http://localhost:8081/v3/api-docs > /dev/null; then
-             echo "Market Day backend is healthy."
-             exit 0
-           fi     
-           echo "Waiting for backend... attempt $i/30"
-           sleep 2
-         done     
-         echo "Backend health check failed."
-         /usr/bin/sudo.ws -n /usr/bin/systemctl status marketday.service --no-pager
-         /usr/bin/sudo.ws -n /usr/bin/journalctl -u marketday.service -n 100 --no-pager
-         exit 1
+          for i in {1..30}; do
+            if curl --silent --fail http://localhost:8081/v3/api-docs > /dev/null; then
+              echo "Market Day backend is healthy."
+              exit 0
+            fi
+            echo "Waiting for backend... attempt $i/30"
+            sleep 2
+          done
+          echo "Backend health check failed."
+          /usr/bin/sudo -n /usr/bin/systemctl status marketday.service --no-pager
+          /usr/bin/sudo -n /usr/bin/journalctl -u marketday.service -n 100 --no-pager
+          exit 1

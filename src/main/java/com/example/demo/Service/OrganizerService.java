@@ -127,9 +127,27 @@ public class OrganizerService {
         }
 
         boolean needsProfile = isOrganizerProfileIncomplete(organizer);
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> paymentAccount = organizerPaymentAccountRepository
+                .findByOrganizerUserId(organizerUserId)
+                .orElse(null);
+        String paymentAccountStatus = paymentAccount == null
+                ? null
+                : statusText(paymentAccount.get("status"));
+        String verificationStatus = paymentAccount == null
+                ? "UNVERIFIED"
+                : statusText(paymentAccount.get("verificationStatus"));
+        boolean paymentAccountVerified = "ACTIVE".equals(paymentAccountStatus)
+                && "VERIFIED".equals(verificationStatus);
+        boolean needsPaymentAccount = !needsProfile && !paymentAccountVerified;
         return ApiResponse.success(
                 "Organizer dashboard initialized successfully",
-                new OrganizerDashboardInitResponse(needsProfile));
+                new OrganizerDashboardInitResponse(
+                        needsProfile,
+                        needsPaymentAccount,
+                        !needsProfile && paymentAccountVerified,
+                        paymentAccountStatus,
+                        verificationStatus));
     }
 
     public ApiResponse<OrganizerEventSearchResponse> searchOrganizerEvents(
@@ -311,6 +329,21 @@ public class OrganizerService {
         if (organizer.containsKey("message")) {
             return ApiResponse.fail(organizer.get("message").toString());
         }
+        if (isOrganizerProfileIncomplete(organizer)) {
+            return ApiResponse.fail(
+                    409,
+                    "請先完成主辦方基本資料，才能建立活動");
+        }
+
+        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
+        Map<String, Object> paymentAccount = organizerPaymentAccountRepository
+                .findActiveByOrganizerUserId(organizerUserId)
+                .orElse(null);
+        if (paymentAccount == null) {
+            return ApiResponse.fail(
+                    409,
+                    "請先綁定藍新金流帳戶並完成 NT$1 驗證，才能建立活動");
+        }
 
         if (request == null) {
             return ApiResponse.fail("Event data is required");
@@ -327,20 +360,9 @@ public class OrganizerService {
             return ApiResponse.fail("Event categories are invalid or inactive");
         }
 
-        Long organizerUserId = ((Number) organizer.get("userId")).longValue();
         Long eventId = draft.eventId();
         if (eventId == null) {
-            Map<String, Object> paymentAccount = organizerPaymentAccountRepository
-                    .findActiveByOrganizerUserId(organizerUserId)
-                    .orElse(null);
-            if (requiresOnlinePayment(draft) && paymentAccount == null) {
-                return ApiResponse.fail(
-                        409,
-                        "請先綁定並啟用藍新金流帳戶，才能建立付費活動");
-            }
-            Long paymentAccountId = paymentAccount == null
-                    ? null
-                    : ((Number) paymentAccount.get("paymentAccountId")).longValue();
+            Long paymentAccountId = ((Number) paymentAccount.get("paymentAccountId")).longValue();
             eventId = organizerRepository.createOrganizerEvent(
                     organizerUserId, draft, paymentAccountId);
         } else {
@@ -368,17 +390,6 @@ public class OrganizerService {
 
         ApiResponse<OrganizerEventDetailResponse> detail = getOrganizerEventDetail(authorizationHeader, eventId);
         return new ApiResponse<>(detail.getStatusCode(), "活動儲存成功", detail.getData());
-    }
-
-    private boolean requiresOnlinePayment(OrganizerEventSaveRequest request) {
-        if (isPositive(request.booth().baseFee())
-                || isPositive(request.booth().depositAmount())) {
-            return true;
-        }
-        return request.equipment().items().stream()
-                .anyMatch(item -> "PAID".equalsIgnoreCase(item.chargeType())
-                        && item.rentalFee() != null
-                        && item.rentalFee().signum() > 0);
     }
 
     @Transactional

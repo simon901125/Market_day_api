@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.demo.Repository.OrganizerRepository;
+import com.example.demo.Repository.OrganizerPaymentAccountRepository;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.OrganizerDashboardInitResponse;
 
@@ -29,6 +30,9 @@ class OrganizerServiceDashboardInitTest {
 
     @Mock
     private OrganizerRepository organizerRepository;
+
+    @Mock
+    private OrganizerPaymentAccountRepository organizerPaymentAccountRepository;
 
     @Mock
     private JwtService jwtService;
@@ -54,6 +58,8 @@ class OrganizerServiceDashboardInitTest {
 
         assertTrue(response.isSuccessStatus());
         assertTrue(response.getData().needsProfile());
+        assertFalse(response.getData().needsPaymentAccount());
+        assertFalse(response.getData().canCreateEvent());
     }
 
     @Test
@@ -62,24 +68,52 @@ class OrganizerServiceDashboardInitTest {
         organizer.put("companyName", null);
         organizer.put("taxId", null);
         when(organizerRepository.findOrganizerAccountByEmail(EMAIL)).thenReturn(Optional.of(organizer));
+        when(organizerPaymentAccountRepository.findByOrganizerUserId(1L))
+                .thenReturn(Optional.of(verifiedPaymentAccount()));
 
         ApiResponse<OrganizerDashboardInitResponse> response =
                 organizerService.initOrganizerDashboard(AUTHORIZATION_HEADER);
 
         assertTrue(response.isSuccessStatus());
         assertFalse(response.getData().needsProfile());
+        assertFalse(response.getData().needsPaymentAccount());
+        assertTrue(response.getData().canCreateEvent());
     }
 
     @Test
     void shouldNotRequireProfileWhenAllRequiredFieldsArePresent() {
         when(organizerRepository.findOrganizerAccountByEmail(EMAIL))
                 .thenReturn(Optional.of(completeOrganizer()));
+        when(organizerPaymentAccountRepository.findByOrganizerUserId(1L))
+                .thenReturn(Optional.of(verifiedPaymentAccount()));
 
         ApiResponse<OrganizerDashboardInitResponse> response =
                 organizerService.initOrganizerDashboard(AUTHORIZATION_HEADER);
 
         assertTrue(response.isSuccessStatus());
         assertFalse(response.getData().needsProfile());
+        assertFalse(response.getData().needsPaymentAccount());
+        assertTrue(response.getData().canCreateEvent());
+    }
+
+    @Test
+    void shouldRequireVerifiedPaymentAccountAfterProfileIsComplete() {
+        when(organizerRepository.findOrganizerAccountByEmail(EMAIL))
+                .thenReturn(Optional.of(completeOrganizer()));
+        when(organizerPaymentAccountRepository.findByOrganizerUserId(1L))
+                .thenReturn(Optional.of(Map.of(
+                        "status", "DISABLED",
+                        "verificationStatus", "PENDING")));
+
+        ApiResponse<OrganizerDashboardInitResponse> response =
+                organizerService.initOrganizerDashboard(AUTHORIZATION_HEADER);
+
+        assertTrue(response.isSuccessStatus());
+        assertFalse(response.getData().needsProfile());
+        assertTrue(response.getData().needsPaymentAccount());
+        assertFalse(response.getData().canCreateEvent());
+        assertTrue("DISABLED".equals(response.getData().paymentAccountStatus()));
+        assertTrue("PENDING".equals(response.getData().paymentAccountVerificationStatus()));
     }
 
     private Map<String, Object> completeOrganizer() {
@@ -99,5 +133,11 @@ class OrganizerServiceDashboardInitTest {
         organizer.put("serviceStartTime", LocalTime.of(9, 0));
         organizer.put("serviceEndTime", LocalTime.of(18, 0));
         return organizer;
+    }
+
+    private Map<String, Object> verifiedPaymentAccount() {
+        return Map.of(
+                "status", "ACTIVE",
+                "verificationStatus", "VERIFIED");
     }
 }

@@ -43,7 +43,7 @@ class OrganizerServiceEventSaveTest {
         when(jwtService.isTokenValid("valid-token")).thenReturn(true);
         when(jwtService.getEmail("valid-token")).thenReturn("organizer@example.com");
         when(organizerRepository.findOrganizerAccountByEmail("organizer@example.com"))
-                .thenReturn(Optional.of(new LinkedHashMap<>(Map.of("userId", 7L, "role", "ORGANIZER"))));
+                .thenReturn(Optional.of(completeOrganizer()));
         lenient().when(organizerPaymentAccountRepository.findActiveByOrganizerUserId(7L))
                 .thenReturn(Optional.of(Map.of("paymentAccountId", 9L)));
     }
@@ -114,9 +114,8 @@ class OrganizerServiceEventSaveTest {
     }
 
     @Test
-    void rejectsPaidEventWhenOrganizerHasNoActivePaymentAccount() {
+    void rejectsEventWhenOrganizerHasNoActiveVerifiedPaymentAccount() {
         OrganizerEventSaveRequest request = validRequest(null);
-        when(organizerRepository.countActiveCategories(Set.of(1L))).thenReturn(1);
         when(organizerPaymentAccountRepository.findActiveByOrganizerUserId(7L))
                 .thenReturn(Optional.empty());
 
@@ -124,6 +123,19 @@ class OrganizerServiceEventSaveTest {
 
         assertThat(response.getStatusCode()).isEqualTo(409);
         assertThat(response.getMessage()).contains("藍新金流帳戶");
+    }
+
+    @Test
+    void rejectsEventWhenOrganizerProfileIsIncomplete() {
+        Map<String, Object> incompleteOrganizer = completeOrganizer();
+        incompleteOrganizer.put("address", null);
+        when(organizerRepository.findOrganizerAccountByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(incompleteOrganizer));
+
+        var response = organizerService.saveOrganizerEvent(AUTH, validRequest(null));
+
+        assertThat(response.getStatusCode()).isEqualTo(409);
+        assertThat(response.getMessage()).contains("主辦方基本資料");
     }
 
     @Test
@@ -168,6 +180,23 @@ class OrganizerServiceEventSaveTest {
                         BigDecimal.valueOf(2500), BigDecimal.valueOf(500),
                         List.of(new OrganizerEventSaveRequest.Zone(null, "A 區", 20, "#F97316"))),
                 new OrganizerEventSaveRequest.Equipment(false, false, false, List.of()));
+    }
+
+    private Map<String, Object> completeOrganizer() {
+        Map<String, Object> organizer = new LinkedHashMap<>();
+        organizer.put("userId", 7L);
+        organizer.put("role", "ORGANIZER");
+        organizer.put("organizerName", "Market Day Organizer");
+        organizer.put("contactName", "Test User");
+        organizer.put("contactPhone", "0912345678");
+        organizer.put("contactEmail", "contact@example.com");
+        organizer.put("city", "臺北市");
+        organizer.put("district", "信義區");
+        organizer.put("address", "測試地址");
+        organizer.put("serviceDays", "MON,TUE");
+        organizer.put("serviceStartTime", java.time.LocalTime.of(9, 0));
+        organizer.put("serviceEndTime", java.time.LocalTime.of(18, 0));
+        return organizer;
     }
 
     private OrganizerEventSaveRequest withZones(

@@ -1,15 +1,15 @@
 [Unit]
 Description=Market Day Spring Boot API
-After=network-online.target
-Wants=network-online.target
+After=network-online.target mssql-server.service
+Wants=network-online.target mssql-server.service
 
 [Service]
 Type=simple
-User=chengchih1125
-Group=chengchih1125
+User=zxcasdqwe901125
+Group=zxcasdqwe901125
 
-WorkingDirectory=/home/chengchih1125/Market_day_api
-ExecStart=/usr/bin/bash /home/chengchih1125/Market_day_api/run-local.sh
+WorkingDirectory=/home/zxcasdqwe901125/Market_day_api
+ExecStart=/usr/bin/bash /home/zxcasdqwe901125/Market_day_api/run-local.sh
 
 Restart=on-failure
 RestartSec=5
