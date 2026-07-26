@@ -61,7 +61,7 @@ jobs:
             'NEWEBPAY_NOTIFY_URL=https://api.marketday.dev/api/newebpay/notify' \
             'NEWEBPAY_RETURN_URL=https://api.marketday.dev/api/newebpay/return' \
             'IMAGE_STORAGE=gcs' \
-            'GCS_BUCKET=market-day-images-503508' \
+            'GCS_BUCKET=market_day_images' \
             'GCS_PUBLIC_BASE_URL=https://storage.googleapis.com'
           do
             echo "${runtime_environment}" | /usr/bin/grep -Fx "${expected}"

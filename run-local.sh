@@ -37,7 +37,7 @@ export FRONTEND_URL='https://market-day-web.pages.dev'
 
 # Google Cloud Storage
 export IMAGE_STORAGE='gcs'
-export GCS_BUCKET='market-day-images-503508'
+export GCS_BUCKET='market_day_images'
 export GCS_PUBLIC_BASE_URL='https://storage.googleapis.com'
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
