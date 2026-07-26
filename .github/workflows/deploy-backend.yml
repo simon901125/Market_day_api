@@ -16,6 +16,7 @@ jobs:
       - self-hosted
       - Linux
       - X64
+      - marketday-server
 
     steps:
       - name: Update production source
