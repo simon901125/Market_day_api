@@ -1,5 +1,28 @@
 # API Response 與 DTO 架構
 
+## 2026-07-26 主辦方藍新帳戶、付款與退款回傳
+
+正式 API 維持統一回傳格式：
+
+```json
+{
+  "statusCode": 200,
+  "message": "操作成功",
+  "messageDetails": null,
+  "data": {}
+}
+```
+
+- 主辦方 `newebpay/load` 會回傳 MerchantID、`bound`、`status`、`verificationStatus`、`verifiedAt`、`updatedAt`，並保留 `hashKey`、`hashIv` 欄位但固定回傳空字串，不回傳金鑰明文或密文。
+- `newebpay/verify` 建立 NT$1 驗證付款，回傳藍新 MPG 表單資料；帳戶驗證狀態包含 `UNVERIFIED`、`PENDING`、`VERIFIED`、`FAILED`。
+- `GET /api/organizers/me/payment-account` 僅供綁定狀態檢查，回傳遮罩後 MerchantID、帳戶狀態與更新時間。
+- 建立付款成功時，`data` 會提供前端送往藍新的 gateway、MerchantID、TradeInfo、TradeSha、Version、付款單號及報名編號。
+- 攤主提出退款後會取得退款編號、原付款資訊、退款金額、保證金與 `REFUND_REQUESTED` 狀態。
+- 主辦方確認退款成功時回傳藍新 MerchantID、原商店訂單編號、藍新交易序號、退款／調整金額與 `REFUNDED` 狀態。
+- 藍新退款失敗時使用 HTTP 502；`message` 表示退款失敗，`messageDetails` 保存藍新或驗證失敗原因，退款資料則標記為 `FAILED`，供後續重試。
+- Notify 為藍新伺服器端通知端點，獨立回傳純文字 `1|OK` 或 `0|原因`，不套用全域 JSON 包裝。
+- Return 成功驗證後使用 HTTP 302 導向 `FRONTEND_URL` 的付款結果頁，不回傳一般 JSON body。
+
 更新日期：2026-07-15
 
 目前 `demo` 的 Controller 直接回傳 `ApiResponse<T>`，其中 `T` 會是對應的 Response DTO。

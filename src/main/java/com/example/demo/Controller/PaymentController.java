@@ -45,7 +45,7 @@ public class PaymentController {
             NewebPayService newebPayService,
             VendorRefundService vendorRefundService,
             OrganizerRefundService organizerRefundService,
-            @Value("${frontend.url:http://localhost:4200}") String frontendUrl) {
+            @Value("${frontend.url:}") String frontendUrl) {
         this.newebPayService = newebPayService;
         this.vendorRefundService = vendorRefundService;
         this.organizerRefundService = organizerRefundService;

@@ -216,7 +216,10 @@ public class AutomaticStallAssignmentRepository {
         String sql = """
                 UPDATE dbo.market_events
                 SET workflow_status = N'FINAL_REVIEW',
-                    brands_public_at = COALESCE(brands_public_at, :publishedAt)
+                    brands_public_at = COALESCE(
+                        brands_public_at,
+                        CAST(DATEADD(HOUR, 8, SYSUTCDATETIME()) AS DATETIME2(0))
+                    )
                 WHERE id = :eventId
                   AND workflow_status = N'PUBLISHED'
                 """;

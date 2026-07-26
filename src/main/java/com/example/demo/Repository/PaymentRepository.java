@@ -49,9 +49,18 @@ public class PaymentRepository {
                     a.payment_status AS paymentStatus,
                     a.payment_due_at AS paymentDueAt,
                     a.is_cancelled AS isCancelled,
-                    me.title AS eventName
+                    me.title AS eventName,
+                    me.payment_account_id AS paymentAccountId,
+                    opa.organizer_profile_id AS paymentOrganizerProfileId,
+                    opa.merchant_id AS merchantId,
+                    opa.hash_key_encrypted AS hashKeyEncrypted,
+                    opa.hash_iv_encrypted AS hashIvEncrypted,
+                    opa.status AS paymentAccountStatus,
+                    opa.verification_status AS paymentAccountVerificationStatus
                     FROM dbo.event_applications a
                     INNER JOIN dbo.market_events me ON me.id = a.event_id
+                    LEFT JOIN dbo.organizer_payment_accounts opa
+                        ON opa.id = me.payment_account_id
                     WHERE a.application_no = :applicationNo
                 """;
 
@@ -122,6 +131,7 @@ public class PaymentRepository {
                     amount,
                     provider,
                     provider_trade_no AS providerTradeNo,
+                    payment_account_id AS paymentAccountId,
                     status,
                     paid_at AS paidAt,
                     created_at AS createdAt
@@ -180,11 +190,16 @@ public class PaymentRepository {
         return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(sql, map).stream().findFirst());
     }
 
-    public void createPendingPayment(String paymentNo, Long applicationId, BigDecimal amount) {
+    public void createPendingPayment(
+            String paymentNo,
+            Long applicationId,
+            Long paymentAccountId,
+            BigDecimal amount) {
         String sql = """
                 INSERT INTO dbo.payments (
                     payment_no,
                     application_id,
+                    payment_account_id,
                     amount,
                     provider,
                     status
@@ -192,6 +207,7 @@ public class PaymentRepository {
                 VALUES (
                     :paymentNo,
                     :applicationId,
+                    :paymentAccountId,
                     :amount,
                     N'NEWEBPAY',
                     N'PENDING'
@@ -201,8 +217,13 @@ public class PaymentRepository {
         Map<String, Object> map = new HashMap<>();
         map.put("paymentNo", paymentNo);
         map.put("applicationId", applicationId);
+        map.put("paymentAccountId", paymentAccountId);
         map.put("amount", amount);
         namedParameterJdbcTemplate.update(sql, map);
+    }
+
+    public void createPendingPayment(String paymentNo, Long applicationId, BigDecimal amount) {
+        createPendingPayment(paymentNo, applicationId, null, amount);
     }
 
     public Long createRefund(
@@ -251,6 +272,8 @@ public class PaymentRepository {
                     p.amount,
                     p.provider,
                     p.provider_trade_no AS providerTradeNo,
+                    p.payment_account_id AS paymentAccountId,
+                    payment_up.user_id AS paymentAccountOrganizerUserId,
                     p.status AS paymentRecordStatus,
                     p.paid_at AS paidAt,
                     a.application_no AS applicationNo,
@@ -258,11 +281,21 @@ public class PaymentRepository {
                     me.user_id AS organizerUserId,
                     a.payment_status AS applicationPaymentStatus,
                     me.title AS eventTitle,
-                    vp.brand_name AS brandName
+                    vp.brand_name AS brandName,
+                    opa.merchant_id AS merchantId,
+                    opa.hash_key_encrypted AS hashKeyEncrypted,
+                    opa.hash_iv_encrypted AS hashIvEncrypted,
+                    opa.status AS paymentAccountStatus,
+                    opa.verification_status AS paymentAccountVerificationStatus
                 FROM dbo.payments p
                 INNER JOIN dbo.event_applications a ON a.id = p.application_id
                 INNER JOIN dbo.market_events me ON me.id = a.event_id
                 INNER JOIN dbo.vendor_profiles vp ON vp.id = a.vendor_profile_id
+                LEFT JOIN dbo.organizer_payment_accounts opa ON opa.id = p.payment_account_id
+                LEFT JOIN dbo.organizer_profiles payment_op
+                    ON payment_op.id = opa.organizer_profile_id
+                LEFT JOIN dbo.user_profiles payment_up
+                    ON payment_up.id = payment_op.user_profile_id
                 WHERE p.payment_no = :paymentNo
                 """;
 
@@ -272,12 +305,24 @@ public class PaymentRepository {
     }
 
     public int markPaymentPaid(String paymentNo, String providerTradeNo, LocalDateTime paidAt) {
+        return markPaymentPaid(paymentNo, providerTradeNo, paidAt, null, null);
+    }
+
+    public int markPaymentPaid(
+            String paymentNo,
+            String providerTradeNo,
+            LocalDateTime paidAt,
+            String responseCode,
+            String providerMessage) {
         String sql = """
                 UPDATE dbo.payments
                 SET
                     status = N'PAID',
                     provider_trade_no = :providerTradeNo,
-                    paid_at = COALESCE(:paidAt, SYSDATETIME())
+                    provider_response_code = :responseCode,
+                    provider_message = :providerMessage,
+                    paid_at = COALESCE(:paidAt, SYSDATETIME()),
+                    updated_at = SYSDATETIME()
                 WHERE payment_no = :paymentNo
                   AND status <> N'PAID'
                 """;
@@ -286,15 +331,28 @@ public class PaymentRepository {
         map.put("paymentNo", paymentNo);
         map.put("providerTradeNo", providerTradeNo);
         map.put("paidAt", paidAt);
+        map.put("responseCode", responseCode);
+        map.put("providerMessage", providerMessage);
         return namedParameterJdbcTemplate.update(sql, map);
     }
 
     public int markPaymentFailed(String paymentNo, String providerTradeNo) {
+        return markPaymentFailed(paymentNo, providerTradeNo, null, null);
+    }
+
+    public int markPaymentFailed(
+            String paymentNo,
+            String providerTradeNo,
+            String responseCode,
+            String providerMessage) {
         String sql = """
                 UPDATE dbo.payments
                 SET
                     status = N'FAILED',
-                    provider_trade_no = COALESCE(:providerTradeNo, provider_trade_no)
+                    provider_trade_no = COALESCE(:providerTradeNo, provider_trade_no),
+                    provider_response_code = :responseCode,
+                    provider_message = :providerMessage,
+                    updated_at = SYSDATETIME()
                 WHERE payment_no = :paymentNo
                   AND status = N'PENDING'
                 """;
@@ -302,6 +360,8 @@ public class PaymentRepository {
         Map<String, Object> map = new HashMap<>();
         map.put("paymentNo", paymentNo);
         map.put("providerTradeNo", providerTradeNo);
+        map.put("responseCode", responseCode);
+        map.put("providerMessage", providerMessage);
         return namedParameterJdbcTemplate.update(sql, map);
     }
 
@@ -357,12 +417,20 @@ public class PaymentRepository {
                     p.amount AS paymentAmount,
                     p.provider,
                     p.provider_trade_no AS providerTradeNo,
+                    p.payment_account_id AS paymentAccountId,
+                    payment_up.user_id AS paymentAccountOrganizerUserId,
                     p.status AS paymentStatus,
                     p.paid_at AS paidAt
                 FROM dbo.refunds r
                 INNER JOIN dbo.event_applications a ON a.id = r.application_id
                 INNER JOIN dbo.market_events me ON me.id = a.event_id
                 INNER JOIN dbo.payments p ON p.id = r.payment_id
+                LEFT JOIN dbo.organizer_payment_accounts opa
+                    ON opa.id = p.payment_account_id
+                LEFT JOIN dbo.organizer_profiles payment_op
+                    ON payment_op.id = opa.organizer_profile_id
+                LEFT JOIN dbo.user_profiles payment_up
+                    ON payment_up.id = payment_op.user_profile_id
                 WHERE r.refund_no = :refundNo
                 """;
 

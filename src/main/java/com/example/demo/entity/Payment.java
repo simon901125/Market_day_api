@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -53,6 +54,14 @@ public class Payment {
     @JoinColumn(name = "application_id", nullable = false, foreignKey = @ForeignKey(name = "FK_payments_event_applications"))
     private EventApplication application;
 
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "payment_account_id",
+            foreignKey = @ForeignKey(name = "FK_payments_payment_account"))
+    private OrganizerPaymentAccount paymentAccount;
+
     /**金額 */
     @Column(name = "amount", precision = 10, scale = 2, nullable = false)
     private BigDecimal amount;
@@ -82,10 +91,17 @@ public class Payment {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+    @Column(name = "expired_at")
+    private LocalDateTime expiredAt;
+
     /**建立時間 */
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
 
     // ----------其他Entity的FK----------
 

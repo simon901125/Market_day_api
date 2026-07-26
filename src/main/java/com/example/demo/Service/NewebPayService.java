@@ -28,11 +28,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Config.NewebPayProperties;
 import com.example.demo.Repository.PaymentRepository;
+import com.example.demo.Repository.OrganizerPaymentAccountRepository;
 import com.example.demo.dto.request.VendorPaymentRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.NewebPayPaymentResponse;
 import com.example.demo.dto.response.NewebPayRefundResultResponse;
 import com.example.demo.dto.response.NewebPayQueryResponse;
+import com.example.demo.dto.response.OrganizerNewebPayVerificationPaymentResponse;
 import com.example.demo.dto.response.PaymentStatusResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,6 +52,12 @@ public class NewebPayService {
     private PaymentRepository paymentRepository;
 
     @Autowired
+    private OrganizerPaymentAccountRepository organizerPaymentAccountRepository;
+
+    @Autowired
+    private CredentialEncryptionService credentialEncryptionService;
+
+    @Autowired
     private JwtService jwtService;
 
     @Autowired
@@ -59,6 +67,28 @@ public class NewebPayService {
     private NotificationService notificationService;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    public OrganizerNewebPayVerificationPaymentResponse createPaymentAccountVerification(
+            Map<String, Object> account,
+            String verificationNo,
+            BigDecimal amount) {
+        NewebPayCredential credential = credentialFromAccount(account, false);
+        Map<String, String> tradeInfo = buildVerificationTradeInfo(
+                verificationNo, amount, credential);
+        String encryptedTradeInfo = encrypt(
+                toQueryString(tradeInfo), credential.hashKey(), credential.hashIv());
+        String tradeSha = sha256Upper("HashKey=" + credential.hashKey()
+                + "&" + encryptedTradeInfo
+                + "&HashIV=" + credential.hashIv());
+        return new OrganizerNewebPayVerificationPaymentResponse(
+                verificationNo,
+                amount,
+                newebPayProperties.getGateway(),
+                credential.merchantId(),
+                encryptedTradeInfo,
+                tradeSha,
+                newebPayProperties.getVersion());
+    }
 
     @Transactional
     public ApiResponse<NewebPayPaymentResponse> createPayment(
@@ -74,7 +104,9 @@ public class NewebPayService {
             return ApiResponse.fail(authError.getStatusCode(), authError.getMessage());
         }
 
-        if (!isNewebPayConfigComplete()) {
+        if (isBlank(newebPayProperties.getGateway())
+                || isBlank(newebPayProperties.getNotifyUrl())
+                || isBlank(newebPayProperties.getReturnUrl())) {
             return ApiResponse.fail("NewebPay config is incomplete");
         }
 
@@ -110,12 +142,21 @@ public class NewebPayService {
         if (!isValidNewebPayAmount(amount)) {
             return ApiResponse.fail("Payment amount is invalid");
         }
+        NewebPayCredential credential;
+        try {
+            credential = credentialFromAccount(application);
+        } catch (IllegalStateException exception) {
+            return ApiResponse.fail(409, exception.getMessage());
+        }
+        Long paymentAccountId = toLong(application.get("paymentAccountId"));
 
         Map<String, Object> pendingPayment = paymentRepository.findLatestPendingPayment(applicationId)
                 .orElse(null);
-        if (pendingPayment == null) {
+        if (pendingPayment == null
+                || !paymentAccountId.equals(toLong(pendingPayment.get("paymentAccountId")))) {
             String newPaymentNo = generatePaymentNo();
-            paymentRepository.createPendingPayment(newPaymentNo, applicationId, amount);
+            paymentRepository.createPendingPayment(
+                    newPaymentNo, applicationId, paymentAccountId, amount);
             pendingPayment = paymentRepository.findLatestPendingPayment(applicationId)
                     .orElseThrow(() -> new IllegalStateException("Payment record was not created"));
         }
@@ -123,11 +164,12 @@ public class NewebPayService {
         String paymentNo = stringValue(pendingPayment.get("paymentNo"));
         Long paymentId = toLong(pendingPayment.get("paymentId"));
 
-        Map<String, String> tradeInfo = buildMpgTradeInfo(paymentNo, amount, application);
-        String encryptedTradeInfo = encrypt(toQueryString(tradeInfo));
-        String tradeSha = sha256Upper("HashKey=" + newebPayProperties.getHashKey()
+        Map<String, String> tradeInfo = buildMpgTradeInfo(paymentNo, amount, application, credential);
+        String encryptedTradeInfo = encrypt(
+                toQueryString(tradeInfo), credential.hashKey(), credential.hashIv());
+        String tradeSha = sha256Upper("HashKey=" + credential.hashKey()
                 + "&" + encryptedTradeInfo
-                + "&HashIV=" + newebPayProperties.getHashIv());
+                + "&HashIV=" + credential.hashIv());
 
         return ApiResponse.success(
                 "NewebPay payment created successfully",
@@ -138,7 +180,7 @@ public class NewebPayService {
                         paymentNo,
                         paymentNo,
                         newebPayProperties.getGateway(),
-                        newebPayProperties.getMerchantId(),
+                        credential.merchantId(),
                         encryptedTradeInfo,
                         tradeSha,
                         newebPayProperties.getVersion()));
@@ -187,21 +229,32 @@ public class NewebPayService {
         if (status.getPaymentNo() == null || status.getPaymentNo().isBlank()) {
             return ApiResponse.fail("Payment record not found");
         }
-        if (!isNewebPayQueryConfigComplete()) {
+        if (isBlank(newebPayProperties.getQueryUrl())) {
             return ApiResponse.fail("NewebPay config is incomplete");
+        }
+        Map<String, Object> payment = paymentRepository.findPaymentWithApplication(status.getPaymentNo())
+                .orElse(null);
+        if (payment == null) {
+            return ApiResponse.fail("Payment record not found");
+        }
+        NewebPayCredential credential;
+        try {
+            credential = credentialFromAccount(payment);
+        } catch (IllegalStateException exception) {
+            return ApiResponse.fail(409, exception.getMessage());
         }
 
         Map<String, String> checkValueSource = new LinkedHashMap<>();
         checkValueSource.put("Amt", toNewebPayAmount(status.getPaymentAmount()));
-        checkValueSource.put("MerchantID", newebPayProperties.getMerchantId());
+        checkValueSource.put("MerchantID", credential.merchantId());
         checkValueSource.put("MerchantOrderNo", status.getPaymentNo());
 
-        String checkValue = sha256Upper("IV=" + newebPayProperties.getHashIv()
+        String checkValue = sha256Upper("IV=" + credential.hashIv()
                 + "&" + toQueryString(checkValueSource)
-                + "&Key=" + newebPayProperties.getHashKey());
+                + "&Key=" + credential.hashKey());
 
         Map<String, String> form = new LinkedHashMap<>();
-        form.put("MerchantID", newebPayProperties.getMerchantId());
+        form.put("MerchantID", credential.merchantId());
         form.put("Version", "1.3");
         form.put("RespondType", "JSON");
         form.put("CheckValue", checkValue);
@@ -308,13 +361,19 @@ public class NewebPayService {
             throw new IllegalArgumentException("Refund amount is invalid");
         }
 
-        Map<String, Object> tradeResult = queryTradeResultForClose(merchantOrderNo, paymentAmount);
+        Map<String, Object> payment = paymentRepository.findPaymentWithApplication(merchantOrderNo)
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
+        NewebPayCredential credential = credentialFromAccount(payment);
+        Map<String, Object> tradeResult =
+                queryTradeResultForClose(merchantOrderNo, paymentAmount, credential);
         NewebPayCloseAction closeAction = resolveCloseAction(tradeResult, refundAmount);
-        Map<String, String> postData = buildClosePostData(merchantOrderNo, providerTradeNo, closeAction);
+        Map<String, String> postData =
+                buildClosePostData(merchantOrderNo, providerTradeNo, closeAction, credential);
 
         Map<String, String> form = new LinkedHashMap<>();
-        form.put("MerchantID_", newebPayProperties.getMerchantId());
-        form.put("PostData_", encrypt(toQueryString(postData)));
+        form.put("MerchantID_", credential.merchantId());
+        form.put("PostData_", encrypt(
+                toQueryString(postData), credential.hashKey(), credential.hashIv()));
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -329,7 +388,12 @@ public class NewebPayService {
                     response.body(),
                     new TypeReference<Map<String, Object>>() {
                     });
-            return toRefundResult(rawResponse, merchantOrderNo, providerTradeNo, closeAction.amount());
+            return toRefundResult(
+                    rawResponse,
+                    credential.merchantId(),
+                    merchantOrderNo,
+                    providerTradeNo,
+                    closeAction.amount());
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("NewebPay refund failed", exception);
@@ -338,22 +402,25 @@ public class NewebPayService {
         }
     }
 
-    private Map<String, Object> queryTradeResultForClose(String merchantOrderNo, BigDecimal amount) {
-        if (!isNewebPayQueryConfigComplete()) {
+    private Map<String, Object> queryTradeResultForClose(
+            String merchantOrderNo,
+            BigDecimal amount,
+            NewebPayCredential credential) {
+        if (isBlank(newebPayProperties.getQueryUrl())) {
             throw new IllegalStateException("NewebPay query config is incomplete");
         }
 
         Map<String, String> checkValueSource = new LinkedHashMap<>();
         checkValueSource.put("Amt", toNewebPayAmount(amount));
-        checkValueSource.put("MerchantID", newebPayProperties.getMerchantId());
+        checkValueSource.put("MerchantID", credential.merchantId());
         checkValueSource.put("MerchantOrderNo", merchantOrderNo);
 
-        String checkValue = sha256Upper("IV=" + newebPayProperties.getHashIv()
+        String checkValue = sha256Upper("IV=" + credential.hashIv()
                 + "&" + toQueryString(checkValueSource)
-                + "&Key=" + newebPayProperties.getHashKey());
+                + "&Key=" + credential.hashKey());
 
         Map<String, String> form = new LinkedHashMap<>();
-        form.put("MerchantID", newebPayProperties.getMerchantId());
+        form.put("MerchantID", credential.merchantId());
         form.put("Version", "1.3");
         form.put("RespondType", "JSON");
         form.put("CheckValue", checkValue);
@@ -413,9 +480,10 @@ public class NewebPayService {
     private Map<String, String> buildClosePostData(
             String merchantOrderNo,
             String providerTradeNo,
-            NewebPayCloseAction closeAction) {
+            NewebPayCloseAction closeAction,
+            NewebPayCredential credential) {
         Map<String, String> postData = new LinkedHashMap<>();
-        postData.put("MerchantID", newebPayProperties.getMerchantId());
+        postData.put("MerchantID", credential.merchantId());
         postData.put("RespondType", "JSON");
         postData.put("Version", "1.1");
         postData.put("TimeStamp", String.valueOf(System.currentTimeMillis() / 1000));
@@ -435,16 +503,24 @@ public class NewebPayService {
 
     @Transactional
     public String handleNotify(Map<String, String> payload) {
-        Map<String, String> result = parseAndVerifyCallback(payload);
+        NewebPayCredential credential = callbackCredential(payload);
+        Map<String, String> result = parseAndVerifyCallback(payload, credential);
         String paymentNo = result.get("MerchantOrderNo");
         if (paymentNo == null || paymentNo.isBlank()) {
             return "0|MerchantOrderNo required";
         }
 
         Map<String, Object> payment = paymentRepository.findPaymentWithApplication(paymentNo).orElse(null);
+        Map<String, Object> verification = organizerPaymentAccountRepository
+                .findVerificationByNo(paymentNo).orElse(null);
+        if (verification != null) {
+            syncVerificationStatusFromCallback(verification, credential, result);
+            return "1|OK";
+        }
         if (payment == null) {
             return "0|Payment not found";
         }
+        assertPaymentAccount(payment, credential, result);
 
         syncPaymentStatusFromCallback(payment, result);
         return "1|OK";
@@ -452,13 +528,25 @@ public class NewebPayService {
     @Transactional
     public String buildReturnUrl(Map<String, String> payload, String frontendUrl) {
         try {
-            Map<String, String> result = parseAndVerifyCallback(payload);
+            NewebPayCredential credential = callbackCredential(payload);
+            Map<String, String> result = parseAndVerifyCallback(payload, credential);
             String paymentNo = result.getOrDefault("MerchantOrderNo", "");
             String status = result.getOrDefault("Status", "");
+            Map<String, Object> verification = paymentNo.isBlank()
+                    ? Map.of()
+                    : organizerPaymentAccountRepository.findVerificationByNo(paymentNo).orElse(Map.of());
+            if (!verification.isEmpty()) {
+                syncVerificationStatusFromCallback(verification, credential, result);
+                return trimTrailingSlash(frontendUrl)
+                        + "/organizer/dash-board/newebpay"
+                        + "?verificationNo=" + urlEncode(paymentNo)
+                        + "&verificationStatus=" + urlEncode(status);
+            }
             Map<String, Object> payment = paymentNo.isBlank()
                     ? Map.of()
                     : paymentRepository.findPaymentWithApplication(paymentNo).orElse(Map.of());
             if (!payment.isEmpty()) {
+                assertPaymentAccount(payment, credential, result);
                 syncPaymentStatusFromCallback(payment, result);
             }
             String applicationNo = stringValue(payment.get("applicationNo"));
@@ -484,7 +572,12 @@ public class NewebPayService {
         String currentPaymentStatus = stringValue(payment.get("paymentRecordStatus"));
         if ("SUCCESS".equalsIgnoreCase(status)) {
             assertCallbackAmount(payment, result);
-            paymentRepository.markPaymentPaid(paymentNo, providerTradeNo, parsePayTime(result.get("PayTime")));
+            paymentRepository.markPaymentPaid(
+                    paymentNo,
+                    providerTradeNo,
+                    parsePayTime(result.get("PayTime")),
+                    result.get("Status"),
+                    result.get("Message"));
             int updatedApplications = paymentRepository.updateApplicationPaymentStatus(applicationId, "PAID");
             if (updatedApplications > 0) {
                 notificationService.notifyPaymentStatusChanged(
@@ -500,7 +593,11 @@ public class NewebPayService {
                         true);
             }
         } else if (!"PAID".equals(currentPaymentStatus)) {
-            paymentRepository.markPaymentFailed(paymentNo, providerTradeNo);
+            paymentRepository.markPaymentFailed(
+                    paymentNo,
+                    providerTradeNo,
+                    result.get("Status"),
+                    result.get("Message"));
             int updatedApplications = paymentRepository.updateApplicationPaymentStatus(applicationId, "FAILED");
             if (updatedApplications > 0) {
                 notificationService.notifyPaymentStatusChanged(
@@ -522,6 +619,7 @@ public class NewebPayService {
     @SuppressWarnings("unchecked")
     private NewebPayRefundResultResponse toRefundResult(
             Map<String, Object> rawResponse,
+            String expectedMerchantId,
             String expectedMerchantOrderNo,
             String expectedTradeNo,
             BigDecimal expectedAmount) {
@@ -533,9 +631,13 @@ public class NewebPayService {
 
         Object rawResult = rawResponse.get("Result");
         Map<String, Object> result = rawResult instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        String merchantId = stringValue(result.get("MerchantID"));
         String merchantOrderNo = stringValue(result.get("MerchantOrderNo"));
         String tradeNo = stringValue(result.get("TradeNo"));
         BigDecimal amount = toAmount(result.get("Amt"));
+        if (!expectedMerchantId.equals(merchantId)) {
+            throw new IllegalArgumentException("NewebPay refund merchant mismatch");
+        }
         if (!expectedMerchantOrderNo.equals(merchantOrderNo)) {
             throw new IllegalArgumentException("NewebPay refund order number mismatch");
         }
@@ -547,7 +649,7 @@ public class NewebPayService {
         }
 
         return new NewebPayRefundResultResponse(
-                stringValue(result.get("MerchantID")),
+                merchantId,
                 amount,
                 tradeNo,
                 merchantOrderNo);
@@ -555,9 +657,10 @@ public class NewebPayService {
     private Map<String, String> buildMpgTradeInfo(
             String paymentNo,
             BigDecimal amount,
-            Map<String, Object> application) {
+            Map<String, Object> application,
+            NewebPayCredential credential) {
         Map<String, String> tradeInfo = new LinkedHashMap<>();
-        tradeInfo.put("MerchantID", newebPayProperties.getMerchantId());
+        tradeInfo.put("MerchantID", credential.merchantId());
         tradeInfo.put("RespondType", "String");
         tradeInfo.put("TimeStamp", String.valueOf(System.currentTimeMillis() / 1000));
         tradeInfo.put("Version", newebPayProperties.getVersion());
@@ -571,7 +674,28 @@ public class NewebPayService {
         return tradeInfo;
     }
 
-    private Map<String, String> parseAndVerifyCallback(Map<String, String> payload) {
+    private Map<String, String> buildVerificationTradeInfo(
+            String verificationNo,
+            BigDecimal amount,
+            NewebPayCredential credential) {
+        Map<String, String> tradeInfo = new LinkedHashMap<>();
+        tradeInfo.put("MerchantID", credential.merchantId());
+        tradeInfo.put("RespondType", "String");
+        tradeInfo.put("TimeStamp", String.valueOf(System.currentTimeMillis() / 1000));
+        tradeInfo.put("Version", newebPayProperties.getVersion());
+        tradeInfo.put("MerchantOrderNo", verificationNo);
+        tradeInfo.put("Amt", toNewebPayAmount(amount));
+        tradeInfo.put("ItemDesc", limitItemDesc("藍新商店綁定驗證"));
+        tradeInfo.put("NotifyURL", newebPayProperties.getNotifyUrl());
+        tradeInfo.put("ReturnURL", newebPayProperties.getReturnUrl());
+        tradeInfo.put("CREDIT", "1");
+        tradeInfo.put("LangType", "zh-tw");
+        return tradeInfo;
+    }
+
+    private Map<String, String> parseAndVerifyCallback(
+            Map<String, String> payload,
+            NewebPayCredential credential) {
         String tradeInfo = payload == null ? null : normalizeHex(firstPresent(payload, "TradeInfo"));
         String tradeSha = payload == null ? null : normalizeHex(firstPresent(payload, "TradeSha"));
         if (tradeInfo == null || tradeInfo.isBlank()) {
@@ -581,16 +705,106 @@ public class NewebPayService {
             throw new IllegalArgumentException("TradeSha is required");
         }
 
-        String expectedTradeSha = sha256Upper("HashKey=" + newebPayProperties.getHashKey()
+        String expectedTradeSha = sha256Upper("HashKey=" + credential.hashKey()
                 + "&" + tradeInfo
-                + "&HashIV=" + newebPayProperties.getHashIv());
+                + "&HashIV=" + credential.hashIv());
         if (!MessageDigest.isEqual(
                 expectedTradeSha.getBytes(StandardCharsets.UTF_8),
                 tradeSha.toUpperCase().getBytes(StandardCharsets.UTF_8))) {
             throw new IllegalArgumentException("TradeSha verification failed");
         }
 
-        return parseQueryString(decrypt(tradeInfo));
+        return parseQueryString(decrypt(tradeInfo, credential.hashKey(), credential.hashIv()));
+    }
+
+    private void syncVerificationStatusFromCallback(
+            Map<String, Object> verification,
+            NewebPayCredential credential,
+            Map<String, String> result) {
+        Long expectedAccountId = toLong(verification.get("paymentAccountId"));
+        String verificationNo = stringValue(verification.get("verificationNo"));
+        if (!credential.paymentAccountId().equals(expectedAccountId)) {
+            throw new IllegalArgumentException("藍新驗證付款帳戶不相符");
+        }
+        String callbackMerchantId = result.get("MerchantID");
+        if (callbackMerchantId != null && !credential.merchantId().equals(callbackMerchantId)) {
+            throw new IllegalArgumentException("藍新驗證付款 MerchantID 不相符");
+        }
+        assertCallbackAmount(verification, result);
+        if ("SUCCESS".equalsIgnoreCase(result.get("Status"))) {
+            organizerPaymentAccountRepository.completeVerification(
+                    verificationNo);
+        } else {
+            organizerPaymentAccountRepository.failVerification(
+                    verificationNo);
+        }
+    }
+
+    private NewebPayCredential callbackCredential(Map<String, String> payload) {
+        String tradeInfo = payload == null ? null : firstPresent(payload, "TradeInfo");
+        if (tradeInfo == null || tradeInfo.isBlank()) {
+            throw new IllegalArgumentException("TradeInfo is required");
+        }
+        String merchantId = payload == null ? null : firstPresent(payload, "MerchantID");
+        if (merchantId == null || merchantId.isBlank()) {
+            merchantId = payload == null ? null : firstPresent(payload, "MerchantID_");
+        }
+        if (merchantId == null || merchantId.isBlank()) {
+            throw new IllegalArgumentException("MerchantID is required");
+        }
+        Map<String, Object> account = organizerPaymentAccountRepository
+                .findByMerchantId(merchantId.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Payment account not found"));
+        return credentialFromAccount(account, false);
+    }
+
+    private NewebPayCredential credentialFromAccount(Map<String, Object> account) {
+        return credentialFromAccount(account, true);
+    }
+
+    private NewebPayCredential credentialFromAccount(
+            Map<String, Object> account,
+            boolean requireActive) {
+        Long paymentAccountId = toLong(account.get("paymentAccountId"));
+        String merchantId = stringValue(account.get("merchantId"));
+        String status = stringValue(account.get("paymentAccountStatus"));
+        if (status.isBlank()) {
+            status = stringValue(account.get("status"));
+        }
+        if (paymentAccountId == null) {
+            throw new IllegalStateException("活動尚未綁定藍新金流帳戶");
+        }
+        if (requireActive && !"ACTIVE".equals(status)) {
+            throw new IllegalStateException("主辦方藍新金流帳戶尚未啟用");
+        }
+        String verificationStatus = stringValue(account.get("paymentAccountVerificationStatus"));
+        if (verificationStatus.isBlank()) {
+            verificationStatus = stringValue(account.get("verificationStatus"));
+        }
+        if (requireActive && !"VERIFIED".equals(verificationStatus)) {
+            throw new IllegalStateException("藍新金流帳戶尚未完成驗證");
+        }
+        String hashKey = credentialEncryptionService.decrypt(
+                stringValue(account.get("hashKeyEncrypted")));
+        String hashIv = credentialEncryptionService.decrypt(
+                stringValue(account.get("hashIvEncrypted")));
+        if (merchantId.isBlank() || hashKey.length() != 32 || hashIv.length() != 16) {
+            throw new IllegalStateException("主辦方藍新金流帳戶設定不完整");
+        }
+        return new NewebPayCredential(paymentAccountId, merchantId, hashKey, hashIv);
+    }
+
+    private void assertPaymentAccount(
+            Map<String, Object> payment,
+            NewebPayCredential credential,
+            Map<String, String> result) {
+        if (!credential.paymentAccountId().equals(toLong(payment.get("paymentAccountId")))) {
+            throw new IllegalArgumentException("Payment account mismatch");
+        }
+        String callbackMerchantId = result.get("MerchantID");
+        if (callbackMerchantId != null && !credential.merchantId().equals(callbackMerchantId)) {
+            throw new IllegalArgumentException("Callback MerchantID mismatch");
+        }
     }
 
     private ApiResponse<Void> validateVendorToken(String token) {
@@ -628,12 +842,16 @@ public class NewebPayService {
     }
 
     private String encrypt(String plainText) {
+        return encrypt(plainText, newebPayProperties.getHashKey(), newebPayProperties.getHashIv());
+    }
+
+    private String encrypt(String plainText, String hashKey, String hashIv) {
         try {
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
             cipher.init(
                     Cipher.ENCRYPT_MODE,
-                    new SecretKeySpec(newebPayProperties.getHashKey().getBytes(StandardCharsets.UTF_8), "AES"),
-                    new IvParameterSpec(newebPayProperties.getHashIv().getBytes(StandardCharsets.UTF_8)));
+                    new SecretKeySpec(hashKey.getBytes(StandardCharsets.UTF_8), "AES"),
+                    new IvParameterSpec(hashIv.getBytes(StandardCharsets.UTF_8)));
             return HexFormat.of().formatHex(cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception exception) {
             throw new IllegalStateException("NewebPay TradeInfo encryption failed", exception);
@@ -641,6 +859,10 @@ public class NewebPayService {
     }
 
     private String decrypt(String encryptedHex) {
+        return decrypt(encryptedHex, newebPayProperties.getHashKey(), newebPayProperties.getHashIv());
+    }
+
+    private String decrypt(String encryptedHex, String hashKey, String hashIv) {
         String normalizedHex = normalizeHex(encryptedHex);
         if (normalizedHex == null || normalizedHex.isBlank()) {
             throw new IllegalArgumentException("NewebPay TradeInfo decryption failed: TradeInfo is blank");
@@ -665,13 +887,13 @@ public class NewebPayService {
 
         Exception noPaddingException = null;
         try {
-            return decryptNoPadding(encryptedBytes);
+            return decryptNoPadding(encryptedBytes, hashKey, hashIv);
         } catch (Exception exception) {
             noPaddingException = exception;
         }
 
         try {
-            return decryptPkcs5Padding(encryptedBytes);
+            return decryptPkcs5Padding(encryptedBytes, hashKey, hashIv);
         } catch (Exception pkcs5Exception) {
             throw new IllegalArgumentException(
                     "NewebPay TradeInfo decryption failed: "
@@ -683,23 +905,30 @@ public class NewebPayService {
         }
     }
 
-    private String decryptNoPadding(byte[] encryptedBytes) throws Exception {
+    private String decryptNoPadding(byte[] encryptedBytes, String hashKey, String hashIv) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
         cipher.init(
                 Cipher.DECRYPT_MODE,
-                new SecretKeySpec(newebPayProperties.getHashKey().getBytes(StandardCharsets.UTF_8), "AES"),
-                new IvParameterSpec(newebPayProperties.getHashIv().getBytes(StandardCharsets.UTF_8)));
+                new SecretKeySpec(hashKey.getBytes(StandardCharsets.UTF_8), "AES"),
+                new IvParameterSpec(hashIv.getBytes(StandardCharsets.UTF_8)));
         byte[] decrypted = cipher.doFinal(encryptedBytes);
         return new String(stripPkcs7Padding(decrypted), StandardCharsets.UTF_8);
     }
 
-    private String decryptPkcs5Padding(byte[] encryptedBytes) throws Exception {
+    private String decryptPkcs5Padding(byte[] encryptedBytes, String hashKey, String hashIv) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
         cipher.init(
                 Cipher.DECRYPT_MODE,
-                new SecretKeySpec(newebPayProperties.getHashKey().getBytes(StandardCharsets.UTF_8), "AES"),
-                new IvParameterSpec(newebPayProperties.getHashIv().getBytes(StandardCharsets.UTF_8)));
+                new SecretKeySpec(hashKey.getBytes(StandardCharsets.UTF_8), "AES"),
+                new IvParameterSpec(hashIv.getBytes(StandardCharsets.UTF_8)));
         return new String(cipher.doFinal(encryptedBytes), StandardCharsets.UTF_8);
+    }
+
+    private record NewebPayCredential(
+            Long paymentAccountId,
+            String merchantId,
+            String hashKey,
+            String hashIv) {
     }
 
     private byte[] stripPkcs7Padding(byte[] value) {
@@ -870,11 +1099,12 @@ public class NewebPayService {
     }
 
     private boolean isNewebPayQueryConfigComplete() {
-        return isNewebPayConfigComplete() && !isBlank(newebPayProperties.getQueryUrl());
+        return !isBlank(newebPayProperties.getQueryUrl());
     }
 
     private boolean isNewebPayCloseConfigComplete() {
-        return isNewebPayConfigComplete() && !isBlank(newebPayProperties.getCloseUrl());
+        return !isBlank(newebPayProperties.getCloseUrl())
+                && !isBlank(newebPayProperties.getQueryUrl());
     }
 
     private boolean isBlank(String value) {

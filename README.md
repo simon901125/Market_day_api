@@ -11,6 +11,26 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - `sql/test*.sql` 屬於開發及驗證用測試資料，不在更新日誌中記錄檔名、建立筆數、測試帳號或測試資料內容。
 - 測試資料的使用方式與預期結果應直接寫在對應的 `test*.sql` 註解內，不重複放入 README 更新日誌。
 
+### 2026-07-26
+
+#### simon branch
+
+- 主辦方基本資料 API 恢復只處理主辦資料；藍新設定改由獨立頁面使用 `/api/organizer/newebpay/portal`、`load`、`save`、`verify` 四支 API。
+- portal API 提供藍新官方註冊及登入網址；load API 載入 MerchantID 與設定狀態，但 HashKey、HashIV 固定回傳空字串；save API 負責格式驗證及加密保存。
+- verify API 會建立一筆獨立的 NT$1 藍新商店驗證付款；只有藍新 callback 簽章、MerchantID、訂單與金額皆驗證成功，帳戶才標記為 `VERIFIED`。
+- 藍新帳戶儲存或更新後為 `DISABLED / UNVERIFIED`，開始 NT$1 驗證後為 `DISABLED / PENDING`；成功才切換為 `ACTIVE / VERIFIED`，失敗則為 `DISABLED / FAILED`。
+- 建立正式付款、退款及活動綁定金流帳戶時皆再次檢查帳戶必須同時為 `ACTIVE + VERIFIED`，避免舊資料中的 `ACTIVE / PENDING` 帳戶被誤用。
+- 保留 `GET /api/organizers/me/payment-account` 供後端或管理介面檢查目前綁定狀態。
+- 建立活動時會綁定登入主辦方的有效藍新帳戶；攤主建立付款時，MerchantID、TradeInfo 與 TradeSha 均使用該活動主辦方的帳戶產生，款項不再流入共用商店。
+- 藍新 Notify 與 Return 會依回傳 MerchantID 找到對應主辦方帳戶，使用該帳戶的 HashKey、HashIV 驗證及解密，再比對付款單綁定帳戶後更新付款與報名狀態。
+- 交易查詢與信用卡 Close API 改由原付款單的 `payment_account_id` 取得憑證；退款不使用活動目前帳戶或全域預設帳戶，確保由原收款主辦方商店退回原信用卡交易。
+- 主辦方確認退款前會檢查活動擁有者與原付款帳戶擁有者一致；藍新退款成功回應亦會驗證 MerchantID、商店訂單編號、交易序號及金額。
+- 已請款交易使用藍新退款流程；僅授權、尚未請款的交易則調整最終請款金額，兩者成功後皆會完成系統退款狀態及通知更新。
+- 主辦方藍新帳戶一旦已有付款紀錄即禁止更換 MerchantID，避免歷史交易無法查詢或退款；相同 MerchantID 仍可更新金鑰。
+- `NEWEBPAY_NOTIFY_URL`、`NEWEBPAY_RETURN_URL` 保留為藍新可公開存取的後端端點，`FRONTEND_URL` 僅用於 Return 驗證完成後導回前端付款結果頁。
+- 更新 Spring Boot 冒煙測試設定，改用主辦方金流憑證加密主金鑰及目前的 Gateway、Query、Close、Notify、Return、Frontend 設定；啟動後會由 OpenAPI 確認四支主辦方藍新 API 與 Notify、Return callback 均已註冊。
+- 更新 SQL Server 整合測試資料與預期：品牌探索測試補上已核准且未取消的已發布活動參與紀錄，主辦活動管理測試保留已取消活動，自動選位後的品牌公開判斷統一使用台北時間；重建 `MarketDayDB_Test` 後 35 項整合測試全部通過。
+
 ### 2026-07-22
 
 #### yingtung branch

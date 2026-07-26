@@ -1,7 +1,5 @@
 package com.example.demo.Repository.projection.admin;
 
-import java.time.LocalDateTime;
-
 import com.example.demo.enums.status.WorkflowStatus;
 
 /**
@@ -12,9 +10,6 @@ import com.example.demo.enums.status.WorkflowStatus;
  * @param title 活動名稱
  * @param organizerId 活動主辦方(User)id
  * @param organizerContactName 活動主辦方聯絡人姓名(userProfile.contactName)，若無個人資料則為null
- * @param endAt 活動結束日期時間
- * @param paymentReceived 是否已收款
- * @param paymentAccount 收款帳號
  *
  * @see com.example.demo.Repository.EventRepo#findApprovalStatusById(Long)
  */
@@ -23,7 +18,4 @@ public record EventApprovalProjection(
     WorkflowStatus workflowStatus,
     String title,
     Long organizerId,
-    String organizerContactName,
-    LocalDateTime endAt,
-    Boolean paymentReceived,
-    String paymentAccount) {}
+    String organizerContactName) {}

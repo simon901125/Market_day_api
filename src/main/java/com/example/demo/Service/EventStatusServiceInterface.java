@@ -68,7 +68,7 @@ public interface EventStatusServiceInterface<T> {
             case UNPUBLISHED:
                 return EventStatus.UNPUBLISHED;
             case CANCELLED:
-                return null;
+                return EventStatus.CANCELLED;
             default:
                 break;
         }
@@ -76,7 +76,6 @@ public interface EventStatusServiceInterface<T> {
 
     }
 
-    
     /** 把活動資料轉換成在前端顯示的活動狀態 */
     EventStatus changeToEventStatus(T data);
 

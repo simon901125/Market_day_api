@@ -110,4 +110,5 @@ public class OrganizerProfileSaveRequest {
     public void setServiceEndTime(String serviceEndTime) {
         this.serviceEndTime = serviceEndTime;
     }
+
 }

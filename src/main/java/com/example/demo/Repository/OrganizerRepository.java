@@ -24,21 +24,32 @@ public class OrganizerRepository {
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
     public long createOrganizerEvent(Long organizerUserId, OrganizerEventSaveRequest request) {
+        return createOrganizerEvent(organizerUserId, request, null);
+    }
+
+    public long createOrganizerEvent(
+            Long organizerUserId,
+            OrganizerEventSaveRequest request,
+            Long paymentAccountId) {
         String sql = """
                 INSERT INTO dbo.market_events (
                     user_id, title, summary, description, location_name, city, district, address,
                     start_at, end_at, registration_start_at, registration_end_at,
                     max_booths, stall_width, stall_length, base_fee, deposit_amount,
+                    payment_account_id,
                     traffic_info_driving, traffic_info_bus, traffic_info_metro, workflow_status
                 ) VALUES (
                     :organizerUserId, :eventTitle, :summary, :description, :locationName, :city, :district, :address,
                     :startAt, :endAt, :registrationStartAt, :registrationEndAt,
                     :maxBooths, :stallWidth, :stallLength, :baseFee, :depositAmount,
+                    :paymentAccountId,
                     :driving, :bus, :metro, N'DRAFT'
                 )
                 """;
         KeyHolder keyHolder = new GeneratedKeyHolder();
-        namedParameterJdbcTemplate.update(sql, eventParameters(organizerUserId, request), keyHolder, new String[] {"id"});
+        MapSqlParameterSource parameters = eventParameters(organizerUserId, request)
+                .addValue("paymentAccountId", paymentAccountId);
+        namedParameterJdbcTemplate.update(sql, parameters, keyHolder, new String[] {"id"});
         Number key = keyHolder.getKey();
         if (key == null) {
             throw new IllegalStateException("Event id was not generated");
@@ -150,7 +161,50 @@ public class OrganizerRepository {
                 WHERE id = :eventId
                   AND user_id = :organizerUserId
                   AND workflow_status = N'PUBLISHED'
+                  AND NOT (
+                      registration_start_at IS NOT NULL
+                      AND registration_end_at IS NOT NULL
+                      AND SYSDATETIME() BETWEEN registration_start_at AND registration_end_at
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM dbo.event_applications a
+                      INNER JOIN dbo.payments p ON p.application_id = a.id
+                      WHERE a.event_id = dbo.market_events.id
+                        AND p.status = N'PAID'
+                  )
                 """, Map.of("organizerUserId", organizerUserId, "eventId", eventId));
+    }
+
+    public Map<String, Object> findOrganizerEventUnpublishBlockers(
+            Long organizerUserId, Long eventId) {
+        String sql = """
+                SELECT
+                    CAST(CASE
+                        WHEN e.registration_start_at IS NOT NULL
+                         AND e.registration_end_at IS NOT NULL
+                         AND SYSDATETIME() BETWEEN e.registration_start_at AND e.registration_end_at
+                        THEN 1 ELSE 0
+                    END AS BIT) AS registrationOpen,
+                    CAST(CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM dbo.event_applications a
+                            INNER JOIN dbo.payments p ON p.application_id = a.id
+                            WHERE a.event_id = e.id
+                              AND p.status = N'PAID'
+                        )
+                        THEN 1 ELSE 0
+                    END AS BIT) AS hasPaidPayment
+                FROM dbo.market_events e
+                WHERE e.id = :eventId
+                  AND e.user_id = :organizerUserId
+                """;
+        return RepositoryResultMapper.normalizeOptional(
+                namedParameterJdbcTemplate.queryForList(
+                        sql, Map.of("organizerUserId", organizerUserId, "eventId", eventId))
+                        .stream().findFirst())
+                .orElse(Map.of());
     }
 
     public long createEventUnpublishRequest(
@@ -296,7 +350,11 @@ public class OrganizerRepository {
                        AND a.review_status = N'APPROVED'
                        AND a.payment_status = N'PAID'
                        AND a.is_cancelled = 0
-                       AND ad.selected_stall_id IS NULL) AS pendingStallSelectionCount
+                       AND ad.selected_stall_id IS NULL) AS pendingStallSelectionCount,
+                    (SELECT COUNT(*)
+                     FROM dbo.market_events e
+                     WHERE e.user_id = :organizerUserId
+                       AND e.workflow_status = N'READY_TO_PUBLISH') AS pendingPublishCount
                 """;
         return RepositoryResultMapper.normalizeOptional(namedParameterJdbcTemplate.queryForList(
                 sql, Map.of("organizerUserId", organizerUserId)).stream().findFirst()).orElse(Map.of());
@@ -370,7 +428,6 @@ public class OrganizerRepository {
                     ) applicationStats
                 ) stats
                 WHERE e.user_id = :organizerUserId
-                  AND e.workflow_status <> N'CANCELLED'
                   AND (:keyword IS NULL OR e.title LIKE N'%' + :keyword + N'%')
                   AND (:startAt IS NULL OR e.end_at >= :startAt)
                   AND (:endExclusive IS NULL OR e.start_at < :endExclusive)
@@ -661,6 +718,7 @@ public class OrganizerRepository {
                     e.end_at AS eventEndAt,
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
+                    accounting_activity.latestAccountingAt,
                     COALESCE(SUM(CASE
                         WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0 THEN 1
                         ELSE 0
@@ -700,6 +758,41 @@ public class OrganizerRepository {
                     FROM dbo.event_stalls s
                     WHERE s.event_id = e.id
                 ) stall_count
+                OUTER APPLY (
+                    SELECT MAX(activity.activityAt) AS latestAccountingAt
+                    FROM (
+                        SELECT a.created_at AS activityAt
+                        FROM dbo.event_applications a
+                        WHERE a.event_id = e.id
+
+                        UNION ALL
+
+                        SELECT COALESCE(p.paid_at, p.created_at) AS activityAt
+                        FROM dbo.payments p
+                        INNER JOIN dbo.event_applications a ON a.id = p.application_id
+                        WHERE a.event_id = e.id
+
+                        UNION ALL
+
+                        SELECT r.refunded_at AS activityAt
+                        FROM dbo.refunds r
+                        INNER JOIN dbo.event_applications a ON a.id = r.application_id
+                        WHERE a.event_id = e.id
+                          AND r.refunded_at IS NOT NULL
+
+                        UNION ALL
+
+                        SELECT rl.created_at AS activityAt
+                        FROM dbo.request_logs rl
+                        INNER JOIN dbo.status_logs sl ON sl.request_log_id = rl.id
+                            AND sl.target_type = N'REFUND'
+                            AND sl.status_field = N'refunds.refund_status'
+                        INNER JOIN dbo.refunds r ON r.id = sl.target_id
+                        INNER JOIN dbo.event_applications a ON a.id = r.application_id
+                        WHERE a.event_id = e.id
+                          AND rl.status_code BETWEEN 200 AND 299
+                    ) activity
+                ) accounting_activity
                 LEFT JOIN application_financial af ON af.event_id = e.id
                 WHERE e.user_id = :organizerUserId
                   AND (:eventTitle IS NULL OR e.title LIKE N'%' + :eventTitle + N'%')
@@ -716,9 +809,10 @@ public class OrganizerRepository {
                     e.registration_start_at,
                     e.registration_end_at,
                     e.max_booths,
-                    stall_count.totalStalls
+                    stall_count.totalStalls,
+                    accounting_activity.latestAccountingAt
                 ORDER BY
-                    e.start_at DESC,
+                    accounting_activity.latestAccountingAt DESC,
                     e.id DESC
                 """;
 
@@ -973,7 +1067,9 @@ public class OrganizerRepository {
                     WHERE ad.application_id = a.id
                 ) application_dates
                 OUTER APPLY (
-                    SELECT TOP (1) COALESCE(p.paid_at, p.created_at) AS paymentTime
+                    SELECT TOP (1)
+                        p.id AS paymentId,
+                        COALESCE(p.paid_at, p.created_at) AS paymentTime
                     FROM dbo.payments p
                     WHERE p.application_id = a.id
                     ORDER BY
@@ -1003,7 +1099,7 @@ public class OrganizerRepository {
                   AND (:paidEndExclusive IS NULL OR COALESCE(latest_payment.paymentTime, a.created_at) < :paidEndExclusive)
                 ORDER BY
                     COALESCE(latest_payment.paymentTime, a.created_at) DESC,
-                    a.created_at DESC,
+                    latest_payment.paymentId DESC,
                     a.id DESC
                 """;
 
@@ -1101,6 +1197,11 @@ public class OrganizerRepository {
                     ) selected_count
                 ) stall_selection
                 WHERE e.user_id = :organizerUserId
+                  AND EXISTS (
+                      SELECT 1
+                      FROM dbo.event_stalls configured_stall
+                      WHERE configured_stall.event_id = e.id
+                  )
                   AND e.workflow_status IN (
                       N'READY_TO_PUBLISH',
                       N'PUBLISHED',
@@ -1221,6 +1322,14 @@ public class OrganizerRepository {
                     END AS isFullySelected
                 ) full_status
                 WHERE e.user_id = :organizerUserId
+                  AND EXISTS (
+                      SELECT 1
+                      FROM dbo.status_logs sl
+                      WHERE sl.target_type = N'EVENT'
+                        AND sl.target_id = e.id
+                        AND sl.status_field = N'workflow_status'
+                        AND sl.new_status = N'MAP_BUILDING'
+                  )
                   AND (:eventTitle IS NULL OR e.title LIKE N'%' + :eventTitle + N'%')
                   AND (:eventStartAt IS NULL OR e.start_at >= :eventStartAt)
                   AND (:eventEndExclusive IS NULL OR e.end_at < :eventEndExclusive)

@@ -1,5 +1,63 @@
 # Swagger / OpenAPI 文件
 
+## 2026-07-26 藍新多主辦方金流 API
+
+主辦方藍新設定頁：
+
+```http
+GET  /api/organizer/newebpay/portal
+GET  /api/organizer/newebpay/load
+POST /api/organizer/newebpay/save
+POST /api/organizer/newebpay/verify
+```
+
+`newebpay/save` request body：
+
+```json
+{
+  "merchantId": "主辦方的 MerchantID",
+  "hashKey": "32 字元 HashKey",
+  "hashIv": "16 字元 HashIV"
+}
+```
+
+- 主辦方 profile API 不包含藍新欄位。
+- portal 回傳藍新官方註冊與登入網址。
+- load 不回傳既有 HashKey、HashIV；如需更新金鑰，必須在 save 重新輸入完整內容。
+- 已有付款紀錄後不可更換 MerchantID。
+- verify 建立一筆獨立的 NT$1 藍新商店驗證付款，回傳 gateway、MerchantID、TradeInfo、TradeSha、Version、verificationNo 與 amount，供前端送往藍新付款頁。
+- 只有藍新 Notify／Return 簽章、MerchantID、驗證單號及 NT$1 金額全部吻合且付款成功，帳戶才會標記為 `VERIFIED`。
+- `GET /api/organizers/me/payment-account` 保留為綁定狀態檢查，不提供建立或更新功能。
+
+攤主付款與查詢：
+
+```http
+POST /api/vendor/payments/newebpay
+GET  /api/vendor/payments/{applicationNo}/status
+POST /api/vendor/payments/{applicationNo}/newebpay-query
+```
+
+退款流程：
+
+```http
+POST /api/vendor/refunds
+POST /api/organizer/refunds/review
+POST /api/organizer/refunds/payment
+```
+
+- `/api/vendor/refunds` 由原付款攤主以 `applicationNo` 提出退款申請。
+- `/api/organizer/refunds/review` 由原收款主辦方以 `refundNo` 確認並呼叫藍新退款。
+- `/api/organizer/refunds/payment` 僅供狀態為 `FAILED` 的退款再次執行金流。
+- Notify 與 Return 由藍新呼叫，不需要 JWT：
+
+```http
+POST /api/newebpay/notify
+POST /api/newebpay/return
+```
+
+- NotifyURL、ReturnURL 必須是藍新可從公網連線的 HTTPS 後端網址；不可設定成 `localhost`。
+- `FRONTEND_URL` 不會送給藍新作為 API 來源，只負責 Return 完成驗證後的前端導向。
+
 更新日期：2026-07-15
 
 本文件說明目前 `demo` 專案的 Swagger / OpenAPI 設定、DTO 標註方式、JWT 使用方式，以及目前 API 清單。

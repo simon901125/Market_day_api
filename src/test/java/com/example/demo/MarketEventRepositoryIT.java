@@ -121,13 +121,17 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
 
         Map<String, Object> row = jdbc.queryForMap("""
                 SELECT workflow_status AS workflowStatus,
-                       brands_public_at AS brandsPublicAt
+                       brands_public_at AS brandsPublicAt,
+                       CAST(DATEADD(HOUR, 8, SYSUTCDATETIME()) AS DATETIME2(0)) AS databaseNow
                 FROM market_events
                 WHERE id = :id
                 """, Map.of("id", eventId));
         assertThat(row).containsEntry("workflowStatus", "FINAL_REVIEW");
-        assertThat(((java.sql.Timestamp) row.get("brandsPublicAt")).toLocalDateTime())
-                .isEqualTo(publishedAt);
+        LocalDateTime brandsPublicAt =
+                ((java.sql.Timestamp) row.get("brandsPublicAt")).toLocalDateTime();
+        LocalDateTime databaseNow =
+                ((java.sql.Timestamp) row.get("databaseNow")).toLocalDateTime();
+        assertThat(brandsPublicAt).isNotNull().isBeforeOrEqualTo(databaseNow);
     }
 
     private Long createPublishedEvent() {

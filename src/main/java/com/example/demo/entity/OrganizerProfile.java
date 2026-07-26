@@ -60,4 +60,9 @@ public class OrganizerProfile {
     @Column(name = "service_end_time")
     private LocalTime serviceEndTime;
 
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToOne(mappedBy = "organizerProfile", fetch = FetchType.LAZY)
+    private OrganizerPaymentAccount paymentAccount;
+
 }

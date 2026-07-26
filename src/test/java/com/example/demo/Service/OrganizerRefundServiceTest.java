@@ -84,6 +84,24 @@ class OrganizerRefundServiceTest {
         assertThat(response.isSuccessStatus()).isFalse();
         verify(paymentRepository, never()).markRefundProcessing(any());
     }
+
+    @Test
+    void reviewRefundRejectsOriginalPaymentAccountOwnedByAnotherOrganizer() {
+        mockOrganizerToken();
+        when(paymentRepository.findOrganizerPaymentUserByEmail("organizer@test.local"))
+                .thenReturn(Optional.of(Map.of("userId", 99L)));
+        Map<String, Object> refund = refund("REFUND_REQUESTED", 99L);
+        refund.put("paymentAccountOrganizerUserId", 100L);
+        when(paymentRepository.findRefundForOrganizerProcessing("REF001"))
+                .thenReturn(Optional.of(refund));
+
+        ApiResponse<OrganizerRefundResponse> response =
+                service.reviewRefund("Bearer token", request());
+
+        assertThat(response.isSuccessStatus()).isFalse();
+        verify(newebPayService, never()).closeCreditCardRefund(any(), any(), any(), any());
+        verify(paymentRepository, never()).markRefundProcessing(any());
+    }
     @Test
     void reviewRefundDoesNotCallNewebPayWhenRefunding() {
         mockOrganizerToken();
@@ -224,6 +242,8 @@ class OrganizerRefundServiceTest {
         refund.put("provider", "NEWEBPAY");
         refund.put("paymentStatus", "PAID");
         refund.put("paymentAmount", new BigDecimal("1700"));
+        refund.put("paymentAccountId", 12L);
+        refund.put("paymentAccountOrganizerUserId", organizerUserId);
         return refund;
     }
 }

@@ -26,7 +26,7 @@ public interface StatusLogRepo extends JpaRepository<StatusLog, Long> {
             JOIN r.user u
             LEFT JOIN u.userProfile p
             LEFT JOIN u.adminProfile a
-            WHERE s.targetType = 'EVENT' AND s.targetId = :eventId AND s.statusField in ('workflow_status', 'payment_received') 
+            WHERE s.targetType = 'EVENT' AND s.targetId = :eventId AND s.statusField = 'workflow_status'
             ORDER BY r.createdAt DESC
             """)
     List<EventStatusLogProjection> findEventStatusLogs(@Param("eventId") Long eventId, Pageable pageable);

@@ -29,7 +29,7 @@ public interface NotificationRepo extends JpaRepository<Notification, Long> {
             WHERE n.user.id = :userId
               AND (:category IS NULL OR n.category = :category)
               AND (:isRead IS NULL OR n.isRead = :isRead)
-            ORDER BY n.isRead ASC, n.createdAt DESC
+            ORDER BY n.isRead ASC, n.createdAt DESC, n.id DESC
             """)
     List<AdminNoticeProjection> findAdminNotices(
             @Param("userId") Long userId,

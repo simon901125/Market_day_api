@@ -58,6 +58,7 @@ import com.example.demo.dto.response.admin.AdminEventDetailDto;
 import com.example.demo.dto.response.CategoryResponse;
 import com.example.demo.dto.response.admin.AdminEventListDto;
 import com.example.demo.dto.response.admin.AdminNoticeDto;
+import com.example.demo.dto.notification.NotificationContentSanitizer;
 import com.example.demo.dto.response.admin.AdminOperationLogDto;
 import com.example.demo.dto.response.admin.AdminOrgDetailDto;
 import com.example.demo.dto.response.admin.AdminOrgEventManagementDto;
@@ -158,7 +159,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 .orElseThrow(() -> new IllegalArgumentException("找不到該管理員"));
 
         LocalDateTime now = LocalDateTime.now();
-        int eventPaymentCount = eventRepo.countEndedEventsPaymentNotNotified(now);
+        long systemWarningCount = notificationRepo.countUnreadNoticesByCategory(admin.id(), NotificationCategory.EXCEPTION);
         List<AdminNoticeDto> notices = getNotice(null, null, 1, DASHBOARD_NOTICE_COUNT, operatorEmail).getItems();
 
         // 塞資料
@@ -166,7 +167,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 eventRepo.countByWorkflowStatus(WorkflowStatus.PENDING_REVIEW),
                 eventRepo.countByWorkflowStatus(WorkflowStatus.MAP_BUILDING),
                 eventRepo.countByWorkflowStatus(WorkflowStatus.UNPUBLISH_REQUESTED),
-                eventPaymentCount,
+                (int) systemWarningCount,
                 userRepo.countByRoleAndStatus(Role.ORGANIZER, UserStatus.ACTIVE),
                 userRepo.countByRoleAndStatus(Role.VENDOR, UserStatus.ACTIVE),
                 eventRepo.countByEventInPlatform(now),
@@ -245,11 +246,6 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                             endAt,
                             maxBooths == null ? 0 : maxBooths,
                             registeredBoothCount == null ? 0 : registeredBoothCount.intValue());
-            if (status == EventStatus.ENDED
-                    && Boolean.FALSE.equals(row.get("paymentReceived", Boolean.class))
-                    && eventRepo.isPaymentNotNotified(row.get("id", Long.class))) {
-                status = EventStatus.PAYMENT;
-            }
 
             AdminEventListDto dtoItem = new AdminEventListDto(
                     row.get("id", Long.class),
@@ -324,11 +320,6 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 event.endAt(),
                 event.maxBooths(),
                 registeredBoothCount);
-
-        if (eventStatus == EventStatus.ENDED
-                && Boolean.FALSE.equals(event.paymentReceived())) {
-            eventStatus = EventStatus.PAYMENT;
-        }
 
         List<BoothZone> boothZones = zones.stream()
                 .map(zone -> new BoothZone(zone.getZoneName(), zone.getStallCount()))
@@ -612,11 +603,6 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                             endAt,
                             maxBooths,
                             registeredBoothCount);
-            if (status == EventStatus.ENDED
-                    && Boolean.FALSE.equals(event.paymentReceived())
-                ) {
-                status = EventStatus.PAYMENT;
-            }
             String eventStatus = status != null
                     ? status.getStatus()
                     : (workflowStatus == null ? "" : workflowStatus.getDescription());
@@ -939,6 +925,10 @@ public class AdminService extends AdminServiceBase implements EventStatusService
             throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
         }
 
+        if (eventApplicationRepo.existsUnprocessedPayment(eventId)) {
+            throw new IllegalArgumentException("當前活動尚有未處理款項");
+        }
+
         User adminRef = userRepo.getReferenceById(admin.id());
 
         Long unpublishRequestId = eventUnpublishRequestRepo
@@ -1049,48 +1039,6 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         return new EventStatusChangeDto(review.eventName(), newEventStatus);
     }
 
-    // 設定管理員後台: 通知主辦方活動款項已結清
-    @Override
-    @Transactional
-    public EventStatusChangeDto setEventPaymentNotification(Long eventId, String operatorEmail, Role operatorRole) {
-        if (eventId == null) {
-            throw new IllegalArgumentException("請提供活動id");
-        }
-        AdminLookupProjection admin = validateAdminOperator(operatorEmail, operatorRole);
-
-        EventApprovalProjection event = eventRepo.findApprovalStatusById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("找不到指定的活動"));
-
-        LocalDateTime now = LocalDateTime.now();
-        String paymentAccount = event.paymentAccount() == null? "指定帳戶" : event.paymentAccount();
-        //活動已結束
-        boolean eventEnded = event.workflowStatus() == WorkflowStatus.FINAL_REVIEW
-                && event.endAt() != null && !event.endAt().isAfter(now);
-        //24小時內有通知紀錄
-        boolean notifiedRecently = eventRepo.existsPaymentNotificationSince(eventId, now.minusHours(24));
-
-        if (!eventEnded) {
-            throw new IllegalArgumentException(event.title() + "當前狀態不可執行此操作");
-        }
-        if (Boolean.TRUE.equals(event.paymentReceived())) {
-            throw new IllegalArgumentException(event.title() + "主辦方已確認收到活動款項");
-        }
-        if (notifiedRecently) {
-            throw new IllegalArgumentException("在24小時內通知過"+ event.title() + "主辦方");
-        }
-
-        saveNotification(
-                userRepo.getReferenceById(event.organizerId()), NotificationCategory.EVENT_CHANGE,
-                NotificationType.PAYMENT_SETTLED, NotificationTargetType.MARKET_EVENT, eventId,
-                "確認款項", "小集市已將活動「" + event.title() + "」的款項轉至帳戶: " + paymentAccount + "請盡速確認");
-
-        saveAdminLog(
-                userRepo.getReferenceById(admin.id()), AdminOperationType.NOTIFY_EVENT_PAYMENT, AdminTargetType.MARKET_EVENT,
-                eventId, event.title(), admin.adminName() + "通知" + event.title() + "主辦方款項已結清");
-
-        return new EventStatusChangeDto(event.title(), EventStatus.ENDED);
-    }
-
     // 處理通知中心:通知建立時間格式映射
     private AdminNoticeDto toAdminNoticeDto(AdminNoticeProjection notice) {
         String time = notice.createdAt() == null ? null : notice.createdAt().format(DATE_TIME_FORMATTER);
@@ -1101,7 +1049,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
                 notice.targetType(),
                 notice.targetId(),
                 notice.title(),
-                notice.content(),
+                NotificationContentSanitizer.sanitize(notice.content()),
                 notice.isRead(),
                 time);
     }
@@ -1213,7 +1161,7 @@ public class AdminService extends AdminServiceBase implements EventStatusService
         notification.setTargetType(targetType);
         notification.setTargetId(targetId);
         notification.setTitle(title);
-        notification.setContent(content);
+        notification.setContent(NotificationContentSanitizer.sanitize(content));
         notificationRepo.save(notification);
     }
 

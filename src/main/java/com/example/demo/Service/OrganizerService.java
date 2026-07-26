@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.Repository.OrganizerRepository;
+import com.example.demo.Repository.OrganizerPaymentAccountRepository;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
 import com.example.demo.dto.request.OrganizerEventSaveRequest;
 import com.example.demo.dto.request.OrganizerEventUnpublishRequest;
@@ -66,6 +67,7 @@ import com.example.demo.dto.response.PageResponse;
 import com.example.demo.dto.response.OrganizerStallEventSummaryResponse;
 import com.example.demo.enums.status.EventStatus;
 import com.example.demo.enums.status.WorkflowStatus;
+import com.example.demo.exception.ConflictException;
 
 @Service
 public class OrganizerService {
@@ -102,6 +104,9 @@ public class OrganizerService {
     private static final Set<String> SERVICE_DAY_CODES = Set.of("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
     @Autowired
     private OrganizerRepository organizerRepository;
+
+    @Autowired
+    private OrganizerPaymentAccountRepository organizerPaymentAccountRepository;
 
     @Autowired
     private JwtService jwtService;
@@ -178,6 +183,7 @@ public class OrganizerService {
 
     private boolean isRegistrationOverviewEvent(OrganizerEventSummaryResponse event) {
         return Set.of(
+                WorkflowStatus.READY_TO_PUBLISH.name(),
                 WorkflowStatus.PUBLISHED.name(),
                 WorkflowStatus.FINAL_REVIEW.name(),
                 WorkflowStatus.UNPUBLISH_REQUESTED.name())
@@ -324,7 +330,19 @@ public class OrganizerService {
         Long organizerUserId = ((Number) organizer.get("userId")).longValue();
         Long eventId = draft.eventId();
         if (eventId == null) {
-            eventId = organizerRepository.createOrganizerEvent(organizerUserId, draft);
+            Map<String, Object> paymentAccount = organizerPaymentAccountRepository
+                    .findActiveByOrganizerUserId(organizerUserId)
+                    .orElse(null);
+            if (requiresOnlinePayment(draft) && paymentAccount == null) {
+                return ApiResponse.fail(
+                        409,
+                        "請先綁定並啟用藍新金流帳戶，才能建立付費活動");
+            }
+            Long paymentAccountId = paymentAccount == null
+                    ? null
+                    : ((Number) paymentAccount.get("paymentAccountId")).longValue();
+            eventId = organizerRepository.createOrganizerEvent(
+                    organizerUserId, draft, paymentAccountId);
         } else {
             if (eventId <= 0) {
                 return ApiResponse.fail("Invalid event id");
@@ -350,6 +368,17 @@ public class OrganizerService {
 
         ApiResponse<OrganizerEventDetailResponse> detail = getOrganizerEventDetail(authorizationHeader, eventId);
         return new ApiResponse<>(detail.getStatusCode(), "活動儲存成功", detail.getData());
+    }
+
+    private boolean requiresOnlinePayment(OrganizerEventSaveRequest request) {
+        if (isPositive(request.booth().baseFee())
+                || isPositive(request.booth().depositAmount())) {
+            return true;
+        }
+        return request.equipment().items().stream()
+                .anyMatch(item -> "PAID".equalsIgnoreCase(item.chargeType())
+                        && item.rentalFee() != null
+                        && item.rentalFee().signum() > 0);
     }
 
     @Transactional
@@ -546,10 +575,24 @@ public class OrganizerService {
             return ApiResponse.fail(404, "Organizer event not found");
         }
         if (!WorkflowStatus.PUBLISHED.name().equals(statusText(event.get("workflowStatus")))) {
-            return ApiResponse.fail(409, "Event cannot request unpublishing in its current workflow status");
+            throw new ConflictException(
+                    displayPublishStatus(event.get("workflowStatus")) + "無法下架活動");
         }
+
+        Map<String, Object> blockers = organizerRepository
+                .findOrganizerEventUnpublishBlockers(organizerUserId, eventId);
+        if (blockers == null) {
+            blockers = Map.of();
+        }
+        if (isTrue(blockers.get("registrationOpen"))) {
+            throw new ConflictException("正在報名無法下架活動");
+        }
+        if (isTrue(blockers.get("hasPaidPayment"))) {
+            throw new ConflictException("已收款無法下架活動");
+        }
+
         if (organizerRepository.requestOrganizerEventUnpublish(organizerUserId, eventId) != 1) {
-            return ApiResponse.fail(409, "Event workflow status changed before unpublish request");
+            throw new ConflictException("活動狀態已變更，無法下架活動");
         }
 
         LocalDateTime requestedAt = LocalDateTime.now();
@@ -952,7 +995,7 @@ public class OrganizerService {
             case READY_TO_PUBLISH -> EventStatus.READY_TO_PUBLISH;
             case UNPUBLISH_REQUESTED -> EventStatus.UNPUBLISH_REQUESTED;
             case UNPUBLISHED -> EventStatus.UNPUBLISHED;
-            case CANCELLED -> EventStatus.UNPUBLISHED;
+            case CANCELLED -> EventStatus.CANCELLED;
             case PUBLISHED -> {
                 LocalDateTime now = LocalDateTime.now();
                 LocalDateTime registrationStartAt = toLocalDateTime(event.get("registrationStartAt"));
@@ -995,11 +1038,20 @@ public class OrganizerService {
     }
 
     private Comparator<OrganizerEventSummaryResponse> organizerEventComparator(String sort) {
+        if (!"UPCOMING_FIRST".equals(sort)) {
+            return Comparator
+                    .comparing(
+                            OrganizerEventSummaryResponse::createdAt,
+                            Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(
+                            OrganizerEventSummaryResponse::eventId,
+                            Comparator.reverseOrder());
+        }
+
         LocalDateTime now = LocalDateTime.now();
-        boolean upcomingFirst = "UPCOMING_FIRST".equals(sort);
         return (left, right) -> {
-            int leftGroup = organizerEventSortGroup(left, now, upcomingFirst);
-            int rightGroup = organizerEventSortGroup(right, now, upcomingFirst);
+            int leftGroup = organizerEventSortGroup(left, now, true);
+            int rightGroup = organizerEventSortGroup(right, now, true);
             int groupComparison = Integer.compare(leftGroup, rightGroup);
             if (groupComparison != 0) return groupComparison;
 
@@ -1104,7 +1156,6 @@ public class OrganizerService {
         String serviceDays = normalizeText(body.getServiceDays());
         String serviceStartTimeText = normalizeText(body.getServiceStartTime());
         String serviceEndTimeText = normalizeText(body.getServiceEndTime());
-
         String validationError = validateOrganizerProfile(
                 organizerName,
                 contactName,
@@ -1386,7 +1437,8 @@ public class OrganizerService {
         OrganizerTaskSummaryResponse taskSummary = new OrganizerTaskSummaryResponse(
                 longValue(summary.get("pendingReviewCount")),
                 longValue(summary.get("pendingRefundConfirmationCount")),
-                longValue(summary.get("pendingStallSelectionCount")));
+                longValue(summary.get("pendingStallSelectionCount")),
+                longValue(summary.get("pendingPublishCount")));
         LocalDateTime appliedStartAt = registrationStartAt == null ? null : registrationStartAt.atStartOfDay();
         LocalDateTime appliedEndExclusive = registrationEndAt == null ? null : registrationEndAt.plusDays(1).atStartOfDay();
         List<Map<String, Object>> applicationRows = organizerRepository

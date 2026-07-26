@@ -3,6 +3,7 @@ package com.example.demo.Service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 
@@ -24,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.demo.Repository.OrganizerRepository;
+import com.example.demo.Repository.OrganizerPaymentAccountRepository;
 import com.example.demo.dto.request.OrganizerEventSaveRequest;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,6 +33,7 @@ class OrganizerServiceEventSaveTest {
     private static final String AUTH = "Bearer valid-token";
 
     @Mock OrganizerRepository organizerRepository;
+    @Mock OrganizerPaymentAccountRepository organizerPaymentAccountRepository;
     @Mock JwtService jwtService;
     @InjectMocks OrganizerService organizerService;
 
@@ -41,13 +44,15 @@ class OrganizerServiceEventSaveTest {
         when(jwtService.getEmail("valid-token")).thenReturn("organizer@example.com");
         when(organizerRepository.findOrganizerAccountByEmail("organizer@example.com"))
                 .thenReturn(Optional.of(new LinkedHashMap<>(Map.of("userId", 7L, "role", "ORGANIZER"))));
+        lenient().when(organizerPaymentAccountRepository.findActiveByOrganizerUserId(7L))
+                .thenReturn(Optional.of(Map.of("paymentAccountId", 9L)));
     }
 
     @Test
     void createsDraftAndReplacesNestedData() {
         OrganizerEventSaveRequest request = validRequest(null);
         when(organizerRepository.countActiveCategories(Set.of(1L))).thenReturn(1);
-        when(organizerRepository.createOrganizerEvent(7L, request)).thenReturn(15L);
+        when(organizerRepository.createOrganizerEvent(7L, request, 9L)).thenReturn(15L);
         stubDetail(15L, "DRAFT");
 
         var response = organizerService.saveOrganizerEvent(AUTH, request);
@@ -69,7 +74,7 @@ class OrganizerServiceEventSaveTest {
                 request.eventId(), request.eventTitle(), request.summary(), request.description(),
                 request.categoryIds(), request.schedule(), location, request.booth(), request.equipment());
         when(organizerRepository.countActiveCategories(Set.of(1L))).thenReturn(1);
-        when(organizerRepository.createOrganizerEvent(7L, request)).thenReturn(16L);
+        when(organizerRepository.createOrganizerEvent(7L, request, 9L)).thenReturn(16L);
         stubDetail(16L, "DRAFT");
 
         var response = organizerService.saveOrganizerEvent(AUTH, request);
@@ -82,7 +87,7 @@ class OrganizerServiceEventSaveTest {
     void normalizesSparseDraftWithoutInventingValues() {
         OrganizerEventSaveRequest sparse = new OrganizerEventSaveRequest(
                 null, null, null, null, null, null, null, null, null);
-        when(organizerRepository.createOrganizerEvent(eq(7L), any(OrganizerEventSaveRequest.class)))
+        when(organizerRepository.createOrganizerEvent(eq(7L), any(OrganizerEventSaveRequest.class), eq(9L)))
                 .thenReturn(17L);
         stubDetail(17L, "DRAFT");
 
@@ -90,7 +95,7 @@ class OrganizerServiceEventSaveTest {
 
         assertThat(response.isSuccessStatus()).isTrue();
         ArgumentCaptor<OrganizerEventSaveRequest> captor = ArgumentCaptor.forClass(OrganizerEventSaveRequest.class);
-        verify(organizerRepository).createOrganizerEvent(eq(7L), captor.capture());
+        verify(organizerRepository).createOrganizerEvent(eq(7L), captor.capture(), eq(9L));
         OrganizerEventSaveRequest saved = captor.getValue();
         assertThat(saved.eventTitle()).isNull();
         assertThat(saved.summary()).isNull();
@@ -106,6 +111,19 @@ class OrganizerServiceEventSaveTest {
         assertThat(saved.equipment().providesBasicPower()).isNull();
         assertThat(saved.equipment().allowsExtraPower()).isNull();
         assertThat(saved.equipment().items()).isEmpty();
+    }
+
+    @Test
+    void rejectsPaidEventWhenOrganizerHasNoActivePaymentAccount() {
+        OrganizerEventSaveRequest request = validRequest(null);
+        when(organizerRepository.countActiveCategories(Set.of(1L))).thenReturn(1);
+        when(organizerPaymentAccountRepository.findActiveByOrganizerUserId(7L))
+                .thenReturn(Optional.empty());
+
+        var response = organizerService.saveOrganizerEvent(AUTH, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(409);
+        assertThat(response.getMessage()).contains("藍新金流帳戶");
     }
 
     @Test

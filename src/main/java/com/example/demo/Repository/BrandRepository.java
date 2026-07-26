@@ -63,7 +63,9 @@ public class BrandRepository {
                         vp.avatar_image_url AS avatarImageUrl,
                         vp.brand_name AS brandName,
                         vp.brand_summary AS brandSummary,
-                        COALESCE(participation.participatedMarketCount, 0) AS participatedMarketCount
+                        COALESCE(participation.participatedMarketCount, 0) AS participatedMarketCount,
+                        COALESCE(recent_participation.recentParticipationCount, 0) AS recentParticipationCount,
+                        recent_participation.latestParticipationAt
                     FROM dbo.vendor_profiles vp
                     INNER JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
                         AND up.profile_type = N'VENDOR'
@@ -80,7 +82,22 @@ public class BrandRepository {
                           AND me.brands_public_at IS NOT NULL
                           AND me.brands_public_at <= SYSDATETIME()
                     ) participation
+                    OUTER APPLY (
+                        SELECT
+                            COUNT(DISTINCT ea.event_id) AS recentParticipationCount,
+                            MAX(me.start_at) AS latestParticipationAt
+                        FROM dbo.event_applications ea
+                        INNER JOIN dbo.market_events me ON me.id = ea.event_id
+                        WHERE ea.vendor_profile_id = vp.id
+                          AND ea.review_status = N'APPROVED'
+                          AND ea.is_cancelled = 0
+                          AND me.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                          AND me.brands_public_at IS NOT NULL
+                          AND me.brands_public_at <= SYSDATETIME()
+                          AND me.start_at >= DATEADD(MONTH, -6, SYSDATETIME())
+                    ) recent_participation
                     WHERE u.status = 'ACTIVE'
+                      AND COALESCE(participation.participatedMarketCount, 0) > 0
                       AND (:categoryName IS NULL OR EXISTS (
                             SELECT 1 FROM dbo.categories category_filter
                             WHERE category_filter.id = vp.category_id
@@ -128,7 +145,10 @@ public class BrandRepository {
                     participatedMarketCount,
                     COUNT(*) OVER() AS totalRows
                 FROM brand_rows
-                ORDER BY participatedMarketCount DESC, brandName ASC, brandId ASC
+                ORDER BY
+                    recentParticipationCount DESC,
+                    latestParticipationAt DESC,
+                    brandId DESC
                 OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY
                 """;
 

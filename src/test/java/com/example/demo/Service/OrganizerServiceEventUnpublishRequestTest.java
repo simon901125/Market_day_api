@@ -1,6 +1,7 @@
 package com.example.demo.Service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -20,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.demo.Repository.OrganizerRepository;
 import com.example.demo.dto.request.OrganizerEventUnpublishRequest;
+import com.example.demo.exception.ConflictException;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizerServiceEventUnpublishRequestTest {
@@ -46,17 +48,17 @@ class OrganizerServiceEventUnpublishRequestTest {
         when(organizerRepository.findOrganizerEventDetail(7L, EVENT_ID))
                 .thenReturn(Optional.of(event("PUBLISHED")));
         when(organizerRepository.requestOrganizerEventUnpublish(7L, EVENT_ID)).thenReturn(1);
-        when(organizerRepository.createEventUnpublishRequest(eq(7L), eq(EVENT_ID), eq("場地臨時停用"), any()))
-                .thenReturn(33L);
+        when(organizerRepository.createEventUnpublishRequest(
+                eq(7L), eq(EVENT_ID), eq("活動不再舉辦"), any())).thenReturn(33L);
 
         var response = organizerService.requestOrganizerEventUnpublish(
-                AUTH, EVENT_ID, new OrganizerEventUnpublishRequest("  場地臨時停用  "));
+                AUTH, EVENT_ID, new OrganizerEventUnpublishRequest("  活動不再舉辦  "));
 
         assertThat(response.isSuccessStatus()).isTrue();
         assertThat(response.getData().unpublishRequestId()).isEqualTo(33L);
         assertThat(response.getData().workflowStatus()).isEqualTo("UNPUBLISH_REQUESTED");
         assertThat(response.getData().status()).isEqualTo("pendingUnpublish");
-        assertThat(response.getData().reason()).isEqualTo("場地臨時停用");
+        assertThat(response.getData().reason()).isEqualTo("活動不再舉辦");
         assertThat(response.getData().availableActions()).isEmpty();
         verify(notificationService).notifyAdminsEventUnpublishRequested(
                 EVENT_ID, 33L, "測試活動", "測試主辦方");
@@ -66,7 +68,6 @@ class OrganizerServiceEventUnpublishRequestTest {
     void rejectsBlankReason() {
         var response = organizerService.requestOrganizerEventUnpublish(
                 AUTH, EVENT_ID, new OrganizerEventUnpublishRequest("   "));
-
         assertThat(response.getStatusCode()).isEqualTo(400);
         verify(organizerRepository, never()).requestOrganizerEventUnpublish(any(), any());
     }
@@ -74,8 +75,7 @@ class OrganizerServiceEventUnpublishRequestTest {
     @Test
     void rejectsReasonLongerThanFiveHundredCharacters() {
         var response = organizerService.requestOrganizerEventUnpublish(
-                AUTH, EVENT_ID, new OrganizerEventUnpublishRequest("理".repeat(501)));
-
+                AUTH, EVENT_ID, new OrganizerEventUnpublishRequest("字".repeat(501)));
         assertThat(response.getStatusCode()).isEqualTo(400);
     }
 
@@ -84,10 +84,37 @@ class OrganizerServiceEventUnpublishRequestTest {
         when(organizerRepository.findOrganizerEventDetail(7L, EVENT_ID))
                 .thenReturn(Optional.of(event("UNPUBLISH_REQUESTED")));
 
-        var response = organizerService.requestOrganizerEventUnpublish(
-                AUTH, EVENT_ID, new OrganizerEventUnpublishRequest("場地異動"));
+        assertThatThrownBy(() -> requestUnpublish())
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("下架申請中無法下架活動");
+        verify(organizerRepository, never()).createEventUnpublishRequest(any(), any(), any(), any());
+    }
 
-        assertThat(response.getStatusCode()).isEqualTo(409);
+    @Test
+    void rejectsEventDuringRegistrationPeriod() {
+        when(organizerRepository.findOrganizerEventDetail(7L, EVENT_ID))
+                .thenReturn(Optional.of(event("PUBLISHED")));
+        when(organizerRepository.findOrganizerEventUnpublishBlockers(7L, EVENT_ID))
+                .thenReturn(Map.of("registrationOpen", true, "hasPaidPayment", false));
+
+        assertThatThrownBy(() -> requestUnpublish())
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("正在報名無法下架活動");
+        verify(organizerRepository, never()).requestOrganizerEventUnpublish(any(), any());
+        verify(organizerRepository, never()).createEventUnpublishRequest(any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsEventWithPaidPayment() {
+        when(organizerRepository.findOrganizerEventDetail(7L, EVENT_ID))
+                .thenReturn(Optional.of(event("PUBLISHED")));
+        when(organizerRepository.findOrganizerEventUnpublishBlockers(7L, EVENT_ID))
+                .thenReturn(Map.of("registrationOpen", false, "hasPaidPayment", true));
+
+        assertThatThrownBy(() -> requestUnpublish())
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("已收款無法下架活動");
+        verify(organizerRepository, never()).requestOrganizerEventUnpublish(any(), any());
         verify(organizerRepository, never()).createEventUnpublishRequest(any(), any(), any(), any());
     }
 
@@ -97,11 +124,15 @@ class OrganizerServiceEventUnpublishRequestTest {
                 .thenReturn(Optional.of(event("PUBLISHED")));
         when(organizerRepository.requestOrganizerEventUnpublish(7L, EVENT_ID)).thenReturn(0);
 
-        var response = organizerService.requestOrganizerEventUnpublish(
-                AUTH, EVENT_ID, new OrganizerEventUnpublishRequest("場地異動"));
-
-        assertThat(response.getStatusCode()).isEqualTo(409);
+        assertThatThrownBy(() -> requestUnpublish())
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("活動狀態已變更，無法下架活動");
         verify(organizerRepository, never()).createEventUnpublishRequest(any(), any(), any(), any());
+    }
+
+    private void requestUnpublish() {
+        organizerService.requestOrganizerEventUnpublish(
+                AUTH, EVENT_ID, new OrganizerEventUnpublishRequest("活動不再舉辦"));
     }
 
     private Map<String, Object> event(String workflowStatus) {

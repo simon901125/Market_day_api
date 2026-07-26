@@ -350,6 +350,8 @@ public class ApiResponse<T> {
             case "Application review failed" -> "\u7533\u8acb\u5be9\u6838\u5931\u6557";
             case "Application payment already paid" -> "\u6b64\u7533\u8acb\u5df2\u5b8c\u6210\u4ed8\u6b3e";
             case "NewebPay config is incomplete" -> "\u85cd\u65b0\u91d1\u6d41\u8a2d\u5b9a\u5c1a\u672a\u5b8c\u6574";
+            case "MerchantID cannot be changed after this payment account has payment records" ->
+                "\u6b64\u85cd\u65b0\u5e33\u6236\u5df2\u6709\u4ed8\u6b3e\u7d00\u9304\uff0c\u4e0d\u53ef\u66f4\u63db MerchantID";
             case "Payment amount is invalid" -> "\u4ed8\u6b3e\u91d1\u984d\u4e0d\u6b63\u78ba";
             case "Payment record not found" -> "\u627e\u4e0d\u5230\u4ed8\u6b3e\u7d00\u9304";
             case "NewebPay query failed" -> "\u85cd\u65b0\u4ea4\u6613\u67e5\u8a62\u5931\u6557";

@@ -29,6 +29,7 @@ class BrandRepositoryIT extends SqlServerIntegrationTestSupport {
         Long brandId = createBrand("brand-repository@example.test", "Integration Tea");
         insertProduct(brandId, "Tea A");
         insertProduct(brandId, "Tea B");
+        createPublishedParticipation(brandId);
 
         List<Map<String, Object>> rows = repository.searchBrands(
                 new BrandSearchRequest("Integration", null, null, 1, 6), 0, 6);
@@ -73,5 +74,46 @@ class BrandRepositoryIT extends SqlServerIntegrationTestSupport {
                 INSERT INTO vendor_products (vendor_profile_id, name, short_description, price)
                 VALUES (:brandId, :name, N'description', 100)
                 """, new MapSqlParameterSource().addValue("brandId", brandId).addValue("name", name));
+    }
+
+    private void createPublishedParticipation(Long brandId) {
+        Long organizerUserId = userRepository.createLocalUser(
+                "ORGANIZER", "brand-repository-organizer@example.test", "hash");
+        userRepository.markEmailVerified(organizerUserId);
+        Long vendorUserId = jdbc.queryForObject("""
+                SELECT up.user_id
+                FROM dbo.vendor_profiles vp
+                INNER JOIN dbo.user_profiles up ON up.id = vp.user_profile_id
+                WHERE vp.id = :brandId
+                """, Map.of("brandId", brandId), Long.class);
+        Long eventId = jdbc.queryForObject("""
+                INSERT INTO dbo.market_events (
+                    user_id, title, start_at, end_at,
+                    registration_start_at, registration_end_at,
+                    workflow_status, brands_public_at
+                )
+                OUTPUT INSERTED.id
+                VALUES (
+                    :organizerUserId, N'Integration Market',
+                    DATEADD(DAY, -2, DATEADD(HOUR, 8, SYSUTCDATETIME())),
+                    DATEADD(DAY, -1, DATEADD(HOUR, 8, SYSUTCDATETIME())),
+                    DATEADD(DAY, -10, DATEADD(HOUR, 8, SYSUTCDATETIME())),
+                    DATEADD(DAY, -3, DATEADD(HOUR, 8, SYSUTCDATETIME())),
+                    N'FINAL_REVIEW', DATEADD(DAY, -2, DATEADD(HOUR, 8, SYSUTCDATETIME()))
+                )
+                """, Map.of("organizerUserId", organizerUserId), Long.class);
+        jdbc.update("""
+                INSERT INTO dbo.event_applications (
+                    application_no, event_id, user_id, vendor_profile_id,
+                    total_amount, review_status, payment_status, is_cancelled
+                )
+                VALUES (
+                    N'BRAND-REPOSITORY-APP', :eventId, :vendorUserId, :brandId,
+                    100, N'APPROVED', N'PAID', 0
+                )
+                """, Map.of(
+                "eventId", eventId,
+                "vendorUserId", vendorUserId,
+                "brandId", brandId));
     }
 }

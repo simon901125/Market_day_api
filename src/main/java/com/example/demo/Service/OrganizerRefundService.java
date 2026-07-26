@@ -84,6 +84,14 @@ public class OrganizerRefundService {
         if (organizerUserId == null || !organizerUserId.equals(refundOrganizerUserId)) {
             return ApiResponse.fail("Refund record does not belong to this organizer");
         }
+        Long paymentAccountId = toLong(refund.get("paymentAccountId"));
+        Long paymentAccountOrganizerUserId = toLong(refund.get("paymentAccountOrganizerUserId"));
+        if (paymentAccountId == null || paymentAccountOrganizerUserId == null) {
+            return ApiResponse.fail("Original payment account is missing");
+        }
+        if (!organizerUserId.equals(paymentAccountOrganizerUserId)) {
+            return ApiResponse.fail("Original payment account does not belong to this organizer");
+        }
 
         String refundStatus = stringValue(refund.get("refundStatus"));
         if (!allowedStatuses.contains(refundStatus)) {

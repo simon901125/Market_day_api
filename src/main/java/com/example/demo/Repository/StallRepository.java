@@ -1101,6 +1101,41 @@ public class StallRepository {
                 WHERE e.workflow_status IN (N'PUBLISHED', N'UNPUBLISH_REQUESTED')
                         AND GETDATE() >= e.registration_start_at
                         AND GETDATE() <= e.registration_end_at
+                        AND EXISTS (
+                            SELECT 1
+                            FROM (
+                                SELECT TOP (
+                                    CASE
+                                        WHEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) >= 0
+                                        THEN DATEDIFF(DAY, CONVERT(date, e.start_at), CONVERT(date, e.end_at)) + 1
+                                        ELSE 0
+                                    END
+                                )
+                                    DATEADD(
+                                        DAY,
+                                        ROW_NUMBER() OVER (ORDER BY object_id) - 1,
+                                        CONVERT(date, e.start_at)
+                                    ) AS applyDate
+                                FROM sys.all_objects
+                            ) event_dates
+                            OUTER APPLY (
+                                SELECT COUNT(*) AS appliedStalls
+                                FROM dbo.application_dates ad
+                                INNER JOIN dbo.event_applications a
+                                    ON a.id = ad.application_id
+                                WHERE a.event_id = e.id
+                                  AND a.is_cancelled = 0
+                                  AND a.review_status <> N'REJECTED'
+                                  AND ad.apply_date = event_dates.applyDate
+                            ) occupied
+                            OUTER APPLY (
+                                SELECT COALESCE(NULLIF(COUNT(s.id), 0), e.max_booths, 0) AS totalStalls
+                                FROM dbo.event_stalls s
+                                WHERE s.event_id = e.id
+                                  AND s.status <> N'DISABLED'
+                            ) capacity
+                            WHERE occupied.appliedStalls < capacity.totalStalls
+                        )
                         """);
 
         Map<String, Object> params = new HashMap<>();
@@ -1138,7 +1173,7 @@ public class StallRepository {
             }
         }
 
-        sql.append(" ORDER BY e.start_at ASC, e.id ASC");
+        sql.append(" ORDER BY e.start_at ASC, e.id DESC");
         return RepositoryResultMapper.normalizeList(
                 namedParameterJdbcTemplate.queryForList(sql.toString(), params));
     }
@@ -1478,6 +1513,7 @@ public class StallRepository {
                 FROM dbo.event_applications
                 WHERE event_id = :eventId
                   AND vendor_profile_id = :vendorProfileId
+                  AND is_cancelled = 0
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1562,6 +1598,7 @@ public class StallRepository {
                     deposit_amount,
                     payment_due_at
                 )
+                OUTPUT INSERTED.id
                 VALUES (
                     :applicationNo,
                     :eventId,
@@ -1585,9 +1622,11 @@ public class StallRepository {
                 .addValue("totalAmount", totalAmount)
                 .addValue("depositAmount", depositAmount)
                 .addValue("paymentDueAt", paymentDueAt);
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        namedParameterJdbcTemplate.update(sql, params, keyHolder, new String[] { "id" });
-        return keyHolder.getKey().longValue();
+        Long applicationId = namedParameterJdbcTemplate.queryForObject(sql, params, Long.class);
+        if (applicationId == null || applicationId <= 0) {
+            throw new IllegalStateException("Event application was created without a valid generated id");
+        }
+        return applicationId;
     }
 
     /**

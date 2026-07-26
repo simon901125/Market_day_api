@@ -24,6 +24,13 @@ class ApplicationSmokeTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody())
                 .isNotNull()
-                .contains("\"openapi\"");
+                .contains(
+                        "\"openapi\"",
+                        "\"/api/organizer/newebpay/portal\"",
+                        "\"/api/organizer/newebpay/load\"",
+                        "\"/api/organizer/newebpay/save\"",
+                        "\"/api/organizer/newebpay/verify\"",
+                        "\"/api/newebpay/notify\"",
+                        "\"/api/newebpay/return\"");
     }
 }
