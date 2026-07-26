@@ -59,6 +59,14 @@ public class MarketEvent {
     @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "FK_market_events_users"))
     private User user;
 
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "payment_account_id",
+            foreignKey = @ForeignKey(name = "FK_market_events_payment_account"))
+    private OrganizerPaymentAccount paymentAccount;
+
     /** 活動類型 */
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

@@ -161,6 +161,38 @@ CREATE TABLE dbo.organizer_profiles
 );
 GO
 
+CREATE TABLE dbo.organizer_payment_accounts
+(
+    id BIGINT IDENTITY(1,1) NOT NULL,
+    organizer_profile_id BIGINT NOT NULL,
+    merchant_id VARCHAR(50) NOT NULL,
+    hash_key_encrypted NVARCHAR(500) NOT NULL,
+    hash_iv_encrypted NVARCHAR(500) NOT NULL,
+    status VARCHAR(20) NOT NULL CONSTRAINT DF_organizer_payment_accounts_status DEFAULT 'DISABLED',
+    verification_status VARCHAR(20) NOT NULL CONSTRAINT DF_organizer_payment_accounts_verification_status DEFAULT 'UNVERIFIED',
+    verification_no NVARCHAR(40) NULL,
+    verified_at DATETIME2(0) NULL,
+    created_at DATETIME2(0) NOT NULL CONSTRAINT DF_organizer_payment_accounts_created_at DEFAULT SYSDATETIME(),
+    updated_at DATETIME2(0) NOT NULL CONSTRAINT DF_organizer_payment_accounts_updated_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_organizer_payment_accounts PRIMARY KEY (id),
+    CONSTRAINT FK_organizer_payment_accounts_organizer FOREIGN KEY (organizer_profile_id) REFERENCES dbo.organizer_profiles(id),
+    CONSTRAINT UQ_organizer_payment_accounts_merchant UNIQUE (merchant_id),
+    CONSTRAINT UQ_organizer_payment_accounts_organizer UNIQUE (organizer_profile_id),
+    CONSTRAINT CK_organizer_payment_accounts_status CHECK (status IN ('ACTIVE', 'DISABLED')),
+    CONSTRAINT CK_organizer_payment_accounts_verification_status CHECK (
+        verification_status IN ('UNVERIFIED', 'PENDING', 'VERIFIED', 'FAILED')
+    ),
+    CONSTRAINT CK_organizer_payment_accounts_active_requires_verified CHECK (
+        status <> 'ACTIVE' OR verification_status = 'VERIFIED'
+    )
+);
+GO
+
+CREATE UNIQUE INDEX UX_organizer_payment_accounts_verification_no
+ON dbo.organizer_payment_accounts(verification_no)
+WHERE verification_no IS NOT NULL;
+GO
+
 CREATE TRIGGER dbo.trg_vendor_profiles_validate_profile_type
 ON dbo.vendor_profiles
 AFTER INSERT, UPDATE
@@ -268,8 +300,7 @@ CREATE TABLE dbo.market_events
     stall_length DECIMAL(6,2) NULL,
     base_fee DECIMAL(10,2) NULL,
     deposit_amount DECIMAL(10,2) NULL CONSTRAINT DF_market_events_deposit_amount DEFAULT 0,
-    payment_account VARCHAR(100) NULL,
-    payment_received BIT NOT NULL CONSTRAINT DF_market_events_payment_received DEFAULT 0,
+    payment_account_id BIGINT NULL,
     traffic_info_driving NVARCHAR(MAX) NULL,
     traffic_info_bus NVARCHAR(MAX) NULL,
     traffic_info_metro NVARCHAR(MAX) NULL,
@@ -282,6 +313,7 @@ CREATE TABLE dbo.market_events
     create_at DATETIME2(0) NOT NULL CONSTRAINT DF_market_events_create_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_market_events PRIMARY KEY (id),
     CONSTRAINT FK_market_events_users FOREIGN KEY (user_id) REFERENCES dbo.users(id),
+    CONSTRAINT FK_market_events_payment_account FOREIGN KEY (payment_account_id) REFERENCES dbo.organizer_payment_accounts(id),
     CONSTRAINT CK_market_events_date_range CHECK (end_at >= start_at),
     CONSTRAINT CK_market_events_registration_range CHECK (registration_end_at >= registration_start_at),
     CONSTRAINT CK_market_events_workflow_status CHECK (workflow_status IN (N'DRAFT', N'PENDING_REVIEW', N'REVISION_REQUIRED', N'MAP_BUILDING', N'READY_TO_PUBLISH', N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED', N'UNPUBLISHED', N'CANCELLED'))
@@ -528,6 +560,7 @@ CREATE TABLE dbo.payments
     id BIGINT IDENTITY(1,1) NOT NULL,
     payment_no NVARCHAR(40) NOT NULL,
     application_id BIGINT NOT NULL,
+    payment_account_id BIGINT NULL,
     amount DECIMAL(10,2) NOT NULL,
     provider NVARCHAR(30) NULL,
     provider_trade_no NVARCHAR(100) NULL,
@@ -535,11 +568,14 @@ CREATE TABLE dbo.payments
     provider_message NVARCHAR(255) NULL,
     status NVARCHAR(30) NOT NULL,
     paid_at DATETIME2(0) NULL,
+    expired_at DATETIME2(0) NULL,
     created_at DATETIME2(0) NOT NULL CONSTRAINT DF_payments_created_at DEFAULT SYSDATETIME(),
+    updated_at DATETIME2(0) NOT NULL CONSTRAINT DF_payments_updated_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_payments PRIMARY KEY (id),
     CONSTRAINT UQ_payments_payment_no UNIQUE (payment_no),
     CONSTRAINT FK_payments_event_applications FOREIGN KEY (application_id) REFERENCES dbo.event_applications(id),
-    CONSTRAINT CK_payments_status CHECK (status IN (N'PENDING', N'PAID', N'FAILED', N'EXPIRED'))
+    CONSTRAINT FK_payments_payment_account FOREIGN KEY (payment_account_id) REFERENCES dbo.organizer_payment_accounts(id),
+    CONSTRAINT CK_payments_status CHECK (status IN (N'PENDING', N'PAID', N'FAILED', N'EXPIRED', N'CANCELLED', N'REFUNDED', N'PARTIALLY_REFUNDED'))
 );
 GO
 
@@ -865,8 +901,7 @@ EXEC dbo.usp_add_column_description N'market_events', N'stall_width', N'本活�
 EXEC dbo.usp_add_column_description N'market_events', N'stall_length', N'本活動固定攤位長度';
 EXEC dbo.usp_add_column_description N'market_events', N'base_fee', N'基本攤位費';
 EXEC dbo.usp_add_column_description N'market_events', N'deposit_amount', N'每攤保證金';
-EXEC dbo.usp_add_column_description N'market_events', N'payment_account', N'主辦方付款帳號，供管理員統整並轉交活動款項';
-EXEC dbo.usp_add_column_description N'market_events', N'payment_received', N'主辦方是否已確認收到活動全部款項';
+EXEC dbo.usp_add_column_description N'market_events', N'payment_account_id', N'活動使用的主辦方金流帳戶 ID';
 EXEC dbo.usp_add_column_description N'market_events', N'traffic_info_driving', N'開車交通資訊';
 EXEC dbo.usp_add_column_description N'market_events', N'traffic_info_bus', N'公車交通資訊';
 EXEC dbo.usp_add_column_description N'market_events', N'traffic_info_metro', N'捷運交通資訊';

@@ -42,9 +42,7 @@ import com.example.demo.enums.status.ReviewStatus;
 @Entity
 @Data
 @Table(name = "event_applications", uniqueConstraints = {
-        @UniqueConstraint(name = "UQ_event_applications_application_no", columnNames = "application_no"),
-        @UniqueConstraint(name = "UQ_event_applications_event_vendor_profile", columnNames = { "event_id",
-                "vendor_profile_id" })
+        @UniqueConstraint(name = "UQ_event_applications_application_no", columnNames = "application_no")
 })
 public class EventApplication {
 

@@ -59,7 +59,8 @@ class OrganizerServiceEventSearchTest {
         when(organizerRepository.findOrganizerApplicationTaskSummary(7L)).thenReturn(Map.of(
                 "pendingReviewCount", 12,
                 "pendingRefundConfirmationCount", 3,
-                "pendingStallSelectionCount", 50));
+                "pendingStallSelectionCount", 50,
+                "pendingPublishCount", 4));
         when(organizerRepository.findOrganizerApplications(7L, null, null, null, null))
                 .thenReturn(List.of());
 
@@ -70,6 +71,7 @@ class OrganizerServiceEventSearchTest {
         assertThat(response.getData().getTaskSummary().pendingReviewCount()).isEqualTo(12);
         assertThat(response.getData().getTaskSummary().pendingRefundConfirmationCount()).isEqualTo(3);
         assertThat(response.getData().getTaskSummary().pendingStallSelectionCount()).isEqualTo(50);
+        assertThat(response.getData().getTaskSummary().pendingPublishCount()).isEqualTo(4);
         assertThat(response.getData().getApplications().getItems()).isEmpty();
     }
 
@@ -104,7 +106,7 @@ class OrganizerServiceEventSearchTest {
 
         assertThat(response.getData().getEvents().getItems())
                 .extracting(event -> event.eventId())
-                .containsExactly(6L);
+                .containsExactly(6L, 5L);
     }
 
     @Test

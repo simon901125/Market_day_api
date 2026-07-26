@@ -82,7 +82,7 @@ public class EventSpecification {
     private static Specification<MarketEvent> withStatus(EventStatus status) {
         return (root, query, cb) -> {
             if (status == null) {
-                return cb.not(root.get("workflowStatus").in(WorkflowStatus.DRAFT, WorkflowStatus.CANCELLED));
+                return cb.notEqual(root.get("workflowStatus"), WorkflowStatus.DRAFT);
             }
             LocalDateTime now = LocalDateTime.now();
             Expression<Long> registeredBoothCount = registeredBoothCountSubquery(root, query, cb);
@@ -132,6 +132,7 @@ public class EventSpecification {
                         cb.lessThanOrEqualTo(root.<LocalDateTime>get("endAt"), now));
                 case UNPUBLISH_REQUESTED -> cb.equal(root.get("workflowStatus"), WorkflowStatus.UNPUBLISH_REQUESTED);
                 case UNPUBLISHED -> cb.equal(root.get("workflowStatus"), WorkflowStatus.UNPUBLISHED);
+                case CANCELLED -> cb.equal(root.get("workflowStatus"), WorkflowStatus.CANCELLED);
             };
         };
     }

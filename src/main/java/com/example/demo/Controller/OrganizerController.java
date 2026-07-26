@@ -20,12 +20,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.Service.OrganizerService;
 import com.example.demo.Service.OrganizerNotificationService;
+import com.example.demo.Service.OrganizerPaymentAccountService;
 import com.example.demo.Service.OrganizerService.ReportExport;
 import com.example.demo.Service.StallService;
 import com.example.demo.dto.request.OrganizerApplicationReviewRequest;
 import com.example.demo.dto.request.OrganizerEventSaveRequest;
 import com.example.demo.dto.request.OrganizerEventUnpublishRequest;
 import com.example.demo.dto.request.OrganizerProfileSaveRequest;
+import com.example.demo.dto.request.OrganizerPaymentAccountRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.MapBackedResponse;
 import com.example.demo.dto.response.OrganizerAccountResponse;
@@ -35,6 +37,10 @@ import com.example.demo.dto.response.OrganizerApplicationSearchResponse;
 import com.example.demo.dto.response.OrganizerDashboardInitResponse;
 import com.example.demo.dto.response.OrganizerNotificationSearchResponse;
 import com.example.demo.dto.response.OrganizerPaymentSearchResponse;
+import com.example.demo.dto.response.OrganizerPaymentAccountResponse;
+import com.example.demo.dto.response.OrganizerNewebPayAccountLoadResponse;
+import com.example.demo.dto.response.OrganizerNewebPayPortalResponse;
+import com.example.demo.dto.response.OrganizerNewebPayVerificationPaymentResponse;
 import com.example.demo.dto.response.OrganizerPaymentDetailResponse;
 import com.example.demo.dto.response.OrganizerEquipmentSearchResponse;
 import com.example.demo.dto.response.OrganizerEventSearchResponse;
@@ -47,7 +53,9 @@ import com.example.demo.dto.response.OrganizerEventUnpublishRequestResponse;
 import com.example.demo.dto.response.OrganizerStallEventSearchResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 
 @RestController
 @Tag(name = "主辦方 API", description = "主辦方帳務、報名、設備、攤位與個人資料 API")
@@ -61,6 +69,89 @@ public class OrganizerController {
 
     @Autowired
     private StallService stallService;
+
+    @Autowired
+    private OrganizerPaymentAccountService organizerPaymentAccountService;
+
+    @Operation(
+            summary = "查詢主辦方藍新商店綁定狀態",
+            description = "回傳遮罩後的 MerchantID、帳戶狀態與更新時間，不回傳 HashKey 或 HashIV。",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "成功取得綁定狀態"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "未登入或登入資訊已失效"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "目前帳號不是可用的主辦方帳號"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "尚未綁定藍新商店")
+    })
+    @GetMapping("/api/organizers/me/payment-account")
+    public ApiResponse<OrganizerPaymentAccountResponse> getPaymentAccount(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        return organizerPaymentAccountService.get(authorizationHeader);
+    }
+
+    @Operation(
+            summary = "取得藍新入口網址",
+            description = "回傳藍新金流官方註冊頁與登入頁網址，供主辦方前往建立或管理商店。",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "成功取得藍新入口網址"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "未登入或登入資訊已失效"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "目前帳號不是可用的主辦方帳號")
+    })
+    @GetMapping("/api/organizer/newebpay/portal")
+    public ApiResponse<OrganizerNewebPayPortalResponse> getNewebPayPortal(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        return organizerPaymentAccountService.portal(authorizationHeader);
+    }
+
+    @Operation(
+            summary = "載入主辦方藍新商店設定",
+            description = "載入目前主辦方的藍新綁定狀態、MerchantID 與更新時間。基於安全考量，不會回傳 HashKey 或 HashIV。",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "成功載入設定；尚未綁定時 bound 為 false"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "未登入或登入資訊已失效"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "目前帳號不是可用的主辦方帳號")
+    })
+    @GetMapping("/api/organizer/newebpay/load")
+    public ApiResponse<OrganizerNewebPayAccountLoadResponse> loadNewebPayAccount(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        return organizerPaymentAccountService.load(authorizationHeader);
+    }
+
+    @Operation(
+            summary = "儲存主辦方藍新商店設定",
+            description = "儲存 MerchantID、32 字元 HashKey 與 16 字元 HashIV。HashKey 與 HashIV 會加密保存，不會在後續查詢中回傳。",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "藍新商店設定儲存成功"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "欄位缺漏或格式不正確"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "未登入或登入資訊已失效"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "目前帳號不是可用的主辦方帳號"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "該帳戶已有付款紀錄，不能更換 MerchantID")
+    })
+    @PostMapping("/api/organizer/newebpay/save")
+    public ApiResponse<OrganizerPaymentAccountResponse> saveNewebPayAccount(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @Valid @RequestBody OrganizerPaymentAccountRequest request) {
+        return organizerPaymentAccountService.save(authorizationHeader, request);
+    }
+
+    @Operation(
+            summary = "建立主辦方藍新商店 NT$1 驗證付款",
+            description = "建立一筆獨立的 NT$1 藍新付款並回傳 MPG 表單資料。只有藍新付款成功且 callback 驗證通過後，商店才會標記為 VERIFIED。",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "成功建立 NT$1 驗證付款資料"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "未登入或登入資訊已失效"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "目前帳號不是可用的主辦方帳號"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "尚未綁定藍新商店")
+    })
+    @PostMapping("/api/organizer/newebpay/verify")
+    public ApiResponse<OrganizerNewebPayVerificationPaymentResponse> verifyNewebPayAccount(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        return organizerPaymentAccountService.verify(authorizationHeader);
+    }
 
     @Operation(summary = "初始化主辦方後台", description = "登入後判斷目前主辦方是否需要填寫基本資料")
     @GetMapping("/api/organizer/dashboard/init")

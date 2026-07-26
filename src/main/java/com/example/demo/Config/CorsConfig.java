@@ -12,8 +12,7 @@ public class CorsConfig implements WebMvcConfigurer {
 
         registry.addMapping("/api/**")
                 .allowedOrigins(
-                        "http://localhost:4200",
-                        "https://marketday.dev",
+                        "https://market-day-web.pages.dev",
                         "https://market-day-1hp.pages.dev",
                         "https://ccore.newebpay.com"
                 )
@@ -34,8 +33,7 @@ public class CorsConfig implements WebMvcConfigurer {
 
         registry.addMapping("/images/**")
                 .allowedOrigins(
-                        "http://localhost:4200",
-                        "https://marketday.dev",
+                        "https://market-day-web.pages.dev",
                         "https://market-day-1hp.pages.dev"
                 )
                 .allowedMethods(

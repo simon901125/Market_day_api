@@ -55,7 +55,9 @@ public class UserRepoCustomImpl extends AbstractTupleQuerySupport implements Use
                 loginTimeSubquery.alias("loginTime"));//最後登入時間
 
         // 設定orderBy: 帳號創建時間:由新到舊(desc)
-        cq.orderBy(cb.desc(root.get("createdAt")));
+        cq.orderBy(
+                cb.desc(root.get("createdAt")),
+                cb.desc(root.get("id")));
 
         // 查詢結果(有設定limit)
         return fetchPage(cq, pageNumber, pageSize);

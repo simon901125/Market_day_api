@@ -31,6 +31,13 @@ import com.example.demo.dto.response.CategoryResponse;
 public class MarketEventRepository {
 
     private static final int STARTING_SOON_DAYS = 7;
+    private static final String CURRENT_EVENTS = "\u76ee\u524d\u6d3b\u52d5";
+    private static final String HISTORY_EVENTS = "\u6b77\u53f2\u6d3b\u52d5";
+    private static final String EVENT_PREVIEW = "\u6d3b\u52d5\u9810\u544a";
+    private static final String STARTING_SOON = "\u5373\u5c07\u958b\u59cb";
+    private static final String IN_PROGRESS = "\u9032\u884c\u4e2d";
+    private static final String ENDED = "\u5df2\u7d50\u675f";
+    private static final String CANCELLED = "\u6d3b\u52d5\u53d6\u6d88";
 
     @Autowired
     private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
@@ -47,12 +54,14 @@ public class MarketEventRepository {
                     e.address,
                     CAST(e.start_at AS DATE) AS start_date,
                     CAST(e.end_at AS DATE) AS end_date,
-                    e.cover_image_url
+                    e.cover_image_url,
+                    e.workflow_status
                 FROM dbo.market_events e
-                WHERE e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                WHERE 1 = 1
                 """);
 
         Map<String, Object> params = new HashMap<>();
+        appendVisibleWorkflowFilter(sql, request);
         appendKeywordFilter(sql, params, request);
         appendCityFilter(sql, params, request);
         appendCategoryNamesFilter(sql, params, request);
@@ -60,7 +69,23 @@ public class MarketEventRepository {
         appendEventTypeFilter(sql, request);
         appendEventStatusesFilter(sql, params, request);
 
-        sql.append(" ORDER BY e.start_at DESC, e.id DESC");
+        if (isHistorySearch(request)) {
+            sql.append(" ORDER BY e.end_at DESC, e.id DESC");
+        } else {
+            sql.append("""
+                     ORDER BY
+                        CASE
+                            WHEN CAST(e.start_at AS DATE) <= CAST(GETDATE() AS DATE)
+                             AND CAST(e.end_at AS DATE) >= CAST(GETDATE() AS DATE) THEN 0
+                            WHEN CAST(e.start_at AS DATE) <= DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
+                                THEN 1
+                            ELSE 2
+                        END ASC,
+                        e.start_at ASC,
+                        e.id DESC
+                    """);
+            params.putIfAbsent("startingSoonDays", STARTING_SOON_DAYS);
+        }
         List<MarketEventCardResponse> cards = namedParameterJdbcTemplate.query(
                 sql.toString(), params, this::toMarketEventCardResponse);
         Map<Long, List<CategoryResponse>> categoriesByEventId = findCategoriesByEventIds(
@@ -84,6 +109,7 @@ public class MarketEventRepository {
                     e.traffic_info_metro,
                     e.traffic_info_bus,
                     e.traffic_info_driving,
+                    e.workflow_status,
                     CAST(e.start_at AS DATE) AS start_date,
                     CAST(e.end_at AS DATE) AS end_date,
                     CAST(e.start_at AS TIME) AS start_time,
@@ -92,14 +118,14 @@ public class MarketEventRepository {
                     CASE
                         WHEN e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                          AND e.brands_public_at IS NOT NULL
-                         AND e.brands_public_at <= SYSDATETIME()
+                         AND e.brands_public_at <= DATEADD(HOUR, 8, SYSUTCDATETIME())
                         THEN e.map_image_url
                         ELSE NULL
                     END AS map_image_url,
                     CAST(CASE
                         WHEN e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                          AND e.brands_public_at IS NOT NULL
-                         AND e.brands_public_at <= SYSDATETIME()
+                         AND e.brands_public_at <= DATEADD(HOUR, 8, SYSUTCDATETIME())
                         THEN 1
                         ELSE 0
                     END AS BIT) AS brands_public,
@@ -114,7 +140,10 @@ public class MarketEventRepository {
                     ON up.user_id = e.user_id AND up.profile_type = N'ORGANIZER'
                 LEFT JOIN dbo.organizer_profiles op ON op.user_profile_id = up.id
                 WHERE e.id = :id
-                  AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                  AND e.workflow_status IN (
+                      N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED',
+                      N'UNPUBLISHED', N'CANCELLED'
+                  )
                 """;
 
         Map<String, Object> params = Map.of("id", id);
@@ -148,7 +177,7 @@ public class MarketEventRepository {
                   AND s.stall_no = :stallNo
                   AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND e.brands_public_at IS NOT NULL
-                  AND e.brands_public_at <= SYSDATETIME()
+                  AND e.brands_public_at <= DATEADD(HOUR, 8, SYSUTCDATETIME())
                 """;
         Map<String, Object> params = Map.of("eventId", eventId, "date", date, "stallNo", stallNo);
         return namedParameterJdbcTemplate.query(sql, params, (rs, rowNum) -> {
@@ -237,14 +266,18 @@ public class MarketEventRepository {
         if (eventType == null) {
             return;
         }
-
-        if ("目前活動".equals(eventType)) {
+        if (CURRENT_EVENTS.equals(eventType)) {
             sql.append(" AND CAST(e.end_at AS DATE) >= CAST(GETDATE() AS DATE)");
             return;
         }
-
-        if ("歷史活動".equals(eventType)) {
-            sql.append(" AND CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)");
+        if (HISTORY_EVENTS.equals(eventType)) {
+            sql.append("""
+                    AND (
+                        CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)
+                        OR e.workflow_status IN (N'UNPUBLISHED', N'CANCELLED')
+                    )
+                    """);
+            return;
         }
     }
 
@@ -255,55 +288,61 @@ public class MarketEventRepository {
         if (statuses.isEmpty()) {
             return;
         }
+        appendKnownEventStatusesFilter(sql, params, statuses);
+    }
 
-        if (statuses.contains("活動預告") || statuses.contains("即將開始")) {
-            params.put("startingSoonDays", STARTING_SOON_DAYS);
-        }
+    private boolean isHistorySearch(MarketSearchRequest request) {
+        return request != null && HISTORY_EVENTS.equals(normalizeText(request.eventType()));
+    }
 
-        sql.append(" AND (");
-        boolean hasCondition = false;
-
-        if (statuses.contains("活動預告")) {
+    private void appendVisibleWorkflowFilter(StringBuilder sql, MarketSearchRequest request) {
+        if (isHistorySearch(request)) {
             sql.append("""
+                    AND e.workflow_status IN (
+                        N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED',
+                        N'UNPUBLISHED', N'CANCELLED'
+                    )
+                    """);
+            return;
+        }
+        sql.append("""
+                AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
+                """);
+    }
+
+    private void appendKnownEventStatusesFilter(
+            StringBuilder sql, Map<String, Object> params, List<String> statuses) {
+        params.put("startingSoonDays", STARTING_SOON_DAYS);
+        List<String> conditions = new ArrayList<>();
+        if (statuses.contains(EVENT_PREVIEW)) {
+            conditions.add("""
                     CAST(e.start_at AS DATE) > DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
                     """);
-            hasCondition = true;
         }
-
-        if (statuses.contains("即將開始")) {
-            if (hasCondition) {
-                sql.append(" OR ");
-            }
-            sql.append("""
+        if (statuses.contains(STARTING_SOON)) {
+            conditions.add("""
                     (
                         CAST(e.start_at AS DATE) > CAST(GETDATE() AS DATE)
                         AND CAST(e.start_at AS DATE) <= DATEADD(day, :startingSoonDays, CAST(GETDATE() AS DATE))
                     )
                     """);
-            hasCondition = true;
         }
-
-        if (statuses.contains("進行中")) {
-            if (hasCondition) {
-                sql.append(" OR ");
-            }
-            sql.append("""
+        if (statuses.contains(IN_PROGRESS)) {
+            conditions.add("""
                     (
                         CAST(e.start_at AS DATE) <= CAST(GETDATE() AS DATE)
                         AND CAST(e.end_at AS DATE) >= CAST(GETDATE() AS DATE)
                     )
                     """);
-            hasCondition = true;
         }
-
-        if (statuses.contains("已結束")) {
-            if (hasCondition) {
-                sql.append(" OR ");
-            }
-            sql.append("CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)");
+        if (statuses.contains(ENDED)) {
+            conditions.add("CAST(e.end_at AS DATE) < CAST(GETDATE() AS DATE)");
         }
-
-        sql.append(")");
+        if (conditions.isEmpty()) {
+            sql.append(" AND 1 = 0");
+            return;
+        }
+        sql.append(" AND (").append(String.join(" OR ", conditions)).append(")");
     }
 
     private MarketEventCardResponse toMarketEventCardResponse(ResultSet rs, int rowNum) throws SQLException {
@@ -324,7 +363,7 @@ public class MarketEventRepository {
                 toChineseDayOfWeek(endDate),
                 rs.getString("cover_image_url"),
                 List.of(),
-                resolveEventStatus(startDate, endDate));
+                resolveEventStatus(rs.getString("workflow_status"), startDate, endDate));
     }
 
     private MarketEventDetailResponse toMarketEventDetailResponse(ResultSet rs, int rowNum) throws SQLException {
@@ -335,7 +374,7 @@ public class MarketEventRepository {
                 rs.getLong("id"),
                 rs.getString("title"),
                 rs.getString("cover_image_url"),
-                resolveEventStatus(startDate, endDate),
+                resolveEventStatus(rs.getString("workflow_status"), startDate, endDate),
                 rs.getString("summary"),
                 startDate,
                 toChineseDayOfWeek(startDate),
@@ -426,7 +465,10 @@ public class MarketEventRepository {
         }
     }
 
-    private static String resolveEventStatus(LocalDate startDate, LocalDate endDate) {
+    private static String resolveEventStatus(String workflowStatus, LocalDate startDate, LocalDate endDate) {
+        if ("UNPUBLISHED".equals(workflowStatus) || "CANCELLED".equals(workflowStatus)) {
+            return CANCELLED;
+        }
         LocalDate today = LocalDate.now();
 
         if (endDate != null && today.isAfter(endDate)) {

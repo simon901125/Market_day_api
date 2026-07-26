@@ -44,6 +44,7 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
 
         // 設定搜尋條件
         applyPredicate(root, cq, cb, spec);
+        Expression<LocalDateTime> submittedAt = submittedAtSubquery(root, cq, cb);
 
         // 組裝select欄位
         cq.multiselect(
@@ -59,10 +60,12 @@ public class EventRepoCustomImpl extends AbstractTupleQuerySupport implements Ev
                 root.get("brandPublicAt").alias("brandPublicAt"),
                 root.get("maxBooths").alias("maxBooths"),
                 EventSpecification.registeredBoothCountSubquery(root, cq, cb).alias("registeredBoothCount"),
-                submittedAtSubquery(root, cq, cb).alias("submittedAt")
+                submittedAt.alias("submittedAt")
             );
         // 設定orderBy: 活動創建時間:由新到舊(desc)
-        cq.orderBy(cb.desc(root.get("createAt")));
+        cq.orderBy(
+                cb.desc(submittedAt),
+                cb.desc(root.get("id")));
 
         // 查詢結果(有設定limit)
         return fetchPage(cq, pageNumber, pageSize);

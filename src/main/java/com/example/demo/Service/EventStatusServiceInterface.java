@@ -68,7 +68,7 @@ public interface EventStatusServiceInterface<T> {
             case UNPUBLISHED:
                 return EventStatus.UNPUBLISHED;
             case CANCELLED:
-                return null;
+                return EventStatus.CANCELLED;
             default:
                 break;
         }

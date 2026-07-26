@@ -25,7 +25,10 @@ public enum PaymentStatus {
     /**付款失敗 */
     FAILED("failed", "付款失敗"),
     /**已逾期 */
-    EXPIRED("expired", "已逾期");
+    EXPIRED("expired", "已逾期"),
+    CANCELLED("cancelled", "已取消"),
+    REFUNDED("refunded", "已退款"),
+    PARTIALLY_REFUNDED("partiallyRefunded", "部分退款");
 
     @JsonValue
     private final String status;

@@ -211,7 +211,9 @@ class JdbcRepositorySqlIT extends SqlServerIntegrationTestSupport {
                 Map.of("eventId", eventId), Integer.class)).isOne();
         assertThat(organizer.findOrganizerEventDetail(organizerUserId, eventId)).isEmpty();
         assertThat(organizer.findOrganizerEvents(organizerUserId, null, null, null))
-                .noneMatch(event -> eventId.equals(((Number) event.get("eventId")).longValue()));
+                .anyMatch(event ->
+                        eventId.equals(((Number) event.get("eventId")).longValue())
+                                && "CANCELLED".equals(event.get("workflowStatus")));
     }
 
     @Test void paymentReadQueriesCompileAgainstCurrentSchema() {

@@ -29,7 +29,7 @@ class EventStatusServiceInterfaceTest {
         assertThat(status(WorkflowStatus.READY_TO_PUBLISH, now, 0, 10)).isEqualTo(EventStatus.READY_TO_PUBLISH);
         assertThat(status(WorkflowStatus.UNPUBLISH_REQUESTED, now, 0, 10)).isEqualTo(EventStatus.UNPUBLISH_REQUESTED);
         assertThat(status(WorkflowStatus.UNPUBLISHED, now, 0, 10)).isEqualTo(EventStatus.UNPUBLISHED);
-        assertThat(status(WorkflowStatus.CANCELLED, now, 0, 10)).isNull();
+        assertThat(status(WorkflowStatus.CANCELLED, now, 0, 10)).isEqualTo(EventStatus.CANCELLED);
     }
 
     @Test

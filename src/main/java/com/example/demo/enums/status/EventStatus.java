@@ -41,7 +41,9 @@ public enum EventStatus {
     /**活動公開後狀態:主辦方提出活動下架申請 */
     UNPUBLISH_REQUESTED("pendingUnpublish", "下架申請中"),
     /**活動公開後狀態:活動下架 */
-    UNPUBLISHED("unpublished", "已下架");
+    UNPUBLISHED("unpublished", "已下架"),
+    /** 活動已取消。 */
+    CANCELLED("cancelled", "已取消");
 
 
     @JsonValue
