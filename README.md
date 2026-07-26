@@ -2,7 +2,6 @@
 
 Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登入註冊、攤主資料、主辦資料、活動查詢、攤位選位、主辦後台管理、設備統計與帳務匯出等功能。
 
-
 ## 更新紀錄
 
 ### 更新日誌編寫規則
@@ -93,6 +92,7 @@ Market Day 是小集日市集平台的 Spring Boot API 專案，提供帳號登�
 - 刪除活動採狀態保留方式，將 `workflow_status` 由 `DRAFT` 更新為 `CANCELLED`，不實體刪除活動、分類、設備、分區、圖片 URL 或圖片檔案，並保留所有送審、撤回及稽核紀錄。
 - 已刪除的 `CANCELLED` 活動不再出現在主辦方活動列表與詳情；刪除使用資料列鎖與條件更新防止和送審同時執行，成功回傳 `eventId`、`eventTitle` 並寫入活動狀態紀錄。
 - 補齊撤回、發布、下架申請、地圖攤位建立、分區驗證、活動刪除、狀態判斷與競態處理的 Service、Controller、狀態紀錄及 SQL Server 整合測試。
+
 #### yushuan branch
 
 - 新增主辦方退款確認 API：`POST /api/organizer/refunds/review`，主辦方可針對攤主已送出的退款申請進行第一次同意退款確認。
@@ -541,15 +541,15 @@ POST /api/newebpay/return
 
 ## 攤主 API
 
-| Method | API                                       | 說明                   |
-| ------ | ----------------------------------------- | ---------------------- |
-| GET    | `/api/vendor/account`                   | 攤主帳號資料           |
+| Method | API                                       | 說明                       |
+| ------ | ----------------------------------------- | -------------------------- |
+| GET    | `/api/vendor/account`                   | 攤主帳號資料               |
 | GET    | `/api/vendor/notices`                   | 攤主通知中心篩選與分頁查詢 |
-| GET    | `/api/vendor/stall/load`                | 讀取攤主品牌與商品資料 |
-| POST   | `/api/vendor/stall/save`                | 儲存攤主品牌基本資料   |
-| POST   | `/api/vendor/CancelApplication/{id}`    | 取消待審核或待付款報名 |
-| GET    | `/api/vendor/stall-map/{applicationNo}` | 攤主選位地圖           |
-| POST   | `/api/stalls/select`                    | 攤主送出選位           |
+| GET    | `/api/vendor/stall/load`                | 讀取攤主品牌與商品資料     |
+| POST   | `/api/vendor/stall/save`                | 儲存攤主品牌基本資料       |
+| POST   | `/api/vendor/CancelApplication/{id}`    | 取消待審核或待付款報名     |
+| GET    | `/api/vendor/stall-map/{applicationNo}` | 攤主選位地圖               |
+| POST   | `/api/stalls/select`                    | 攤主送出選位               |
 
 ### 攤主取消報名
 
@@ -563,22 +563,22 @@ POST /api/newebpay/return
 
 取消只會將 `event_applications.is_cancelled` 更新為 `true`，不會刪除報名單、報名日期、付款或其他關聯資料。已付款、已退件或已取消的報名不可取消。
 
-| 情境 | HTTP 狀態 | 紀錄行為 |
-| ---- | --------- | -------- |
-| 首次成功取消 | `200` | 寫入 `request_logs`，並在 `status_logs` 紀錄 `event_applications.is_cancelled = true` |
-| 報名單不存在或不屬於目前攤主 | `404` | 只寫入 `request_logs` |
-| 報名狀態不可取消 | `409` | 只寫入 `request_logs` |
-| 重複取消 | `409` | 只寫入 `request_logs` |
+| 情境                         | HTTP 狀態 | 紀錄行為                                                                                   |
+| ---------------------------- | --------- | ------------------------------------------------------------------------------------------ |
+| 首次成功取消                 | `200`   | 寫入`request_logs`，並在 `status_logs` 紀錄 `event_applications.is_cancelled = true` |
+| 報名單不存在或不屬於目前攤主 | `404`   | 只寫入`request_logs`                                                                     |
+| 報名狀態不可取消             | `409`   | 只寫入`request_logs`                                                                     |
+| 重複取消                     | `409`   | 只寫入`request_logs`                                                                     |
 
 ### 攤主通知中心
 
 `GET /api/vendor/notices` 需要 Bearer Token，且帳號必須為已建立攤主資料的 `VENDOR`。
 
-| Query 參數 | 預設值 | 說明 |
-| ---------- | ------ | ---- |
-| `filter` | `全部` | 僅接受：`全部`、`未讀`、`報名審核`、`付款相關`、`攤位分配`、`活動異動` |
-| `page` | `1` | 頁碼從 1 開始 |
-| `pageSize` | `10` | 每頁筆數，最大 10 |
+| Query 參數   | 預設值   | 說明                                                                               |
+| ------------ | -------- | ---------------------------------------------------------------------------------- |
+| `filter`   | `全部` | 僅接受：`全部`、`未讀`、`報名審核`、`付款相關`、`攤位分配`、`活動異動` |
+| `page`     | `1`    | 頁碼從 1 開始                                                                      |
+| `pageSize` | `10`   | 每頁筆數，最大 10                                                                  |
 
 - 只回傳目前登入攤主的通知，包含已讀與未讀。
 - 預設限制為最近一年，可以 `notification.retention-years` 調整。
@@ -617,36 +617,36 @@ POST /api/newebpay/return
 
 ## 主辦 API
 
-| Method | API                                           | 說明             |
-| ------ | --------------------------------------------- | ---------------- |
-| GET    | `/api/organizer/profile/load`               | 讀取主辦基本資料 |
-| POST   | `/api/organizer/profile/save`               | 儲存主辦基本資料 |
-| GET    | `/api/organizer/events/search`              | 主辦活動列表查詢 |
-| GET    | `/api/organizer/events/{eventId}`           | 主辦活動詳情     |
-| POST   | `/api/organizer/events`                     | 建立或修改活動   |
+| Method | API                                               | 說明               |
+| ------ | ------------------------------------------------- | ------------------ |
+| GET    | `/api/organizer/profile/load`                   | 讀取主辦基本資料   |
+| POST   | `/api/organizer/profile/save`                   | 儲存主辦基本資料   |
+| GET    | `/api/organizer/events/search`                  | 主辦活動列表查詢   |
+| GET    | `/api/organizer/events/{eventId}`               | 主辦活動詳情       |
+| POST   | `/api/organizer/events`                         | 建立或修改活動     |
 | POST   | `/api/organizer/events/{eventId}/submit-review` | 初次送審或重新送審 |
-| GET    | `/api/organizer/applications/search`        | 報名列表查詢     |
-| GET    | `/api/organizer/applications/{id}`          | 報名詳情         |
-| POST   | `/api/organizer/applications/{id}/approve`  | 審核通過         |
-| POST   | `/api/organizer/applications/{id}/reject`   | 退回或拒絕       |
-| POST   | `/api/organizer/deposits/refund`            | 現金退還保證金   |
-| GET    | `/api/organizer/stalls/search`              | 攤位管理活動列表 |
-| GET    | `/api/organizer/stall/{eventId}`            | 主辦攤位地圖     |
-| GET    | `/api/organizer/stall/{eventId}/{stallNo}`  | 主辦攤位詳情     |
-| GET    | `/api/organizer/equipment/search`           | 設備管理活動列表 |
-| GET    | `/api/organizer/equipment/{eventId}`        | 設備管理詳情     |
-| GET    | `/api/organizer/equipment/{eventId}/export` | 設備資料匯出     |
-| GET    | `/api/organizer/accounts/search`            | 帳務管理活動列表 |
-| GET    | `/api/organizer/accounts/{eventId}`         | 帳務管理詳情     |
-| GET    | `/api/organizer/accounts/{eventId}/export`  | 帳務資料匯出     |
+| GET    | `/api/organizer/applications/search`            | 報名列表查詢       |
+| GET    | `/api/organizer/applications/{id}`              | 報名詳情           |
+| POST   | `/api/organizer/applications/{id}/approve`      | 審核通過           |
+| POST   | `/api/organizer/applications/{id}/reject`       | 退回或拒絕         |
+| POST   | `/api/organizer/deposits/refund`                | 現金退還保證金     |
+| GET    | `/api/organizer/stalls/search`                  | 攤位管理活動列表   |
+| GET    | `/api/organizer/stall/{eventId}`                | 主辦攤位地圖       |
+| GET    | `/api/organizer/stall/{eventId}/{stallNo}`      | 主辦攤位詳情       |
+| GET    | `/api/organizer/equipment/search`               | 設備管理活動列表   |
+| GET    | `/api/organizer/equipment/{eventId}`            | 設備管理詳情       |
+| GET    | `/api/organizer/equipment/{eventId}/export`     | 設備資料匯出       |
+| GET    | `/api/organizer/accounts/search`                | 帳務管理活動列表   |
+| GET    | `/api/organizer/accounts/{eventId}`             | 帳務管理詳情       |
+| GET    | `/api/organizer/accounts/{eventId}/export`      | 帳務資料匯出       |
 
 ### 主辦方退還保證金
 
 `POST /api/organizer/deposits/refund` 需要 Organizer Bearer Token，並使用 Query Parameter 傳入：
 
-| 參數 | 必填 | 說明 |
-| ---- | ---- | ---- |
-| `applicationId` | 是 | 報名單 ID；後端會反查活動與攤主，並驗證活動屬於目前登入主辦方 |
+| 參數              | 必填 | 說明                                                          |
+| ----------------- | ---- | ------------------------------------------------------------- |
+| `applicationId` | 是   | 報名單 ID；後端會反查活動與攤主，並驗證活動屬於目前登入主辦方 |
 
 退還條件：
 
@@ -788,4 +788,3 @@ account-report-{eventId}.xlsx
 - 商品刪除目前使用 `POST /api/vendor/stall/deleteproduct/{id}`。
 - 商品編輯 API 路徑目前維持既有拼字：`POST /api/vendor/stall/edituct/{id}`。
 - README 不記錄測試資料腳本內容，正式 API 行為以 Controller、Service、Swagger 與本文件為準。
-
