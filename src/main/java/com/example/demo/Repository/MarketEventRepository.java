@@ -118,14 +118,16 @@ public class MarketEventRepository {
                     CASE
                         WHEN e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                          AND e.brands_public_at IS NOT NULL
-                         AND e.brands_public_at <= DATEADD(HOUR, 8, SYSUTCDATETIME())
+                         AND e.brands_public_at <= CAST(
+                             DATEADD(HOUR, 8, SYSUTCDATETIME()) AS DATETIME2(0))
                         THEN e.map_image_url
                         ELSE NULL
                     END AS map_image_url,
                     CAST(CASE
                         WHEN e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                          AND e.brands_public_at IS NOT NULL
-                         AND e.brands_public_at <= DATEADD(HOUR, 8, SYSUTCDATETIME())
+                         AND e.brands_public_at <= CAST(
+                             DATEADD(HOUR, 8, SYSUTCDATETIME()) AS DATETIME2(0))
                         THEN 1
                         ELSE 0
                     END AS BIT) AS brands_public,
@@ -177,7 +179,8 @@ public class MarketEventRepository {
                   AND s.stall_no = :stallNo
                   AND e.workflow_status IN (N'PUBLISHED', N'FINAL_REVIEW', N'UNPUBLISH_REQUESTED')
                   AND e.brands_public_at IS NOT NULL
-                  AND e.brands_public_at <= DATEADD(HOUR, 8, SYSUTCDATETIME())
+                  AND e.brands_public_at <= CAST(
+                      DATEADD(HOUR, 8, SYSUTCDATETIME()) AS DATETIME2(0))
                 """;
         Map<String, Object> params = Map.of("eventId", eventId, "date", date, "stallNo", stallNo);
         return namedParameterJdbcTemplate.query(sql, params, (rs, rowNum) -> {
