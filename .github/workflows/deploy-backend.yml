@@ -92,3 +92,4 @@ jobs:
           /usr/bin/sudo -n /usr/bin/systemctl status marketday.service --no-pager
           /usr/bin/sudo -n /usr/bin/journalctl -u marketday.service -n 100 --no-pager
           exit 1
+####測試自動部屬
