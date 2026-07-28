@@ -82,7 +82,7 @@ public class EventSpecification {
     private static Specification<MarketEvent> withStatus(EventStatus status) {
         return (root, query, cb) -> {
             if (status == null) {
-                return cb.notEqual(root.get("workflowStatus"), WorkflowStatus.DRAFT);
+                return cb.not(root.get("workflowStatus").in(WorkflowStatus.DRAFT, WorkflowStatus.CANCELLED));
             }
             LocalDateTime now = LocalDateTime.now();
             Expression<Long> registeredBoothCount = registeredBoothCountSubquery(root, query, cb);
