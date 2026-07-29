@@ -71,8 +71,93 @@ class NewebPayServiceTest {
     }
 
     @Test void invalidCallbackBuildsSafeFrontendFallback() {
-        String url = service.buildReturnUrl(Map.of(), "https://front.test/");
+        String url = service.buildVendorReturnUrl(Map.of(), "https://front.test/");
         assertThat(url).isEqualTo("https://front.test/vendor/dash-board/application-record?paymentStatus=invalid");
+    }
+
+    @Test void organizerVerificationReturnDoesNotFallThroughToVendorRoute() {
+        String merchantId = "TEST_MERCHANT";
+        String hashKey = "12345678901234567890123456789012";
+        String hashIv = "1234567890123456";
+        String verificationNo = "NPV20260728123000ABCD";
+        Map<String, String> payload = signedCallback(
+                merchantId, hashKey, hashIv, verificationNo, "SUCCESS", "1");
+        mockCallbackAccount(merchantId, hashKey, hashIv);
+
+        String url = service.buildOrganizerVerificationReturnUrl(
+                payload, "http://localhost:4200/");
+
+        assertThat(url).isEqualTo(
+                "http://localhost:4200/organizer/dash-board/home"
+                        + "?verificationNo=" + verificationNo
+                        + "&verificationStatus=SUCCESS");
+        verify(organizerPaymentAccountRepository, org.mockito.Mockito.never())
+                .findVerificationByNo(verificationNo);
+        verify(paymentRepository, org.mockito.Mockito.never())
+                .findPaymentWithApplication(verificationNo);
+    }
+
+    @Test void vendorPaymentReturnUsesApplicationPaymentRoute() {
+        String merchantId = "TEST_MERCHANT";
+        String hashKey = "12345678901234567890123456789012";
+        String hashIv = "1234567890123456";
+        String paymentNo = "MDP20260728153000ABCD";
+        Map<String, String> payload = signedCallback(
+                merchantId, hashKey, hashIv, paymentNo, "FAILED", "350");
+        mockCallbackAccount(merchantId, hashKey, hashIv);
+        when(paymentRepository.findPaymentWithApplication(paymentNo))
+                .thenReturn(Optional.of(Map.of(
+                        "paymentAccountId", 9L,
+                        "paymentNo", paymentNo,
+                        "applicationId", 27L,
+                        "applicationNo", "APP-20260728-001",
+                        "paymentRecordStatus", "PENDING")));
+
+        String url = service.buildVendorReturnUrl(payload, "http://localhost:4200/");
+
+        assertThat(url).isEqualTo(
+                "http://localhost:4200/vendor/dash-board/application-record/detail/APP-20260728-001/payment"
+                        + "?applicationId=27"
+                        + "&paymentNo=" + paymentNo
+                        + "&merchantOrderNo=" + paymentNo
+                        + "&status=FAILED");
+        verify(paymentRepository).markPaymentFailed(paymentNo, null, "FAILED", null);
+    }
+
+    private Map<String, String> signedCallback(
+            String merchantId,
+            String hashKey,
+            String hashIv,
+            String orderNo,
+            String status,
+            String amount) {
+        String plainTradeInfo = "Status=" + status
+                + "&MerchantID=" + merchantId
+                + "&MerchantOrderNo=" + orderNo
+                + "&Amt=" + amount;
+        String encryptedTradeInfo = ReflectionTestUtils.invokeMethod(
+                service, "encrypt", plainTradeInfo, hashKey, hashIv);
+        String tradeSha = ReflectionTestUtils.invokeMethod(
+                service,
+                "sha256Upper",
+                "HashKey=" + hashKey + "&" + encryptedTradeInfo + "&HashIV=" + hashIv);
+        return Map.of(
+                "MerchantID", merchantId,
+                "TradeInfo", encryptedTradeInfo,
+                "TradeSha", tradeSha);
+    }
+
+    private void mockCallbackAccount(String merchantId, String hashKey, String hashIv) {
+        when(organizerPaymentAccountRepository.findByMerchantId(merchantId))
+                .thenReturn(Optional.of(Map.of(
+                        "paymentAccountId", 9L,
+                        "merchantId", merchantId,
+                        "status", "ACTIVE",
+                        "verificationStatus", "VERIFIED",
+                        "hashKeyEncrypted", "encrypted-key",
+                        "hashIvEncrypted", "encrypted-iv")));
+        when(credentialEncryptionService.decrypt("encrypted-key")).thenReturn(hashKey);
+        when(credentialEncryptionService.decrypt("encrypted-iv")).thenReturn(hashIv);
     }
 
     @Test void notifyRejectsMissingTradeInformation() {
@@ -81,10 +166,29 @@ class NewebPayServiceTest {
                 .hasMessageContaining("TradeInfo");
     }
 
+    @Test void organizerNotifyDoesNotFallThroughToVendorPaymentLookup() {
+        String merchantId = "TEST_MERCHANT";
+        String hashKey = "12345678901234567890123456789012";
+        String hashIv = "1234567890123456";
+        String verificationNo = "NPV20260728170000ABCD";
+        mockCallbackAccount(merchantId, hashKey, hashIv);
+        when(organizerPaymentAccountRepository.findVerificationByNo(verificationNo))
+                .thenReturn(Optional.empty());
+
+        String result = service.handleNotify(signedCallback(
+                merchantId, hashKey, hashIv, verificationNo, "SUCCESS", "1"));
+
+        assertThat(result).isEqualTo("0|Verification not found");
+        verify(paymentRepository, org.mockito.Mockito.never())
+                .findPaymentWithApplication(verificationNo);
+    }
+
     @Test void createPaymentUsesEventOrganizerMerchantAndCopiesPaymentAccount() {
         properties.setGateway("https://ccore.newebpay.com/MPG/mpg_gateway");
         properties.setNotifyUrl("https://api.test/api/newebpay/notify");
         properties.setReturnUrl("https://api.test/api/newebpay/return");
+        properties.setOrganizerVerificationReturnUrl(
+                "https://api.test/api/newebpay/organizer-verification/return");
         properties.setVersion("2.3");
         when(jwtService.extractTokenFromAuthorizationHeader("Bearer token")).thenReturn("token");
         when(jwtService.isTokenValid("token")).thenReturn(true);

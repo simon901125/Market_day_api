@@ -72,6 +72,11 @@ public class NewebPayService {
             Map<String, Object> account,
             String verificationNo,
             BigDecimal amount) {
+        if (isBlank(newebPayProperties.getGateway())
+                || isBlank(newebPayProperties.getNotifyUrl())
+                || isBlank(newebPayProperties.getOrganizerVerificationReturnUrl())) {
+            throw new IllegalStateException("NewebPay organizer verification config is incomplete");
+        }
         NewebPayCredential credential = credentialFromAccount(account, false);
         Map<String, String> tradeInfo = buildVerificationTradeInfo(
                 verificationNo, amount, credential);
@@ -510,13 +515,17 @@ public class NewebPayService {
             return "0|MerchantOrderNo required";
         }
 
-        Map<String, Object> payment = paymentRepository.findPaymentWithApplication(paymentNo).orElse(null);
-        Map<String, Object> verification = organizerPaymentAccountRepository
-                .findVerificationByNo(paymentNo).orElse(null);
-        if (verification != null) {
+        if (isOrganizerVerificationOrder(paymentNo)) {
+            Map<String, Object> verification = organizerPaymentAccountRepository
+                    .findVerificationByNo(paymentNo).orElse(null);
+            if (verification == null) {
+                return "0|Verification not found";
+            }
             syncVerificationStatusFromCallback(verification, credential, result);
             return "1|OK";
         }
+
+        Map<String, Object> payment = paymentRepository.findPaymentWithApplication(paymentNo).orElse(null);
         if (payment == null) {
             return "0|Payment not found";
         }
@@ -525,23 +534,19 @@ public class NewebPayService {
         syncPaymentStatusFromCallback(payment, result);
         return "1|OK";
     }
+
     @Transactional
-    public String buildReturnUrl(Map<String, String> payload, String frontendUrl) {
+    public String buildVendorReturnUrl(Map<String, String> payload, String frontendUrl) {
         try {
             NewebPayCredential credential = callbackCredential(payload);
             Map<String, String> result = parseAndVerifyCallback(payload, credential);
             String paymentNo = result.getOrDefault("MerchantOrderNo", "");
             String status = result.getOrDefault("Status", "");
-            Map<String, Object> verification = paymentNo.isBlank()
-                    ? Map.of()
-                    : organizerPaymentAccountRepository.findVerificationByNo(paymentNo).orElse(Map.of());
-            if (!verification.isEmpty()) {
-                syncVerificationStatusFromCallback(verification, credential, result);
-                return trimTrailingSlash(frontendUrl)
-                        + "/organizer/dash-board/newebpay"
-                        + "?verificationNo=" + urlEncode(paymentNo)
-                        + "&verificationStatus=" + urlEncode(status);
+            if (isOrganizerVerificationOrder(paymentNo)) {
+                throw new IllegalArgumentException(
+                        "Organizer verification callback used the vendor return channel");
             }
+
             Map<String, Object> payment = paymentNo.isBlank()
                     ? Map.of()
                     : paymentRepository.findPaymentWithApplication(paymentNo).orElse(Map.of());
@@ -562,6 +567,36 @@ public class NewebPayService {
                     + "/vendor/dash-board/application-record"
                     + "?paymentStatus=invalid";
         }
+    }
+
+    @Transactional
+    public String buildOrganizerVerificationReturnUrl(
+            Map<String, String> payload,
+            String frontendUrl) {
+        try {
+            NewebPayCredential credential = callbackCredential(payload);
+            Map<String, String> result = parseAndVerifyCallback(payload, credential);
+            String verificationNo = result.getOrDefault("MerchantOrderNo", "");
+            String status = result.getOrDefault("Status", "");
+
+            if (!isOrganizerVerificationOrder(verificationNo)) {
+                throw new IllegalArgumentException(
+                        "Vendor payment callback used the organizer verification return channel");
+            }
+
+            return trimTrailingSlash(frontendUrl)
+                    + "/organizer/dash-board/home"
+                    + "?verificationNo=" + urlEncode(verificationNo)
+                    + "&verificationStatus=" + urlEncode(status);
+        } catch (RuntimeException exception) {
+            return trimTrailingSlash(frontendUrl)
+                    + "/organizer/dash-board/home"
+                    + "?verificationStatus=invalid";
+        }
+    }
+
+    private boolean isOrganizerVerificationOrder(String paymentNo) {
+        return paymentNo != null && paymentNo.startsWith("NPV");
     }
 
     private void syncPaymentStatusFromCallback(Map<String, Object> payment, Map<String, String> result) {
@@ -687,7 +722,7 @@ public class NewebPayService {
         tradeInfo.put("Amt", toNewebPayAmount(amount));
         tradeInfo.put("ItemDesc", limitItemDesc("藍新商店綁定驗證"));
         tradeInfo.put("NotifyURL", newebPayProperties.getNotifyUrl());
-        tradeInfo.put("ReturnURL", newebPayProperties.getReturnUrl());
+        tradeInfo.put("ReturnURL", newebPayProperties.getOrganizerVerificationReturnUrl());
         tradeInfo.put("CREDIT", "1");
         tradeInfo.put("LangType", "zh-tw");
         return tradeInfo;

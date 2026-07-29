@@ -15,6 +15,7 @@ public class NewebPayProperties {
     private String closeUrl;
     private String notifyUrl;
     private String returnUrl;
+    private String organizerVerificationReturnUrl;
 
     public String getMerchantId() {
         return merchantId;
@@ -86,6 +87,14 @@ public class NewebPayProperties {
 
     public void setReturnUrl(String returnUrl) {
         this.returnUrl = returnUrl;
+    }
+
+    public String getOrganizerVerificationReturnUrl() {
+        return organizerVerificationReturnUrl;
+    }
+
+    public void setOrganizerVerificationReturnUrl(String organizerVerificationReturnUrl) {
+        this.organizerVerificationReturnUrl = organizerVerificationReturnUrl;
     }
 
 }
