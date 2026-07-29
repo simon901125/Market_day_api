@@ -140,7 +140,7 @@ public class PaymentController {
             description = "接收藍新付款完成後的導回資料，驗證後重新導向前端付款結果頁。")
     @PostMapping("/api/newebpay/return")
     public ResponseEntity<Void> receiveReturn(@RequestParam Map<String, String> payload) {
-        return redirectToPaymentReturn(payload);
+        return redirectToVendorPaymentReturn(payload);
     }
 
     @Operation(
@@ -148,13 +148,41 @@ public class PaymentController {
             description = "提供瀏覽器開啟藍新付款完成導回網址，會重新導向前端付款結果頁。")
     @GetMapping("/api/newebpay/return")
     public ResponseEntity<Void> openReturn(@RequestParam Map<String, String> payload) {
-        return redirectToPaymentReturn(payload);
+        return redirectToVendorPaymentReturn(payload);
     }
 
-    private ResponseEntity<Void> redirectToPaymentReturn(Map<String, String> payload) {
+    @Operation(
+            summary = "接收主辦方藍新驗證導回",
+            description = "接收主辦方 NT$1 驗證完成後的導回資料，驗證後重新導向主辦方藍新設定頁。")
+    @PostMapping("/api/newebpay/organizer-verification/return")
+    public ResponseEntity<Void> receiveOrganizerVerificationReturn(
+            @RequestParam Map<String, String> payload) {
+        return redirectToOrganizerVerificationReturn(payload);
+    }
+
+    @Operation(
+            summary = "開啟主辦方藍新驗證導回",
+            description = "提供主辦方 NT$1 驗證導回網址的 GET 備用入口。")
+    @GetMapping("/api/newebpay/organizer-verification/return")
+    public ResponseEntity<Void> openOrganizerVerificationReturn(
+            @RequestParam Map<String, String> payload) {
+        return redirectToOrganizerVerificationReturn(payload);
+    }
+
+    private ResponseEntity<Void> redirectToVendorPaymentReturn(Map<String, String> payload) {
         return ResponseEntity
                 .status(302)
-                .header(HttpHeaders.LOCATION, newebPayService.buildReturnUrl(payload, frontendUrl))
+                .header(HttpHeaders.LOCATION, newebPayService.buildVendorReturnUrl(payload, frontendUrl))
+                .build();
+    }
+
+    private ResponseEntity<Void> redirectToOrganizerVerificationReturn(
+            Map<String, String> payload) {
+        return ResponseEntity
+                .status(302)
+                .header(
+                        HttpHeaders.LOCATION,
+                        newebPayService.buildOrganizerVerificationReturnUrl(payload, frontendUrl))
                 .build();
     }
 }

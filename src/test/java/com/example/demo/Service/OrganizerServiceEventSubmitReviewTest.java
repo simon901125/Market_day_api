@@ -89,6 +89,47 @@ class OrganizerServiceEventSubmitReviewTest {
     }
 
     @Test
+    void rejectsIncompleteDraftBeforeChangingWorkflowStatus() {
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("eventId", EVENT_ID);
+        event.put("workflowStatus", "DRAFT");
+        when(organizerRepository.findOrganizerEventDetail(7L, EVENT_ID))
+                .thenReturn(Optional.of(event));
+        when(organizerRepository.findOrganizerEventCategories(EVENT_ID)).thenReturn(List.of());
+        when(organizerRepository.findOrganizerEventZones(EVENT_ID)).thenReturn(List.of());
+        when(organizerRepository.findEventEquipments(EVENT_ID)).thenReturn(List.of());
+
+        var response = organizerService.submitOrganizerEventReview(AUTH, EVENT_ID);
+
+        assertThat(response.getStatusCode()).isEqualTo(400);
+        assertThat(response.getData().missingFields()).contains(
+                "eventTitle",
+                "summary",
+                "description",
+                "coverImage",
+                "categoryIds",
+                "schedule.startAt",
+                "schedule.endAt",
+                "schedule.registrationStartAt",
+                "schedule.registrationEndAt",
+                "location.locationName",
+                "location.city",
+                "location.district",
+                "location.address",
+                "booth.maxBooths",
+                "booth.stallWidth",
+                "booth.stallLength",
+                "booth.baseFee",
+                "booth.depositAmount",
+                "booth.mapImage",
+                "booth.zones",
+                "equipment.providesEquipmentRental",
+                "equipment.providesBasicPower",
+                "equipment.allowsExtraPower");
+        verify(organizerRepository, never()).submitOrganizerEventReview(7L, EVENT_ID);
+    }
+
+    @Test
     void rejectsEventOutsideDraftAndRevisionStates() {
         when(organizerRepository.findOrganizerEventDetail(7L, EVENT_ID))
                 .thenReturn(Optional.of(completeEvent("PENDING_REVIEW")));

@@ -67,13 +67,25 @@ class PaymentControllerTest {
         assertThat(controller.receiveNotify(payload)).isEqualTo("0|bad payload");
     }
 
-    @Test void getAndPostReturnRedirectToFrontendUrlBuiltByService() {
+    @Test void vendorAndOrganizerReturnsUseSeparateRedirectBuilders() {
         PaymentController controller = new PaymentController(service, vendorRefundService, organizerRefundService, "https://front.test");
         Map<String, String> payload = Map.of("Status", "SUCCESS");
-        when(service.buildReturnUrl(eq(payload), any())).thenReturn("https://front.test/payment/result");
+        when(service.buildVendorReturnUrl(eq(payload), any()))
+                .thenReturn("https://front.test/vendor/payment/result");
+        when(service.buildOrganizerVerificationReturnUrl(eq(payload), any()))
+                .thenReturn("https://front.test/organizer/dash-board/home");
         assertThat(controller.receiveReturn(payload).getStatusCode().value()).isEqualTo(302);
         assertThat(controller.openReturn(payload).getHeaders().getFirst(HttpHeaders.LOCATION))
-                .isEqualTo("https://front.test/payment/result");
-        verify(service, org.mockito.Mockito.times(2)).buildReturnUrl(payload, "https://front.test");
+                .isEqualTo("https://front.test/vendor/payment/result");
+        assertThat(controller.receiveOrganizerVerificationReturn(payload)
+                .getHeaders().getFirst(HttpHeaders.LOCATION))
+                .isEqualTo("https://front.test/organizer/dash-board/home");
+        assertThat(controller.openOrganizerVerificationReturn(payload)
+                .getHeaders().getFirst(HttpHeaders.LOCATION))
+                .isEqualTo("https://front.test/organizer/dash-board/home");
+        verify(service, org.mockito.Mockito.times(2))
+                .buildVendorReturnUrl(payload, "https://front.test");
+        verify(service, org.mockito.Mockito.times(2))
+                .buildOrganizerVerificationReturnUrl(payload, "https://front.test");
     }
 }

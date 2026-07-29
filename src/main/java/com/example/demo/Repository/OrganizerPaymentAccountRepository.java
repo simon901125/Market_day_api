@@ -129,7 +129,7 @@ public class OrganizerPaymentAccountRepository {
         MapSqlParameterSource parameters = new MapSqlParameterSource()
                 .addValue("paymentAccountId", paymentAccountId)
                 .addValue("verificationNo", verificationNo);
-        jdbc.update("""
+        int updated = jdbc.update("""
                 UPDATE dbo.organizer_payment_accounts
                 SET status = 'DISABLED',
                     verification_status = 'PENDING',
@@ -138,6 +138,10 @@ public class OrganizerPaymentAccountRepository {
                     updated_at = SYSDATETIME()
                 WHERE id = :paymentAccountId
                 """, parameters);
+        if (updated != 1) {
+            throw new IllegalStateException(
+                    "建立藍新驗證交易失敗：找不到指定的主辦方金流帳戶");
+        }
     }
 
     public Optional<Map<String, Object>> findVerificationByNo(String verificationNo) {
