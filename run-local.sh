@@ -33,6 +33,8 @@ fi
 
 export NEWEBPAY_NOTIFY_URL='https://api.marketday.dev/api/newebpay/notify'
 export NEWEBPAY_RETURN_URL='https://api.marketday.dev/api/newebpay/return'
+export NEWEBPAY_ORGANIZER_VERIFICATION_RETURN_URL='https://api.marketday.dev/api/newebpay/organizer-verification/return'
+
 export FRONTEND_URL='https://market-day-web.pages.dev'
 
 # Google Cloud Storage
