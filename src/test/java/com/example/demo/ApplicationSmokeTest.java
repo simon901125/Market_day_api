@@ -31,6 +31,7 @@ class ApplicationSmokeTest {
                         "\"/api/organizer/newebpay/save\"",
                         "\"/api/organizer/newebpay/verify\"",
                         "\"/api/newebpay/notify\"",
-                        "\"/api/newebpay/return\"");
+                        "\"/api/newebpay/return\"",
+                        "\"/api/newebpay/organizer-verification/return\"");
     }
 }
