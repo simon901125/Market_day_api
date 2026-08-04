@@ -143,6 +143,30 @@ class StallServiceTest {
         assertThat(service.getOrganizerStallMapDetail(null, 1L, "A01", null).isSuccessStatus()).isFalse();
     }
 
+    @Test void organizerMapCountsAssignedAndSelectedStallsAsSelected() {
+        authenticateOrganizer(7L);
+        LocalDate applyDate = LocalDate.of(2026, 8, 5);
+        when(repository.findOrganizerStallMapEvent(7L, 3L)).thenReturn(Optional.of(Map.of(
+                "eventId", 3L,
+                "eventTitle", "審計新村盛夏生活市集",
+                "startAt", applyDate,
+                "endAt", applyDate,
+                "totalStallCount", 3L,
+                "workflowStatus", "PUBLISHED")));
+        when(repository.findEventStallsMap(3L, applyDate)).thenReturn(List.of(
+                Map.of("stallId", 1L, "zoneId", 1L, "zoneName", "A區", "stallNo", "A01", "status", "ASSIGNED"),
+                Map.of("stallId", 2L, "zoneId", 1L, "zoneName", "A區", "stallNo", "A02", "status", "SELECTED"),
+                Map.of("stallId", 3L, "zoneId", 1L, "zoneName", "A區", "stallNo", "A03", "status", "AVAILABLE")));
+
+        var response = service.getOrganizerStallMap("Bearer token", 3L, applyDate, null, null);
+
+        assertThat(response.isSuccessStatus()).isTrue();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> event = (Map<String, Object>) response.getData().getValues().get("event");
+        assertThat(event).containsEntry("selectedStallCount", 2L)
+                .containsEntry("availableStallCount", 1L);
+    }
+
     @Test void vendorApplicationSearchFiltersMapsAndPaginatesCurrentVendorRecords() {
         authenticateVendor(9L);
         Map<String, Object> newest = application(2L, "APP-002", "夏日市集");
@@ -221,6 +245,15 @@ class StallServiceTest {
         when(jwtService.getEmail("token")).thenReturn("vendor@example.test");
         when(repository.findVendorAccountByEmail("vendor@example.test"))
                 .thenReturn(Optional.of(Map.of("userId", userId, "role", "VENDOR")));
+    }
+
+    private void authenticateOrganizer(Long userId) {
+        when(jwtService.extractTokenFromAuthorizationHeader("Bearer token")).thenReturn("token");
+        when(jwtService.isTokenValid("token")).thenReturn(true);
+        when(jwtService.getRole("token")).thenReturn("ORGANIZER");
+        when(jwtService.getEmail("token")).thenReturn("organizer@example.test");
+        when(organizerRepository.findOrganizerAccountByEmail("organizer@example.test"))
+                .thenReturn(Optional.of(Map.of("userId", userId, "role", "ORGANIZER")));
     }
 
     private StallSelectionRequest selectionRequest() {

@@ -2451,6 +2451,7 @@ public class OrganizerService {
         return orderedMap(
                 "applicationId", application.get("applicationId"),
                 "eventTitle", application.get("eventTitle"),
+                "eventCoverImageUrl", application.get("eventCoverImageUrl"),
                 "eventTime", application.get("eventTime"),
                 "vendorName", application.get("vendorName"),
                 "category", categoryByVendorProfileId.get(toLong(application.get("vendorProfileId"))),

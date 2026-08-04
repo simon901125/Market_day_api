@@ -62,6 +62,21 @@ class MarketEventRepositoryIT extends SqlServerIntegrationTestSupport {
         assertThat(repository.findMarketEventDetailById(eventId)).isEmpty();
     }
 
+    @Test void historySearchCanCombineCityFilterWithEventTypeFilter() {
+        Long eventId = createPublishedEvent();
+        jdbc.update("""
+                UPDATE market_events
+                SET start_at = DATEADD(DAY, -2, SYSDATETIME()),
+                    end_at = DATEADD(DAY, -1, SYSDATETIME())
+                WHERE id = :id
+                """, Map.of("id", eventId));
+
+        var cards = repository.searchMarketEvents(new MarketSearchRequest(
+                null, "Taipei", List.of(), null, null, List.of(), "歷史活動"));
+
+        assertThat(cards).extracting(card -> card.id()).contains(eventId);
+    }
+
     @Test void finalReviewEventRemainsVisibleInPublicSearchAndDetail() {
         Long eventId = createPublishedEvent();
         jdbc.update("""

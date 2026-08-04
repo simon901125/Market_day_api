@@ -702,7 +702,10 @@ public class StallService {
         Map<Long, CategoryResponse> categoryByVendorProfileId = vendorCategoryByProfileId(
                 allStallRows.stream().map(row -> toLong(row.get("vendorProfileId"))).toList());
         long selectedStallCount = allStallRows.stream()
-                .filter(stall -> "SELECTED".equals(stringValue(stall.get("status"))))
+                .filter(stall -> {
+                    String stallStatus = stringValue(stall.get("status"));
+                    return "SELECTED".equals(stallStatus) || "ASSIGNED".equals(stallStatus);
+                })
                 .count();
         long availableStallCount = allStallRows.stream()
                 .filter(stall -> "AVAILABLE".equals(stringValue(stall.get("status"))))
