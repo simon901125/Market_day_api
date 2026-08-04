@@ -1098,9 +1098,9 @@ public class OrganizerRepository {
                   AND (:paidStartAt IS NULL OR COALESCE(latest_payment.paymentTime, a.created_at) >= :paidStartAt)
                   AND (:paidEndExclusive IS NULL OR COALESCE(latest_payment.paymentTime, a.created_at) < :paidEndExclusive)
                 ORDER BY
-                    COALESCE(latest_payment.paymentTime, a.created_at) DESC,
-                    latest_payment.paymentId DESC,
-                    a.id DESC
+                    COALESCE(latest_payment.paymentTime, a.created_at) ASC,
+                    latest_payment.paymentId ASC,
+                    a.id ASC
                 """;
 
         Map<String, Object> parameters = new HashMap<>();
@@ -1417,8 +1417,8 @@ public class OrganizerRepository {
                   AND (:appliedStartAt IS NULL OR a.created_at >= :appliedStartAt)
                   AND (:appliedEndExclusive IS NULL OR a.created_at < :appliedEndExclusive)
                 ORDER BY
-                    a.created_at DESC,
-                    a.id DESC
+                    a.created_at ASC,
+                    a.id ASC
                 """;
 
         Map<String, Object> map = new HashMap<>();
