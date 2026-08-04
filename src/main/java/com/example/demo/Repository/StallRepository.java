@@ -800,10 +800,18 @@ public class StallRepository {
                 FROM dbo.event_stalls s
                 INNER JOIN dbo.market_events e ON e.id = s.event_id
                 INNER JOIN dbo.event_stall_zones z ON z.id = s.zone_id
-                LEFT JOIN dbo.application_dates selected_date ON selected_date.selected_stall_id = s.id
-                    AND selected_date.apply_date = :applyDate
-                LEFT JOIN dbo.event_applications selected_application ON selected_application.id = selected_date.application_id
-                    AND selected_application.is_cancelled = 0
+                OUTER APPLY (
+                    SELECT TOP (1) ad.id, ad.application_id
+                    FROM dbo.application_dates ad
+                    INNER JOIN dbo.event_applications active_application
+                        ON active_application.id = ad.application_id
+                       AND active_application.is_cancelled = 0
+                    WHERE ad.selected_stall_id = s.id
+                      AND ad.apply_date = :applyDate
+                    ORDER BY ad.id DESC
+                ) selected_date
+                LEFT JOIN dbo.event_applications selected_application
+                    ON selected_application.id = selected_date.application_id
                 LEFT JOIN dbo.vendor_profiles selected_vp ON selected_vp.id = selected_application.vendor_profile_id
                 LEFT JOIN dbo.user_profiles selected_vendor ON selected_vendor.id = selected_vp.user_profile_id
                 OUTER APPLY (

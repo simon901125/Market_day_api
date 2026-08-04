@@ -812,8 +812,8 @@ public class OrganizerRepository {
                     stall_count.totalStalls,
                     accounting_activity.latestAccountingAt
                 ORDER BY
-                    accounting_activity.latestAccountingAt DESC,
-                    e.id DESC
+                    e.start_at ASC,
+                    e.id ASC
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1214,8 +1214,8 @@ public class OrganizerRepository {
                   AND (:eventStartAt IS NULL OR e.start_at >= :eventStartAt)
                   AND (:eventEndExclusive IS NULL OR e.end_at < :eventEndExclusive)
                 ORDER BY
-                    e.start_at DESC,
-                    e.id DESC
+                    e.start_at ASC,
+                    e.id ASC
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1334,8 +1334,8 @@ public class OrganizerRepository {
                   AND (:eventStartAt IS NULL OR e.start_at >= :eventStartAt)
                   AND (:eventEndExclusive IS NULL OR e.end_at < :eventEndExclusive)
                 ORDER BY
-                    e.start_at DESC,
-                    e.id DESC
+                    e.start_at ASC,
+                    e.id ASC
                 """;
 
         Map<String, Object> map = new HashMap<>();
