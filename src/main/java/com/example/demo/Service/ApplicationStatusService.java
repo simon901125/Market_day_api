@@ -47,8 +47,7 @@ public class ApplicationStatusService {
         }
 
         if ("PAID".equals(paymentStatus)) {
-            if (isEventEnded(application.get("eventEndAt"))
-                    && "RETURNED".equals(stringValue(application.get("depositStatus")))) {
+            if ("RETURNED".equals(stringValue(application.get("depositStatus")))) {
                 return "保證金已退還";
             }
             return "報名完成";

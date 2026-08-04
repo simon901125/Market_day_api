@@ -3031,17 +3031,6 @@ public class OrganizerService {
                         ? statusCreatedAt(statusLogs, "event_applications.review_status", application.get("reviewStatus"))
                         : null));
 
-        Object cancelledAt = firstPresent(
-                statusCreatedAt(statusLogs, "event_applications.is_cancelled", application.get("isCancelled")),
-                "EXPIRED".equals(paymentStatus)
-                        ? statusCreatedAt(statusLogs, "event_applications.payment_status", "EXPIRED")
-                        : null);
-        flow.add(statusStep(
-                "CANCELLED",
-                "\u53d6\u6d88\u6642\u9593",
-                cancelled ? "\u5df2\u53d6\u6d88" : null,
-                cancelled ? cancelledAt : null));
-
         Object paymentCreatedAt = firstPresent(
                 statusCreatedAt(statusLogs, "event_applications.payment_status", application.get("paymentStatus")),
                 application.get("paidAt"),
@@ -3091,6 +3080,17 @@ public class OrganizerService {
                                 statusCreatedAt(statusLogs, "event_applications.deposit_status", "RETURNED"),
                                 application.get("refundedAt"))
                         : null));
+
+        Object cancelledAt = firstPresent(
+                statusCreatedAt(statusLogs, "event_applications.is_cancelled", application.get("isCancelled")),
+                "EXPIRED".equals(paymentStatus)
+                        ? statusCreatedAt(statusLogs, "event_applications.payment_status", "EXPIRED")
+                        : null);
+        flow.add(statusStep(
+                "CANCELLED",
+                "\u5df2\u53d6\u6d88\u6642\u9593",
+                cancelled ? "\u5df2\u53d6\u6d88" : null,
+                cancelled ? cancelledAt : null));
 
         return flow;
     }

@@ -55,12 +55,12 @@ class ApplicationStatusServiceTest {
     }
 
     @Test
-    void endedPaidApplicationWithReturnedDepositGetsFinalState() {
+    void paidApplicationWithReturnedDepositGetsFinalStateRegardlessOfEventDate() {
         Map<String, Object> application = baseApplication();
         application.put("reviewStatus", "APPROVED");
         application.put("paymentStatus", "PAID");
         application.put("selectedStallId", 1L);
-        application.put("eventEndAt", LocalDate.now().minusDays(1));
+        application.put("eventEndAt", LocalDate.now().plusDays(30));
         application.put("depositStatus", "RETURNED");
         String returned = service.resolveApplicationStatus(application);
         application.put("depositStatus", "NOT_RETURNED");

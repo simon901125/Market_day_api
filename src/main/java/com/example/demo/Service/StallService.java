@@ -1095,6 +1095,7 @@ public class StallService {
         response.put("status", displayBoothStatus(stall.get("status")));
         if (stall.get("selectedApplicationId") != null) {
             response.put("selectedVendor", orderedMap(
+                    "brandId", stall.get("vendorProfileId"),
                     "name", stall.get("vendorName"),
                     "category", categoryByVendorProfileId.get(toLong(stall.get("vendorProfileId"))),
                     "ownerName", stall.get("vendorOwnerName"),
