@@ -1359,6 +1359,7 @@ public class OrganizerRepository {
                     a.application_no AS applicationNo,
                     e.id AS eventId,
                     e.title AS eventTitle,
+                    e.cover_image_url AS eventCoverImageUrl,
                     CONCAT(
                         CONVERT(varchar(16), e.start_at, 120),
                         N' - ',
@@ -1606,6 +1607,14 @@ public class OrganizerRepository {
                         SELECT ad.id
                         FROM dbo.application_dates ad
                         WHERE ad.application_id = :applicationId
+                    )
+                )
+                OR (
+                    sl.target_type = N'REFUND'
+                    AND sl.target_id IN (
+                        SELECT r.id
+                        FROM dbo.refunds r
+                        WHERE r.application_id = :applicationId
                     )
                 )
                 ORDER BY rl.created_at ASC, sl.id ASC

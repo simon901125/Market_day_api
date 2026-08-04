@@ -226,7 +226,7 @@ public class MarketEventRepository {
             return;
         }
 
-        sql.append(" AND e.city = :city");
+        sql.append(" AND e.city = :city\n");
         params.put("city", city);
     }
 
