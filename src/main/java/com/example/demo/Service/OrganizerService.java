@@ -2092,10 +2092,7 @@ public class OrganizerService {
                 "eventTitle", event.get("eventTitle"),
                 "coverImageUrl", event.get("coverImageUrl"),
                 "eventDate", formatEventDate(event),
-                "address", joinAddress(
-                        event.get("city"),
-                        event.get("district"),
-                        event.get("locationName")),
+                "address", event.get("locationName"),
                 "totalStallCount", event.get("totalStallCount"),
                 "availableStallCount", event.get("availableStallCount"),
                 "selectedStallCount", event.get("selectedStallCount"),
