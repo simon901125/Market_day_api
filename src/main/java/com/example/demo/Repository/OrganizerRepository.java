@@ -425,6 +425,7 @@ public class OrganizerRepository {
                         WHERE a.event_id = e.id
                           AND a.is_cancelled = 0
                           AND a.review_status <> N'REJECTED'
+                          AND refundStats.hasRefund = 0
                     ) applicationStats
                 ) stats
                 WHERE e.user_id = :organizerUserId
@@ -470,7 +471,13 @@ public class OrganizerRepository {
                        e.review_note AS reviewNote, e.create_at AS createdAt,
                        (SELECT COUNT(*) FROM dbo.event_applications a
                         WHERE a.event_id = e.id AND a.is_cancelled = 0
-                          AND a.review_status <> N'REJECTED') AS registeredCount
+                          AND a.review_status <> N'REJECTED'
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM dbo.refunds r
+                              WHERE r.application_id = a.id
+                                AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                          )) AS registeredCount
                 FROM dbo.market_events e
                 WHERE e.id = :eventId
                   AND e.user_id = :organizerUserId
