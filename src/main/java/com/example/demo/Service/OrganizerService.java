@@ -968,7 +968,7 @@ public class OrganizerService {
     private OrganizerEventSummaryResponse toOrganizerEventSummary(Map<String, Object> event) {
         WorkflowStatus workflowStatus = WorkflowStatus.valueOf(statusText(event.get("workflowStatus")));
         int capacity = intValue(event.get("capacity"));
-        int registeredCount = intValue(event.get("registeredCount"));
+        int registeredCount = boundedByCapacity(event.get("registeredCount"), capacity);
         EventStatus eventStatus = resolveOrganizerEventStatus(event, workflowStatus, capacity, registeredCount);
         return new OrganizerEventSummaryResponse(
                 ((Number) event.get("eventId")).longValue(),
@@ -989,8 +989,8 @@ public class OrganizerService {
                 capacity,
                 registeredCount,
                 intValue(event.get("pendingReviewCount")),
-                intValue(event.get("paidCount")),
-                intValue(event.get("selectedCount")));
+                boundedByCapacity(event.get("paidCount"), capacity),
+                boundedByCapacity(event.get("selectedCount"), capacity));
     }
 
     private EventStatus resolveOrganizerEventStatus(
@@ -1972,8 +1972,8 @@ public class OrganizerService {
     }
 
     private Map<String, Object> toAccountingSummaryResponse(Map<String, Object> account) {
-        Object paidStallCount = account.get("paidStallCount");
-        Object totalStallCount = account.get("totalStallCount");
+        int totalStallCount = intValue(account.get("totalStallCount"));
+        int paidStallCount = boundedByCapacity(account.get("paidStallCount"), totalStallCount);
         return orderedMap(
                 "eventId", account.get("eventId"),
                 "eventTitle", account.get("eventTitle"),
@@ -1993,6 +1993,7 @@ public class OrganizerService {
     }
 
     private Map<String, Object> toAccountingEventResponse(Map<String, Object> account) {
+        int totalStallCount = intValue(account.get("totalStallCount"));
         return orderedMap(
                 "eventId", account.get("eventId"),
                 "coverImageUrl", account.get("coverImageUrl"),
@@ -2006,8 +2007,8 @@ public class OrganizerService {
                         account.get("city"),
                         account.get("district"),
                         account.get("address")),
-                "totalStallCount", account.get("totalStallCount"),
-                "paidStallCount", account.get("paidStallCount"));
+                "totalStallCount", totalStallCount,
+                "paidStallCount", boundedByCapacity(account.get("paidStallCount"), totalStallCount));
     }
 
     private Map<String, Object> toAccountingFinancialSummary(Map<String, Object> account) {
@@ -2020,11 +2021,12 @@ public class OrganizerService {
     }
 
     private Map<String, Object> toAccountingStatistics(Map<String, Object> account) {
+        int totalStallCount = intValue(account.get("totalStallCount"));
         return orderedMap(
                 "payment", orderedMap(
-                        "totalStallCount", account.get("totalStallCount"),
-                        "paidStallCount", account.get("paidStallCount"),
-                        "pendingPaymentStallCount", account.get("pendingPaymentStallCount")),
+                        "totalStallCount", totalStallCount,
+                        "paidStallCount", boundedByCapacity(account.get("paidStallCount"), totalStallCount),
+                        "pendingPaymentStallCount", boundedByCapacity(account.get("pendingPaymentStallCount"), totalStallCount)),
                 "refund", orderedMap(
                         "refundCount", account.get("refundCount"),
                         "refundedCount", account.get("refundedCount"),
@@ -2098,20 +2100,23 @@ public class OrganizerService {
     }
 
     private Map<String, Object> toStallEventSummaryResponse(Map<String, Object> event) {
+        int totalStallCount = intValue(event.get("totalStallCount"));
+        int selectedStallCount = boundedByCapacity(event.get("selectedStallCount"), totalStallCount);
         return orderedMap(
                 "eventId", event.get("eventId"),
                 "eventTitle", event.get("eventTitle"),
                 "coverImageUrl", event.get("coverImageUrl"),
                 "eventDate", formatEventDate(event),
                 "address", event.get("locationName"),
-                "totalStallCount", event.get("totalStallCount"),
-                "availableStallCount", event.get("availableStallCount"),
-                "selectedStallCount", event.get("selectedStallCount"),
+                "totalStallCount", totalStallCount,
+                "availableStallCount", Math.max(0, totalStallCount - selectedStallCount),
+                "selectedStallCount", selectedStallCount,
                 "status", event.get("status"),
                 "statusNote", event.get("statusNote"));
     }
 
     private Map<String, Object> toEquipmentSummaryResponse(Map<String, Object> event) {
+        int totalStallCount = intValue(event.get("totalStallCount"));
         return orderedMap(
                 "eventId", event.get("eventId"),
                 "eventTitle", event.get("eventTitle"),
@@ -2119,12 +2124,17 @@ public class OrganizerService {
                 "eventDate", formatEventDate(event),
                 "status", event.get("status"),
                 "statusNote", event.get("statusNote"),
-                "registeredStallCount", event.get("registeredStallCount"),
+                "registeredStallCount", boundedByCapacity(event.get("registeredStallCount"), totalStallCount),
                 "freeEquipmentRentalCount", event.get("freeEquipmentRentalCount"),
                 "paidEquipmentRentalCount", event.get("paidEquipmentRentalCount"),
                 "freePowerRentalCount", event.get("freePowerRentalCount"),
                 "paidExtraPowerRentalCount", event.get("paidExtraPowerRentalCount"),
-                "vehicleRegistrationCount", event.get("vehicleRegistrationCount"));
+                "vehicleRegistrationCount", boundedByCapacity(event.get("vehicleRegistrationCount"), totalStallCount));
+    }
+
+    private int boundedByCapacity(Object value, int capacity) {
+        int count = Math.max(0, intValue(value));
+        return capacity > 0 ? Math.min(count, capacity) : count;
     }
 
     private Map<String, Object> toEquipmentDetailEventResponse(Map<String, Object> event) {

@@ -1182,6 +1182,20 @@ public class OrganizerRepository {
                                 INNER JOIN dbo.event_applications a ON a.id = ad.application_id
                                     AND a.event_id = e.id
                                     AND a.is_cancelled = 0
+                                    AND a.review_status = N'APPROVED'
+                                    AND a.payment_status = N'PAID'
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM dbo.refunds r
+                                        WHERE r.application_id = a.id
+                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                                    )
+                                    AND a.review_status = N'APPROVED'
+                                    AND a.payment_status = N'PAID'
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM dbo.refunds r
+                                        WHERE r.application_id = a.id
+                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                                    )
                                 WHERE ad.apply_date = event_dates.applyDate
                                   AND ad.selected_stall_id IS NOT NULL
                             ) selected_count
@@ -1208,6 +1222,13 @@ public class OrganizerRepository {
                         INNER JOIN dbo.event_applications a ON a.id = ad.application_id
                             AND a.event_id = e.id
                             AND a.is_cancelled = 0
+                            AND a.review_status = N'APPROVED'
+                            AND a.payment_status = N'PAID'
+                            AND NOT EXISTS (
+                                SELECT 1 FROM dbo.refunds r
+                                WHERE r.application_id = a.id
+                                  AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                            )
                         WHERE ad.apply_date = event_dates.applyDate
                           AND ad.selected_stall_id IS NOT NULL
                     ) selected_count
@@ -1283,6 +1304,13 @@ public class OrganizerRepository {
                     FROM dbo.event_applications a
                     WHERE a.event_id = e.id
                       AND a.is_cancelled = 0
+                      AND a.review_status = N'APPROVED'
+                      AND a.payment_status = N'PAID'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM dbo.refunds r
+                          WHERE r.application_id = a.id
+                            AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                      )
                 ) application_stats
                 OUTER APPLY (
                     SELECT
@@ -1306,6 +1334,13 @@ public class OrganizerRepository {
                     INNER JOIN dbo.event_applications a ON a.id = er.application_id
                         AND a.event_id = e.id
                         AND a.is_cancelled = 0
+                        AND a.review_status = N'APPROVED'
+                        AND a.payment_status = N'PAID'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM dbo.refunds r
+                            WHERE r.application_id = a.id
+                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                        )
                     INNER JOIN dbo.event_equipments ee ON ee.id = er.event_equipment_id
                 ) equipment_stats
                 OUTER APPLY (
@@ -1328,6 +1363,13 @@ public class OrganizerRepository {
                                 INNER JOIN dbo.event_applications a ON a.id = ad.application_id
                                     AND a.event_id = e.id
                                     AND a.is_cancelled = 0
+                                    AND a.review_status = N'APPROVED'
+                                    AND a.payment_status = N'PAID'
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM dbo.refunds r
+                                        WHERE r.application_id = a.id
+                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                                    )
                                 WHERE ad.apply_date = event_dates.applyDate
                                   AND ad.selected_stall_id IS NOT NULL
                             ) selected_count
@@ -1802,6 +1844,13 @@ public class OrganizerRepository {
                     INNER JOIN dbo.event_applications a ON a.id = er.application_id
                         AND a.event_id = ee.event_id
                         AND a.is_cancelled = 0
+                        AND a.review_status = N'APPROVED'
+                        AND a.payment_status = N'PAID'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM dbo.refunds r
+                            WHERE r.application_id = a.id
+                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                        )
                     WHERE er.event_equipment_id = ee.id
                 ) rental_stats
                 WHERE ee.event_id = :eventId
@@ -1838,6 +1887,13 @@ public class OrganizerRepository {
                 ) stall_summary
                 WHERE a.event_id = :eventId
                   AND a.is_cancelled = 0
+                  AND a.review_status = N'APPROVED'
+                  AND a.payment_status = N'PAID'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM dbo.refunds r
+                      WHERE r.application_id = a.id
+                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                  )
                 ORDER BY stall_summary.stallNo ASC, a.id ASC, ee.id ASC
                 """;
 
@@ -1872,6 +1928,13 @@ public class OrganizerRepository {
                 ) stall_summary
                 WHERE a.event_id = :eventId
                   AND a.is_cancelled = 0
+                  AND a.review_status = N'APPROVED'
+                  AND a.payment_status = N'PAID'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM dbo.refunds r
+                      WHERE r.application_id = a.id
+                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                  )
                 ORDER BY stall_summary.stallNo ASC, a.id ASC, ee.id ASC
                 """;
 
@@ -1900,6 +1963,13 @@ public class OrganizerRepository {
                 ) stall_summary
                 WHERE a.event_id = :eventId
                   AND a.is_cancelled = 0
+                  AND a.review_status = N'APPROVED'
+                  AND a.payment_status = N'PAID'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM dbo.refunds r
+                      WHERE r.application_id = a.id
+                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                  )
                 ORDER BY stall_summary.stallNo ASC, a.id ASC
                 """;
 
