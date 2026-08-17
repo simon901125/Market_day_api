@@ -690,6 +690,7 @@ public class OrganizerRepository {
                         a.is_cancelled,
                         a.deposit_amount,
                         a.deposit_status,
+                        active_refund.hasActiveRefund,
                         COALESCE(paid_payment.paidAmount,
                             CASE WHEN a.payment_status = N'PAID' THEN a.total_amount ELSE 0 END
                         ) AS paidAmount,
@@ -707,6 +708,12 @@ public class OrganizerRepository {
                         WHERE r.application_id = a.id
                           AND r.refund_status = N'REFUNDED'
                     ) refunded
+                    OUTER APPLY (
+                        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS hasActiveRefund
+                        FROM dbo.refunds r
+                        WHERE r.application_id = a.id
+                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                    ) active_refund
                 )
                 SELECT
                     e.id AS eventId,
@@ -720,7 +727,7 @@ public class OrganizerRepository {
                     e.registration_end_at AS registrationEndAt,
                     accounting_activity.latestAccountingAt,
                     COALESCE(SUM(CASE
-                        WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0 THEN 1
+                        WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0 AND af.hasActiveRefund = 0 THEN 1
                         ELSE 0
                     END), 0) AS paidStallCount,
                     COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) AS totalStallCount,
@@ -884,7 +891,9 @@ public class OrganizerRepository {
                     e.registration_end_at AS registrationEndAt,
                     COALESCE(NULLIF(stall_count.totalStalls, 0), e.max_booths) AS totalStallCount,
                     COALESCE(SUM(CASE
-                        WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0 THEN 1
+                        WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0
+                         AND (af.refundStatus IS NULL
+                              OR af.refundStatus NOT IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')) THEN 1
                         ELSE 0
                     END), 0) AS paidStallCount,
                     COALESCE(SUM(CASE
