@@ -374,6 +374,7 @@ public class OrganizerRepository {
                     e.end_at AS eventEndAt,
                     e.registration_start_at AS registrationStartAt,
                     e.registration_end_at AS registrationEndAt,
+                    e.brands_public_at AS brandsPublicAt,
                     e.location_name AS locationName,
                     e.city,
                     e.district,
@@ -413,7 +414,7 @@ public class OrganizerRepository {
                             SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS hasRefund
                             FROM dbo.refunds r
                             WHERE r.application_id = a.id
-                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                         ) refundStats
                         OUTER APPLY (
                             SELECT
@@ -476,7 +477,7 @@ public class OrganizerRepository {
                               SELECT 1
                               FROM dbo.refunds r
                               WHERE r.application_id = a.id
-                                AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                                AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                           )) AS registeredCount
                 FROM dbo.market_events e
                 WHERE e.id = :eventId
@@ -719,7 +720,7 @@ public class OrganizerRepository {
                         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS hasActiveRefund
                         FROM dbo.refunds r
                         WHERE r.application_id = a.id
-                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                     ) active_refund
                 )
                 SELECT
@@ -900,7 +901,7 @@ public class OrganizerRepository {
                     COALESCE(SUM(CASE
                         WHEN af.payment_status = N'PAID' AND af.is_cancelled = 0
                          AND (af.refundStatus IS NULL
-                              OR af.refundStatus NOT IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')) THEN 1
+                              OR af.refundStatus NOT IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')) THEN 1
                         ELSE 0
                     END), 0) AS paidStallCount,
                     COALESCE(SUM(CASE
@@ -1187,14 +1188,14 @@ public class OrganizerRepository {
                                     AND NOT EXISTS (
                                         SELECT 1 FROM dbo.refunds r
                                         WHERE r.application_id = a.id
-                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                                     )
                                     AND a.review_status = N'APPROVED'
                                     AND a.payment_status = N'PAID'
                                     AND NOT EXISTS (
                                         SELECT 1 FROM dbo.refunds r
                                         WHERE r.application_id = a.id
-                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                                     )
                                 WHERE ad.apply_date = event_dates.applyDate
                                   AND ad.selected_stall_id IS NOT NULL
@@ -1227,7 +1228,7 @@ public class OrganizerRepository {
                             AND NOT EXISTS (
                                 SELECT 1 FROM dbo.refunds r
                                 WHERE r.application_id = a.id
-                                  AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                                  AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                             )
                         WHERE ad.apply_date = event_dates.applyDate
                           AND ad.selected_stall_id IS NOT NULL
@@ -1309,7 +1310,7 @@ public class OrganizerRepository {
                       AND NOT EXISTS (
                           SELECT 1 FROM dbo.refunds r
                           WHERE r.application_id = a.id
-                            AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                            AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                       )
                 ) application_stats
                 OUTER APPLY (
@@ -1339,7 +1340,7 @@ public class OrganizerRepository {
                         AND NOT EXISTS (
                             SELECT 1 FROM dbo.refunds r
                             WHERE r.application_id = a.id
-                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                         )
                     INNER JOIN dbo.event_equipments ee ON ee.id = er.event_equipment_id
                 ) equipment_stats
@@ -1368,7 +1369,7 @@ public class OrganizerRepository {
                                     AND NOT EXISTS (
                                         SELECT 1 FROM dbo.refunds r
                                         WHERE r.application_id = a.id
-                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                                          AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                                     )
                                 WHERE ad.apply_date = event_dates.applyDate
                                   AND ad.selected_stall_id IS NOT NULL
@@ -1849,7 +1850,7 @@ public class OrganizerRepository {
                         AND NOT EXISTS (
                             SELECT 1 FROM dbo.refunds r
                             WHERE r.application_id = a.id
-                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                              AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                         )
                     WHERE er.event_equipment_id = ee.id
                 ) rental_stats
@@ -1892,7 +1893,7 @@ public class OrganizerRepository {
                   AND NOT EXISTS (
                       SELECT 1 FROM dbo.refunds r
                       WHERE r.application_id = a.id
-                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                   )
                 ORDER BY stall_summary.stallNo ASC, a.id ASC, ee.id ASC
                 """;
@@ -1933,7 +1934,7 @@ public class OrganizerRepository {
                   AND NOT EXISTS (
                       SELECT 1 FROM dbo.refunds r
                       WHERE r.application_id = a.id
-                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                   )
                 ORDER BY stall_summary.stallNo ASC, a.id ASC, ee.id ASC
                 """;
@@ -1968,7 +1969,7 @@ public class OrganizerRepository {
                   AND NOT EXISTS (
                       SELECT 1 FROM dbo.refunds r
                       WHERE r.application_id = a.id
-                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUNDED')
+                        AND r.refund_status IN (N'REFUND_REQUESTED', N'REFUNDING', N'REFUND_FAILED', N'REFUNDED')
                   )
                 ORDER BY stall_summary.stallNo ASC, a.id ASC
                 """;
