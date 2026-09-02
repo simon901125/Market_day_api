@@ -827,8 +827,10 @@ public class OrganizerRepository {
                     stall_count.totalStalls,
                     accounting_activity.latestAccountingAt
                 ORDER BY
-                    e.start_at ASC,
-                    e.id ASC
+                    CASE WHEN e.end_at < SYSDATETIME() THEN 1 ELSE 0 END ASC,
+                    CASE WHEN e.end_at < SYSDATETIME() THEN e.end_at END DESC,
+                    CASE WHEN e.end_at >= SYSDATETIME() THEN e.start_at END ASC,
+                    e.id DESC
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1115,9 +1117,10 @@ public class OrganizerRepository {
                   AND (:paidStartAt IS NULL OR COALESCE(latest_payment.paymentTime, a.created_at) >= :paidStartAt)
                   AND (:paidEndExclusive IS NULL OR COALESCE(latest_payment.paymentTime, a.created_at) < :paidEndExclusive)
                 ORDER BY
-                    COALESCE(latest_payment.paymentTime, a.created_at) ASC,
-                    latest_payment.paymentId ASC,
-                    a.id ASC
+                    CASE WHEN e.end_at < SYSDATETIME() THEN 1 ELSE 0 END ASC,
+                    COALESCE(latest_payment.paymentTime, a.created_at) DESC,
+                    latest_payment.paymentId DESC,
+                    a.id DESC
                 """;
 
         Map<String, Object> parameters = new HashMap<>();
@@ -1252,8 +1255,10 @@ public class OrganizerRepository {
                   AND (:eventStartAt IS NULL OR e.start_at >= :eventStartAt)
                   AND (:eventEndExclusive IS NULL OR e.end_at < :eventEndExclusive)
                 ORDER BY
-                    e.start_at ASC,
-                    e.id ASC
+                    CASE WHEN e.end_at < SYSDATETIME() THEN 1 ELSE 0 END ASC,
+                    CASE WHEN e.end_at < SYSDATETIME() THEN e.end_at END DESC,
+                    CASE WHEN e.end_at >= SYSDATETIME() THEN e.start_at END ASC,
+                    e.id DESC
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1393,8 +1398,10 @@ public class OrganizerRepository {
                   AND (:eventStartAt IS NULL OR e.start_at >= :eventStartAt)
                   AND (:eventEndExclusive IS NULL OR e.end_at < :eventEndExclusive)
                 ORDER BY
-                    e.start_at ASC,
-                    e.id ASC
+                    CASE WHEN e.end_at < SYSDATETIME() THEN 1 ELSE 0 END ASC,
+                    CASE WHEN e.end_at < SYSDATETIME() THEN e.end_at END DESC,
+                    CASE WHEN e.end_at >= SYSDATETIME() THEN e.start_at END ASC,
+                    e.id DESC
                 """;
 
         Map<String, Object> map = new HashMap<>();
@@ -1476,6 +1483,7 @@ public class OrganizerRepository {
                   AND (:appliedStartAt IS NULL OR a.created_at >= :appliedStartAt)
                   AND (:appliedEndExclusive IS NULL OR a.created_at < :appliedEndExclusive)
                 ORDER BY
+                    CASE WHEN e.end_at < SYSDATETIME() THEN 1 ELSE 0 END ASC,
                     a.created_at ASC,
                     a.id ASC
                 """;
