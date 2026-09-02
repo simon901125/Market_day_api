@@ -1118,9 +1118,9 @@ public class OrganizerRepository {
                   AND (:paidEndExclusive IS NULL OR COALESCE(latest_payment.paymentTime, a.created_at) < :paidEndExclusive)
                 ORDER BY
                     CASE WHEN e.end_at < SYSDATETIME() THEN 1 ELSE 0 END ASC,
-                    COALESCE(latest_payment.paymentTime, a.created_at) DESC,
-                    latest_payment.paymentId DESC,
-                    a.id DESC
+                    COALESCE(latest_payment.paymentTime, a.created_at) ASC,
+                    latest_payment.paymentId ASC,
+                    a.id ASC
                 """;
 
         Map<String, Object> parameters = new HashMap<>();
